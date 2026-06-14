@@ -1,0 +1,144 @@
+{
+  "format": "HJMB_PATH_EDITOR_JSON_V25",
+  "traj_id": 0,
+  "field": {
+    "width_mm": 4000,
+    "height_mm": 2000,
+    "origin": "center",
+    "x_positive": "field_center_to_pickup",
+    "y_positive": "left_when_x_positive_is_forward"
+  },
+  "points": [
+    {
+      "x_mm": -100,
+      "y_mm": 0,
+      "yaw_ddeg": 0,
+      "point_id": 0,
+      "type": 0,
+      "gate_id": 255,
+      "marker_id": 255,
+      "flags": 0
+    },
+    {
+      "x_mm": 1050,
+      "y_mm": 0,
+      "yaw_ddeg": 0,
+      "point_id": 1,
+      "type": 0,
+      "gate_id": 255,
+      "marker_id": 255,
+      "flags": 0
+    },
+    {
+      "x_mm": 1480,
+      "y_mm": -30,
+      "yaw_ddeg": 0,
+      "point_id": 2,
+      "type": 1,
+      "gate_id": 0,
+      "marker_id": 5,
+      "flags": 0
+    },
+    {
+      "x_mm": 900,
+      "y_mm": 100,
+      "yaw_ddeg": 1800,
+      "point_id": 3,
+      "type": 0,
+      "gate_id": 255,
+      "marker_id": 255,
+      "flags": 0
+    },
+    {
+      "x_mm": 1200,
+      "y_mm": 250,
+      "yaw_ddeg": 0,
+      "point_id": 4,
+      "type": 0,
+      "gate_id": 255,
+      "marker_id": 255,
+      "flags": 0
+    },
+    {
+      "x_mm": 1750,
+      "y_mm": 450,
+      "yaw_ddeg": 0,
+      "point_id": 5,
+      "type": 1,
+      "gate_id": 1,
+      "marker_id": 6,
+      "flags": 0
+    },
+    {
+      "x_mm": -900,
+      "y_mm": 100,
+      "yaw_ddeg": 1800,
+      "point_id": 6,
+      "type": 0,
+      "gate_id": 255,
+      "marker_id": 255,
+      "flags": 4
+    },
+    {
+      "x_mm": -1650,
+      "y_mm": 350,
+      "yaw_ddeg": 1800,
+      "point_id": 7,
+      "type": 1,
+      "gate_id": 2,
+      "marker_id": 7,
+      "flags": 128
+    }
+  ],
+  "actions": [
+    {
+      "action_seq": 0,
+      "action": 17,
+      "unlock_gate_id": 255,
+      "flags": 0,
+      "timeout_ms": 0
+    },
+    {
+      "action_seq": 1,
+      "action": 32,
+      "unlock_gate_id": 0,
+      "flags": 3,
+      "timeout_ms": 0
+    },
+    {
+      "action_seq": 2,
+      "action": 49,
+      "unlock_gate_id": 255,
+      "flags": 0,
+      "timeout_ms": 0
+    },
+    {
+      "action_seq": 3,
+      "action": 19,
+      "unlock_gate_id": 255,
+      "flags": 0,
+      "timeout_ms": 0
+    },
+    {
+      "action_seq": 4,
+      "action": 32,
+      "unlock_gate_id": 1,
+      "flags": 3,
+      "timeout_ms": 0
+    },
+    {
+      "action_seq": 5,
+      "action": 50,
+      "unlock_gate_id": 255,
+      "flags": 0,
+      "timeout_ms": 0
+    },
+    {
+      "action_seq": 6,
+      "action": 67,
+      "unlock_gate_id": 2,
+      "flags": 7,
+      "timeout_ms": 0
+    }
+  ]
+}

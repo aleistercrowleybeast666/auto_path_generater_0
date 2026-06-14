@@ -1,0 +1,593 @@
+HJMB 搬运豆子机器人空间轨迹文件协议 V3.0
+============================================
+
+适用对象
+--------
+本文档定义 V3.0 空间轨迹文件、机械动作 FIFO、Gate 同步机制，以及自动轨迹
+生成软件与 STM32 固件之间的职责边界。
+
+场地与当前设计目标：
+
+    内场地尺寸：4000 mm x 2000 mm
+    底盘最高线速度：2000 mm/s
+    目标完赛时间：30 s 内
+    控制周期：建议 5 ms
+    轨迹节点：按空间弧长稀疏采样，并由 STM32 在线线性插值
+
+V3.0 的核心原则：
+
+1. 用户只绘制少量路径锚点，不手工绘制密集轨迹点；
+2. 上位机负责曲线生成、弧长采样、yaw 平滑、速度规划和 450 rpm 轮速约束；
+3. BIN 文件保存 x/y/yaw 和 vx/vy/wz 前馈节点；
+4. STM32 不实时计算贝塞尔曲线，只进行局部投影、节点插值和前馈+PID；
+5. 轨迹进度以空间弧长 s 为主，不直接绑定墙上绝对时间；
+6. Gate 与机械动作完全分离，沿用 V2.5 的独立动作 FIFO；
+7. 碰撞检测、取豆可达性、放豆可达性应由上位机完成，但因车体仍在迭代，
+   V3.0 第一阶段只保留接口和数据模型，不强制启用这些检查。
+
+V3.0 与 V2.x 二进制文件不兼容。
+
+一、文件目录和命名
+------------------
+
+    /TRJ/P0000.BIN ~ /TRJ/P0359.BIN
+
+文件名数字必须与 traj_id 一致。
+
+二、文件总体结构
+----------------
+
+    +---------------------------------------+
+    | BeanTrajectoryHeaderV3_t      48 bytes|
+    +---------------------------------------+
+    | BeanTrajectoryNodeV3_t[]      16 bytes|
+    +---------------------------------------+
+    | BeanMechanicalAction_t[]       8 bytes|
+    +---------------------------------------+
+
+文件大小：
+
+    file_size = 48 + node_count * 16 + action_count * 8
+
+建议限制：
+
+    node_count    2 ~ 2500
+    action_count  0 ~ 32
+    gate_count    0 ~ 32
+    total_length  0 ~ 65535 mm
+
+2500 个节点占 40 kB，32 个动作占 256 B，适合 STM32F407 在运行前一次性
+加载到 RAM。场地只有 4 m x 2 m，正常比赛路线通常远小于 60 m。
+
+三、文件头 BeanTrajectoryHeaderV3_t
+-----------------------------------
+#pragma pack(push, 1)
+
+typedef struct
+{
+    char     magic[4];             // 固定为 "HJMB"
+    uint8_t  version;              // 固定为 3
+    uint8_t  header_size;          // 固定为 48
+    uint8_t  node_size;            // 固定为 16
+    uint8_t  action_size;          // 固定为 8
+
+    uint16_t traj_id;              // 0~359
+    uint16_t flags;                // FILE_FLAG_*
+
+    uint16_t field_width_mm;       // 当前固定为 4000
+    uint16_t field_height_mm;      // 当前固定为 2000
+    uint16_t nominal_spacing_mm;   // 建议默认 25
+    uint16_t node_count;           // 2~2500
+
+    uint8_t  action_count;         // 0~32
+    uint8_t  gate_count;           // 0~32
+    uint16_t reserved0;            // 必须为 0
+
+    uint32_t file_crc32;           // 计算时本字段置 0
+    uint32_t node_offset;          // 固定为 48
+    uint32_t action_offset;        // 48 + node_count*16
+    uint32_t total_length_mm;      // 最后一个节点的 s_mm
+    uint32_t planned_time_ms;      // 仅底盘轨迹预计时间，不含机械等待
+    uint32_t reserved1;            // 必须为 0
+} BeanTrajectoryHeaderV3_t;
+
+#pragma pack(pop)
+
+Python struct：
+
+    <4sBBBBHHHHHHBBHIIIIII
+
+文件 flags：
+
+#define FILE_FLAG_SPATIAL_TRAJECTORY  0x0001U
+#define FILE_FLAG_WORLD_VELOCITY      0x0002U
+
+V3.0 必须同时设置以上两位，其余位为 0。
+
+四、空间轨迹节点 BeanTrajectoryNodeV3_t
+--------------------------------------
+#pragma pack(push, 1)
+
+typedef struct
+{
+    uint16_t s_mm;             // 从正式轨迹起点累计的空间弧长
+
+    int16_t  x_mm;
+    int16_t  y_mm;
+    int16_t  yaw_ddeg;         // 已展开并重新映射到 int16 可表达范围
+
+    int16_t  vx_mmps;          // 世界系速度前馈
+    int16_t  vy_mmps;          // 世界系速度前馈
+    int16_t  wz_ddegps;        // yaw 角速度前馈
+
+    uint8_t  gate_id;          // 0xFF 表示普通节点
+    uint8_t  flags;            // TRAJ_FLAG_*
+} BeanTrajectoryNodeV3_t;
+
+#pragma pack(pop)
+
+Python struct：
+
+    <HhhhhhhBB
+
+字段约束：
+
+1. s_mm 从 0 开始，单调不减；普通移动节点必须严格递增；
+2. x/y 在 int16 范围内；
+3. |vx_mmps|、|vy_mmps| 不得超过配置允许值；
+4. 合成线速度不得超过 2000 mm/s；
+5. gate_id 为 0xFF 或 0~gate_count-1；
+6. Gate ID 唯一、连续，并按轨迹顺序出现；
+7. 第一个节点必须设置 ENTRY；
+8. 最后一个节点必须设置 END。
+
+节点 flags：
+
+#define TRAJ_FLAG_NONE       0x00U
+#define TRAJ_FLAG_GATE       0x01U
+#define TRAJ_FLAG_STOP       0x02U
+#define TRAJ_FLAG_SCAN       0x04U
+#define TRAJ_FLAG_SLOW_ZONE  0x08U
+#define TRAJ_FLAG_ENTRY      0x10U
+#define TRAJ_FLAG_END        0x80U
+
+规则：
+
+- gate_id != 0xFF 时必须设置 GATE；
+- PICK/DROP Gate 必须同时设置 STOP；
+- 需要视觉修正的 Gate 设置 SCAN；
+- ENTRY 只允许出现在第一个节点；
+- END 只允许出现在最后一个节点；
+- STOP 节点的规划线速度必须为 0；
+- 到达 STOP 节点后允许位置 PID 继续完成最终 yaw 对准。
+
+五、机械动作
+------------
+机械动作结构、动作编号、动作 flags、Gate 上锁和 HOLD_PATH 语义与 V2.5
+完全一致：
+
+#pragma pack(push, 1)
+
+typedef struct
+{
+    uint8_t  action_seq;
+    uint8_t  action;
+    uint8_t  unlock_gate_id;
+    uint8_t  flags;
+    uint16_t timeout_ms;
+    uint16_t reserved;
+} BeanMechanicalAction_t;
+
+#pragma pack(pop)
+
+Python struct：
+
+    <BBBBHH
+
+关键规则：
+
+- PICK、DROP 必须 LOCKED | HOLD_PATH；
+- 它们引用的轨迹节点必须为 GATE | STOP；
+- 机械 FIFO 不得越过被锁定的队首；
+- 路径等待指定 action_seq 完成，不等待 FIFO 为空；
+- 锁定动作的 gate_id 按 action_seq 必须单调不减。
+
+六、自动生成软件中的编辑模型
+----------------------------
+V3.0 不要求用户手工编辑数百个轨迹节点。UI 中编辑的是稀疏“锚点”。
+
+建议锚点类型：
+
+    ENTRY   正式轨迹入口
+    SHAPE   路径塑形/绕障参考点
+    GATE    必须准确到达的取豆、放豆、扫码点
+    END     最终结束点
+
+每个锚点建议包含：
+
+    anchor_id
+    x_mm, y_mm
+    yaw_ddeg
+    yaw_mode              FIXED / INHERIT / TANGENT
+    kind                  ENTRY / SHAPE / GATE / END
+    gate_id               非 Gate 为 0xFF
+    marker_id
+    flags
+    max_speed_mmps
+    corner_trim_mm
+
+重要交互原则：
+
+1. 用户点击的是“路径参考锚点”，不是脱离轨迹的原始贝塞尔控制柄；
+2. 软件自动生成局部曲线和控制柄；
+3. 高级模式以后可以允许拖动控制柄，但不是第一阶段必需功能；
+4. GATE、ENTRY、END 必须是轨迹实际经过的精确点；
+5. SHAPE 点用于改变折线路径和圆角形状，不要求曲线精确穿过其尖角位置。
+
+七、曲线连接方法
+----------------
+不建议使用一条全局高阶贝塞尔曲线或普通全局样条，因为它们可能在控制点
+之间过冲，进入障碍物区域。
+
+建议使用：
+
+    折线锚点 + 每个 SHAPE 拐角的局部贝塞尔圆角
+
+对相邻锚点 A、B、C：
+
+1. B 为 SHAPE 且允许圆角时，在 AB 和 BC 上分别取切入点 P_in、切出点 P_out；
+2. 截取距离：
+
+       d = min(corner_trim_mm,
+               0.45 * |AB|,
+               0.45 * |BC|)
+
+3. P_in 距 B 为 d，P_out 距 B 为 d；
+4. P_in 到 P_out 使用以 B 为控制点的二次贝塞尔：
+
+       Q(t) = (1-t)^2 P_in + 2(1-t)t B + t^2 P_out
+
+   实现中也可转换成等价三次贝塞尔；
+5. 曲线完全位于三角形 P_in-B-P_out 内，较少发生全局样条过冲；
+6. 进入和离开圆角时切线分别与 AB、BC 一致；
+7. GATE、ENTRY、END 不允许被圆角绕过，必须精确经过。
+
+直线段保持直线，不必强制曲线化。
+
+八、空间采样
+------------
+轨迹曲线生成后，按弧长重新采样，而不是按贝塞尔参数 t 等间隔采样。
+
+建议默认：
+
+    nominal_spacing_mm = 25
+    直线区域允许放宽到 50 mm
+    普通曲线区域约 20~25 mm
+    任意相邻节点最大间距不超过 50 mm
+
+推荐自适应细化条件：
+
+1. 折线弦误差不超过 3 mm；
+2. 相邻节点路径切线方向变化不超过 3°；
+3. 相邻节点 yaw 变化不超过 3°；
+4. 相邻节点速度变化不超过 150 mm/s；
+5. Gate、停车点前后必须额外保留节点。
+
+在 4 m x 2 m 场地上，若总路线 15 m：
+
+    25 mm 平均间距约 600 个节点
+    16 bytes/节点约 9.6 kB
+
+即使路线较复杂，通常也远低于 2500 节点上限。
+
+九、yaw 规划
+------------
+XY 路径和车体 yaw 分开规划。每个锚点可选择：
+
+FIXED
+    使用明确指定的 yaw。
+
+INHERIT
+    继承上一段 yaw。
+
+TANGENT
+    车头沿路径切线方向。
+
+处理步骤：
+
+1. 将 0~3599 ddeg 角度展开成连续角，避免 359° 到 1° 走长路径；
+2. 沿弧长 s 对 yaw 做平滑插值；
+3. 限制 d(yaw)/ds，避免在很短距离内要求大角度变化；
+4. 计算：
+
+       wz_ff = d(yaw)/ds * v_path
+
+5. 到达 STOP Gate 后，若仍有少量 yaw 误差，由原地保持 PID 完成，不需要
+   在空间轨迹中加入大量同位置旋转节点。
+
+V3.0 第一阶段不建议在正式轨迹中生成长时间纯原地旋转段。启动对准和 Gate
+末端对准由点位保持控制完成。
+
+十、速度规划
+------------
+用户不手工填写每个节点的时间。软件对空间路径自动生成速度前馈。
+
+10.1 基本速度上限
+-----------------
+
+    0 <= v_path <= 2000 mm/s
+
+每个锚点可设置更低的局部 max_speed_mmps。
+
+10.2 曲率限制
+-------------
+计算路径曲率 kappa，使用横向加速度限制：
+
+    v_curve = sqrt(a_lat_max / max(|kappa|, epsilon))
+
+其中 a_lat_max 为生成器配置参数。车体仍在迭代期间，该参数必须可编辑，不能
+写死为唯一值。
+
+10.3 yaw 变化限制
+-----------------
+根据最大允许角速度：
+
+    v_yaw <= wz_max / |d(yaw)/ds|
+
+10.4 450 rpm 四轮约束
+--------------------
+生成器必须使用与 STM32 一致的麦轮逆运动学参数。
+
+对每个空间节点，先假设单位路径速度，计算：
+
+    vx_world = tx * v_path
+    vy_world = ty * v_path
+    wz       = d(yaw)/ds * v_path
+
+转换到车体系后执行四轮逆运动学，得到每单位 v_path 对应的四轮 rpm。由此
+计算满足所有轮速 <= 450 rpm 的最大 v_path。
+
+运行时 450 rpm 限幅仍作为最后安全保护，但正常规划不应持续触发限幅。
+
+10.5 加减速规划
+---------------
+获得每个节点的局部速度上限后做两遍扫描。
+
+正向扫描限制加速度：
+
+    v[i]^2 <= v[i-1]^2 + 2 * a_acc * ds
+
+反向扫描限制减速度：
+
+    v[i]^2 <= v[i+1]^2 + 2 * a_dec * ds
+
+所有 STOP 节点速度固定为 0。完成后计算：
+
+    vx_ff = tx * v_path
+    vy_ff = ty * v_path
+    wz_ff = d(yaw)/ds * v_path
+
+planned_time_ms 由各段 ds/平均速度累加得到，只作为预估和 UI 展示，不作为
+STM32 必须追赶的绝对墙上时间。
+
+建议 UI 同时显示：
+
+    预计底盘时间
+    预计机械等待时间
+    预计总时间
+
+目标 30 s 内完赛时，建议规划预计总时间控制在 27~28 s，留出扫码、打滑和
+到位等待余量。
+
+十一、未来碰撞和可达性检查接口
+------------------------------
+当前车体仍在迭代，V3.0 第一阶段不强制实现以下功能，但软件结构必须允许
+以后增加独立 Validator：
+
+1. 障碍物膨胀后的轨迹碰撞检查；
+2. 根据车体长宽和 yaw 检查旋转矩形包络；
+3. 取豆 Gate 是否位于夹爪可达区域；
+4. 放豆 Gate 是否位于箱门/倒豆机构可达区域；
+5. 曲线是否越出 4000 x 2000 mm 内场地；
+6. 起点接入段是否安全。
+
+建议 JSON 工程预留但默认关闭：
+
+    "vehicle_profile": {...}
+    "collision_check_enabled": false
+    "reachability_check_enabled": false
+
+这些编辑器设置不必写入当前 V3.0 BIN；BIN 只保存已经生成的可执行轨迹。
+
+十二、开始时车辆不在 0 号点
+----------------------------
+第一个轨迹节点必须标记 ENTRY。
+
+固件启动后分两种情况：
+
+1. 车辆已靠近正式轨迹：
+   - 只在第一个 Gate 之前的有限节点范围搜索最近线段；
+   - 将实际位置投影到该线段；
+   - 若横向距离和 yaw 误差小于捕获阈值，则从该 s 开始跟随；
+   - 不能直接跳过任何未完成 Gate。
+
+2. 车辆离正式轨迹较远：
+   - 使用现有点到点 POS 控制，从当前实际位姿移动到 ENTRY；
+   - 接入阶段使用简单直线和独立 yaw 对准；
+   - 到达 ENTRY 后将 s_ref、s_actual 初始化为 0；
+   - 再启动 V3.0 正式轨迹。
+
+由于当前不做在线碰撞规划，ENTRY 必须位于已知安全的启动区域。若当前位姿
+超出允许启动区，应拒绝启动，而不是在 STM32 上自动生成复杂绕障曲线。
+
+十三、STM32 路径跟随
+--------------------
+13.1 一次性加载
+---------------
+任务开始前一次性读取完整 BIN 到 RAM，完成 CRC 和结构校验。比赛运行中不
+建议边跑边从 TF 卡流式读取，避免 FatFS 或 TF 卡偶发延迟影响 5 ms 控制环。
+
+13.2 实际空间进度 s_actual
+--------------------------
+每个控制周期，根据当前实际 XY 在当前节点附近搜索最近轨迹线段并投影。
+
+要求：
+
+1. 只搜索当前索引前后有限窗口，例如前 3 段、后 10 段；
+2. 不扫描整条轨迹；
+3. s_actual 原则上不允许大幅倒退；
+4. 路径交叉处不能跳到远处的另一段；
+5. Gate 未完成时不能投影越过该 Gate。
+
+13.3 参考空间进度 s_ref
+-----------------------
+从轨迹插值得到当前规划路径速度 v_path_ref，正常更新：
+
+    s_ref += v_path_ref * dt
+
+但必须限制：
+
+    s_ref <= s_actual + PATH_MAX_LEAD_MM
+
+初始建议 PATH_MAX_LEAD_MM 为 50~100 mm，后续通过实验调整。
+
+若最终四轮安全限幅产生比例 scale < 1，则本周期 s_ref 增量也应乘 scale，避免
+轮子已经降速而参考轨迹仍继续跑远。
+
+13.4 节点线性插值
+-----------------
+找到：
+
+    node[i].s_mm <= s_ref <= node[i+1].s_mm
+
+计算：
+
+    r = (s_ref - s0) / (s1 - s0)
+
+并线性插值：
+
+    x_ref, y_ref, yaw_ref
+    vx_ff, vy_ff, wz_ff
+
+yaw 必须按生成器导出的连续方向插值，不能再次直接用 0~360°最短角逻辑破坏
+已经规划好的旋转方向。
+
+13.5 前馈 + 位置 PID
+--------------------
+世界系控制：
+
+    vx_cmd_world = vx_ff + PID_X(x_ref - x_actual)
+    vy_cmd_world = vy_ff + PID_Y(y_ref - y_actual)
+    wz_cmd       = wz_ff + PID_YAW(yaw_ref - yaw_actual)
+
+随后：
+
+    世界系 vx/vy
+        -> 按当前 yaw 转为车体系
+        -> 麦轮逆运动学
+        -> 四轮速度环
+
+速度前馈负责主要运动，位置 PID 只修正误差。不要把位置误差 PID 输出再次当成
+新的绝对轨迹速度去做不一致的时间追赶。
+
+十四、Gate 执行
+---------------
+运行到带 GATE 的节点附近时：
+
+1. 若不是 STOP Gate，可在可靠越过触发范围后置 gate_reached；
+2. STOP Gate 必须先将 s_ref 冻结在 Gate；
+3. 等待实际位置、yaw、线速度和角速度全部满足到位条件；
+4. 若设置 SCAN，执行扫码和 XY 修正；
+5. 置 gate_reached[gate_id]；
+6. 解锁机械 FIFO 队首动作；
+7. 若该 Gate 有 HOLD_PATH 动作，等待对应 action_seq 完成；
+8. 完成后恢复 s_ref 推进。
+
+Gate 的触发依据是实际到位，不是 planned_time_ms，也不是仅仅轨迹索引到达。
+
+十五、CRC32 和校验
+-----------------
+使用 CRC-32/IEEE，与 zlib.crc32 一致。计算时 file_crc32 置 0。
+
+STM32 和生成器必须检查：
+
+1. 文件大小、magic、version、各结构大小；
+2. traj_id、field_width_mm=4000、field_height_mm=2000；
+3. node_offset=48，action_offset 正确；
+4. CRC32；
+5. node_count、action_count、gate_count 范围；
+6. s_mm 单调、首点 s=0、末点 s=total_length_mm；
+7. 节点速度不超过 2000 mm/s；
+8. ENTRY、END 唯一且位置正确；
+9. Gate 唯一、连续、顺序正确；
+10. STOP 节点速度为 0；
+11. 动作 FIFO、锁、HOLD_PATH、Gate 引用无死锁；
+12. reserved 字段全部为 0。
+
+十六、JSON 工程建议
+------------------
+工程格式：
+
+    HJMB_PATH_EDITOR_JSON_V3
+
+建议顶层：
+
+    {
+      "format": "HJMB_PATH_EDITOR_JSON_V3",
+      "traj_id": 0,
+      "field": {
+        "width_mm": 4000,
+        "height_mm": 2000
+      },
+      "planner": {
+        "max_speed_mmps": 2000,
+        "nominal_spacing_mm": 25,
+        "max_spacing_mm": 50,
+        "max_nodes": 2500,
+        "wheel_max_rpm": 450,
+        "accel_mmps2": 0,
+        "decel_mmps2": 0,
+        "lateral_accel_mmps2": 0
+      },
+      "vehicle_profile": {},
+      "collision_check_enabled": false,
+      "reachability_check_enabled": false,
+      "anchors": [...],
+      "actions": [...]
+    }
+
+accel/decel/lateral_accel 的 0 表示尚未设置，导出前必须由用户填写有效值，不应
+在协议中假装存在一个未经实测的固定最佳参数。
+
+十七、推荐实现阶段
+------------------
+阶段 1：V2.5
+
+- 路径点与动作 FIFO 分离；
+- Gate 解锁 PICK/DROP；
+- 验证机械并行执行和同步状态机。
+
+阶段 2：V3.0 生成器
+
+- 稀疏锚点；
+- 局部贝塞尔圆角；
+- 空间采样；
+- yaw 规划；
+- 速度和 450 rpm 约束；
+- 导出 V3 BIN。
+
+阶段 3：V3.0 固件
+
+- 一次性加载节点；
+- s_actual 投影；
+- s_ref 推进和领先限制；
+- 线性插值；
+- 速度前馈 + 位置 PID；
+- Gate 与机械 FIFO 联动。
+
+阶段 4：车体定型后
+
+- 自动碰撞检测；
+- 取豆可达性检查；
+- 放豆可达性检查；
+- 起点接入段安全检查。
