@@ -1,0 +1,1022 @@
+HJMB 搬运豆子机器人空间轨迹文件协议 V3.2
+================================================
+
+适用对象
+--------
+本文档定义 V3.2 空间轨迹 BIN 文件、激光雷达初始定位、切入段、空间轨迹节点、
+机械动作 FIFO、编号 Gate、0xFE 加速度条件 Gate，以及自动轨迹生成软件和
+STM32 固件之间的职责边界。
+
+V3.2 是全新的不兼容版本，不要求兼容 V3.1、V3.0、V2.5 或更早版本。
+
+当前实车验证推荐初值：
+
+    轨迹误差修正：X/Y/Yaw 纯 P，Kp = 1.0
+    轨迹线加速度：加速和减速共用 1200 mm/s^2
+    边走边转角加速度：2 rad/s^2
+    纯旋转/最终对准角加速度：5 rad/s^2
+    控制周期：5 ms
+
+这些数值是当前车辆的推荐配置，不是文件格式固定常量。
+
+V3.2 相比 V3.1 的核心变化：
+
+1. 不再把车辆初始位置假定为正式轨迹首点；
+2. 初始真实位姿由激光雷达给出，坐标直接位于场地世界坐标系；
+3. 正式轨迹首点改为唯一的 CUT_IN 切入点；
+4. STM32 从雷达初始位姿直线驶向切入区域；
+5. 切入点不是停车点，切入目标速度可配置；
+6. 到达切入区域后不降到 0，直接切换为空间轨迹跟随；
+7. 编辑器中的主要点类型改为：
+       CUT_IN   切入点
+       WAYPOINT 途径点
+       ARRIVAL  到达点
+8. END 作为最后一个 ARRIVAL 的附加属性，不再作为独立编辑点类型；
+9. 保留 V3.1 的 PREP_DUMP、DUMP、0xFE 加速度 Gate 和速度/加速度分区显示。
+
+一、坐标系和初始位置
+--------------------
+
+1. BIN 中全部 x/y/yaw 都是场地世界坐标系绝对值；
+2. 激光雷达在任务启动前给出：
+       initial_x_mm
+       initial_y_mm
+       initial_yaw_ddeg
+       pose_valid
+       pose_timestamp
+3. STM32 不把雷达初始位姿清零为 (0,0,0)；
+4. CUT_IN、ARRIVAL、WAYPOINT 与雷达初始位姿必须使用同一坐标原点和轴方向；
+5. 动态初始位姿不写入 BIN，因为每次启动可能不同；
+6. BIN 只保存固定的切入点和正式轨迹；
+7. 若雷达位姿无效、超时或超出允许启动区域，固件必须拒绝启动；
+8. 切入段只做直线接入，不做在线避障；
+9. CUT_IN 必须放在从允许启动区域可安全直线到达的位置。
+
+V3.2 中：
+
+    雷达真实初始点
+        -> STM32 在线生成直线切入段
+        -> CUT_IN 捕获区域
+        -> 正式 V3.2 空间轨迹
+
+切入前的直线段不计入 total_length_mm，也不计入 planned_time_ms。编辑器可根据
+一个预览初始点估算切入时间，但该估算不写入 BIN。
+
+二、目录和文件名
+----------------
+
+    /TRJ/P0000.BIN ~ /TRJ/P0359.BIN
+
+文件名数字必须与 traj_id 一致。
+
+三、字节序和单位
+----------------
+
+1. 多字节字段：Little-Endian；
+2. x/y/s：mm；
+3. 线速度：mm/s；
+4. 线加速度：mm/s^2；
+5. yaw：0.1 度，即 ddeg；
+6. 角速度：ddeg/s；
+7. 角加速度：ddeg/s^2；
+8. 时间：ms；
+9. reserved 字段必须为 0；
+10. BIN 使用定长结构。
+
+四、文件总体结构
+----------------
+
+    +-----------------------------------------+
+    | BeanTrajectoryHeaderV32_t       64 bytes|
+    +-----------------------------------------+
+    | BeanTrajectoryNodeV32_t[]       16 bytes|
+    +-----------------------------------------+
+    | BeanMechanicalActionV32_t[]     20 bytes|
+    +-----------------------------------------+
+
+    file_size = 64 + node_count*16 + action_count*20
+
+限制：
+
+    node_count    2~2500
+    action_count  0~32
+    gate_count    0~32
+    total_length  0~65535 mm
+
+五、文件头 BeanTrajectoryHeaderV32_t
+------------------------------------
+
+#pragma pack(push, 1)
+
+typedef struct
+{
+    char     magic[4];                      // "HJMB"
+    uint8_t  version;                       // 固定 32
+    uint8_t  header_size;                   // 固定 64
+    uint8_t  node_size;                     // 固定 16
+    uint8_t  action_size;                   // 固定 20
+
+    uint16_t traj_id;                       // 0~359
+    uint16_t flags;                         // FILE_FLAG_*
+
+    uint16_t field_width_mm;                // 固定 4000
+    uint16_t field_height_mm;               // 固定 2000
+    uint16_t nominal_spacing_mm;            // 建议 25
+    uint16_t node_count;                    // 2~2500
+
+    uint8_t  action_count;                  // 0~32
+    uint8_t  gate_count;                    // 仅统计编号 Gate
+    uint16_t reserved0;                     // 0
+
+    uint32_t file_crc32;                    // 计算时本字段置 0
+    uint32_t node_offset;                   // 固定 64
+    uint32_t action_offset;                 // 64 + node_count*16
+    uint32_t total_length_mm;               // 从 CUT_IN 开始
+    uint32_t planned_time_ms;               // 仅正式轨迹
+    uint32_t reserved1;                     // 0
+
+    uint16_t cut_in_capture_radius_mm;      // 切入捕获半径
+    uint16_t cut_in_speed_mmps;             // 切入交接目标速度
+    uint16_t approach_max_speed_mmps;        // 在线直线切入段最高速度
+    uint16_t cut_in_straight_length_mm;      // 切入后建议保持直线的最小长度
+
+    uint16_t cut_in_yaw_tolerance_ddeg;      // 允许的 yaw 误差
+    uint16_t cut_in_tangent_tolerance_ddeg;  // 接近方向与首段切线夹角容许值
+    uint16_t approach_flags;                 // APPROACH_FLAG_*
+    uint16_t reserved2;                      // 0
+} BeanTrajectoryHeaderV32_t;
+
+#pragma pack(pop)
+
+Python struct：
+
+    <4sBBBBHHHHHHBBHIIIIIIHHHHHHHH
+
+结构大小必须为 64 bytes。
+
+文件 flags：
+
+#define FILE_FLAG_SPATIAL_TRAJECTORY  0x0001U
+#define FILE_FLAG_WORLD_VELOCITY      0x0002U
+#define FILE_FLAG_ACCEL_GATE_USED     0x0004U
+#define FILE_FLAG_LIDAR_CUT_IN        0x0008U
+
+V3.2 必须设置：
+
+    SPATIAL_TRAJECTORY
+    WORLD_VELOCITY
+    LIDAR_CUT_IN
+
+任一动作使用 unlock_gate_id=0xFE 时必须设置 ACCEL_GATE_USED。
+
+六、切入参数
+------------
+
+6.1 cut_in_capture_radius_mm
+---------------------------
+
+定义车辆允许切换到正式轨迹的空间捕获范围。
+
+推荐初值：
+
+    50~150 mm
+
+数值太小：
+
+- 定位噪声可能导致错过切入；
+- 5 ms 离散控制下容易越过单点。
+
+数值太大：
+
+- 可能在尚未接近首段时提前切换；
+- 位置修正会突然增大。
+
+捕获判断不能只检查“是否正好到达一个数学点”，必须支持圆形区域和首段投影
+捕获。
+
+6.2 cut_in_speed_mmps
+---------------------
+
+这是车辆完成直线切入、切换正式轨迹时的目标合成线速度。
+
+要求：
+
+1. 必须可在编辑器中设置；
+2. 默认必须大于 0；
+3. 不得超过全局线速度上限；
+4. 不得超过切入点处的曲率、yaw 和轮速允许值；
+5. 第一正式节点的合成前馈速度必须与该值一致，允许量化误差；
+6. 切换轨迹跟随器时，CurrentVPathRef 不得重置为 0；
+7. CUT_IN 不得设置 STOP；
+8. 若用户确实需要停车后起步，应使用 ARRIVAL|STOP，而不是 CUT_IN。
+
+推荐初始范围：
+
+    500~1200 mm/s
+
+具体值由场地、切入直线长度和首段曲率决定。
+
+6.3 approach_max_speed_mmps
+---------------------------
+
+STM32 在线生成的直线切入段最高速度。
+
+约束：
+
+    approach_max_speed_mmps >= cut_in_speed_mmps
+
+若二者相等：
+
+    切入段不会为了切入点主动降低速度，只保持该速度后交接。
+
+若 approach_max_speed 更大：
+
+    车辆可以在中段跑得更快，但必须在切入前平滑降到 cut_in_speed；
+    这里只是不降到 0，并不保证全过程完全不减速。
+
+6.4 cut_in_straight_length_mm
+-----------------------------
+
+生成器必须保证 CUT_IN 后至少该长度内：
+
+- 路径无急弯；
+- 切线变化很小；
+- 不存在 STOP；
+- 不存在 PICK、SCAN、停车 DUMP；
+- 规划速度不低于 cut_in_speed，除非轮速或场地约束无法满足。
+
+推荐：
+
+    300~800 mm
+
+该直线段用于让切入交接更稳定。
+
+6.5 approach_flags
+------------------
+
+#define APPROACH_FLAG_LIDAR_REQUIRED              0x0001U
+#define APPROACH_FLAG_NO_STOP_AT_CUT_IN            0x0002U
+#define APPROACH_FLAG_ALIGN_YAW_TO_CUT_IN          0x0004U
+#define APPROACH_FLAG_ALLOW_FIRST_SEGMENT_CAPTURE  0x0008U
+
+V3.2 必须设置前两位。
+
+推荐同时设置：
+
+    ALIGN_YAW_TO_CUT_IN
+    ALLOW_FIRST_SEGMENT_CAPTURE
+
+未定义位必须为 0。
+
+七、空间轨迹节点 BeanTrajectoryNodeV32_t
+----------------------------------------
+
+#pragma pack(push, 1)
+
+typedef struct
+{
+    uint16_t s_mm;             // 从 CUT_IN 开始累计
+    int16_t  x_mm;
+    int16_t  y_mm;
+    int16_t  yaw_ddeg;
+    int16_t  vx_mmps;          // 世界系前馈
+    int16_t  vy_mmps;
+    int16_t  wz_ddegps;
+    uint8_t  gate_id;
+    uint8_t  flags;
+} BeanTrajectoryNodeV32_t;
+
+#pragma pack(pop)
+
+Python struct：
+
+    <HhhhhhhBB
+
+节点 gate_id：
+
+    0x00~gate_count-1   编号 Gate
+    0xFF                非 Gate
+
+0xFE 只允许作为机械动作 unlock_gate_id，不允许写入节点 gate_id。
+
+节点 flags：
+
+#define TRAJ_FLAG_NONE       0x00U
+#define TRAJ_FLAG_GATE       0x01U
+#define TRAJ_FLAG_STOP       0x02U
+#define TRAJ_FLAG_SCAN       0x04U
+#define TRAJ_FLAG_SLOW_ZONE  0x08U
+#define TRAJ_FLAG_CUT_IN     0x10U
+#define TRAJ_FLAG_ARRIVAL    0x20U
+#define TRAJ_FLAG_WAYPOINT   0x40U
+#define TRAJ_FLAG_END        0x80U
+
+规则：
+
+1. 第一个节点必须：
+       s_mm = 0
+       设置 CUT_IN
+       不设置 STOP
+       不设置 GATE
+2. CUT_IN 全文件只能出现一次；
+3. 最后一个节点必须设置 ARRIVAL|END|STOP；
+4. END 全文件只能出现一次；
+5. STOP 节点 vx/vy/wz 必须为 0；
+6. CUT_IN 节点合成线速度必须等于 cut_in_speed_mmps，允许整数化误差；
+7. CUT_IN 首段必须满足 cut_in_straight_length_mm；
+8. ARRIVAL 必须是曲线精确经过的点；
+9. WAYPOINT 是编辑器中的途径参考点，可以被圆角平滑，不要求精确经过原坐标；
+10. 若某个 WAYPOINT 配置 exact_pass=true，则生成器应让曲线精确经过并标记节点；
+11. PICK 对应 ARRIVAL 必须 GATE|STOP；
+12. 停车 DUMP 对应 ARRIVAL 必须 GATE|STOP；
+13. 非停车 ARRIVAL 可以保留非零前馈速度。
+
+八、编辑器点类型
+----------------
+
+V3.2 编辑器只向用户提供三种主要点类型。
+
+8.1 CUT_IN 切入点
+-----------------
+
+- 全路线唯一；
+- 必须是第一个正式轨迹点；
+- 必须精确经过；
+- 不停车；
+- 不绑定机械 Gate；
+- 配置切入速度、捕获范围和切入段最高速度；
+- 正式轨迹 s=0 从此处开始。
+
+8.2 WAYPOINT 途径点
+------------------
+
+- 用于手动规定大致路线、绕障和曲线形状；
+- 默认不停车；
+- 默认不绑定机械动作；
+- 允许局部贝塞尔圆角绕过原尖角；
+- 可设置：
+      corner_trim_mm
+      max_speed_mmps
+      exact_pass
+      yaw_mode
+- exact_pass=false 时，它是路径塑形点；
+- exact_pass=true 时，它是精确通过但不停留的途径点。
+
+8.3 ARRIVAL 到达点
+-----------------
+
+- 轨迹必须精确经过；
+- 可设置 stop_required；
+- 可绑定编号 Gate；
+- 可设置 SCAN；
+- 可绑定 PICK、停车 DUMP 或其他需要可靠位置的动作；
+- stop_required=false 时允许带速度通过；
+- stop_required=true 时节点前馈速度为 0；
+- 最后一个 ARRIVAL 同时设置 END，并必须停车。
+
+编辑器不再单独提供 END 类型。END 是最后一个 ARRIVAL 的属性。
+
+九、曲线连接
+------------
+
+采用：
+
+    CUT_IN / ARRIVAL 精确点
+    + WAYPOINT 局部圆角
+    + 分段直线或二次贝塞尔
+
+对相邻 A、B、C，若 B 为可圆角 WAYPOINT：
+
+    d = min(corner_trim_mm,
+            0.45*|AB|,
+            0.45*|BC|)
+
+构造切入点 P_in、切出点 P_out：
+
+    Q(t) = (1-t)^2 P_in + 2(1-t)t B + t^2 P_out
+
+要求：
+
+1. CUT_IN、ARRIVAL 不得被圆角绕过；
+2. exact_pass=true 的 WAYPOINT 不得被绕过；
+3. 普通 WAYPOINT 可作为局部贝塞尔控制参考；
+4. 不使用易过冲的全局高阶曲线；
+5. CUT_IN 后必须满足 cut_in_straight_length_mm 的直线/近直线约束。
+
+十、空间采样
+------------
+
+建议：
+
+    nominal_spacing_mm = 25
+    长直线 = 40~50 mm
+    普通曲线 = 20~25 mm
+    急弯/ARRIVAL 附近 = 10~20 mm
+    max_spacing_mm = 50
+
+自适应细化条件：
+
+1. 弦误差 <= 3 mm；
+2. 相邻切线变化 <= 3°；
+3. 相邻 yaw 变化 <= 3°；
+4. 相邻速度变化 <= 150 mm/s；
+5. CUT_IN、ARRIVAL、精确 WAYPOINT 必须保留为节点；
+6. 编号 Gate、STOP 前后保留附加节点。
+
+十一、切入段在线生成
+--------------------
+
+11.1 输入
+---------
+
+任务开始时 STM32 已知：
+
+    P0 = 雷达实际初始位置
+    yaw0 = 雷达/IMU融合初始 yaw
+    Pc = CUT_IN 节点位置
+    yawc = CUT_IN 节点 yaw
+    vc = cut_in_speed_mmps
+    vmax = approach_max_speed_mmps
+    a = linear_accel_mmps2
+
+11.2 直线
+---------
+
+STM32 只生成：
+
+    P(lambda) = P0 + lambda*(Pc-P0)
+
+不在切入段在线生成贝塞尔、样条或绕障路径。
+
+若起点到 CUT_IN 距离过短，无法在加速度约束下达到 cut_in_speed，固件可以：
+
+1. 使用当前可达到的最高速度切入；
+2. 输出 CUT_IN_SPEED_UNREACHABLE 警告；
+3. 但不得为了满足速度而违反加速度或轮速硬限制。
+
+生成器应结合允许启动区域提前检查这一情况。
+
+11.3 终端非零速度规划
+---------------------
+
+切入段使用非零终端速度约束。
+
+剩余距离为 d 时：
+
+    v_allow(d) = sqrt(vc^2 + 2*a*d)
+
+参考速度：
+
+    v_target = min(vmax, v_allow)
+
+再按 5 ms 时间域加速度限制更新 CurrentApproachSpeed。
+
+因此：
+
+- 车辆不会为 CUT_IN 强制减速到 0；
+- 若 vmax=vc，切入前不进行计划减速；
+- 若 vmax>vc，可以提前平滑减到 vc；
+- CUT_IN 不是传统点到点 POS 的“到点停止”。
+
+11.4 yaw
+--------
+
+若设置 ALIGN_YAW_TO_CUT_IN：
+
+- 切入过程中 yaw 逐步趋近 CUT_IN yaw；
+- 移动中使用 angular_accel_moving；
+- 不应在 CUT_IN 前强制原地旋转停车；
+- yaw 误差应在捕获时满足 cut_in_yaw_tolerance_ddeg。
+
+若未设置：
+
+- 切入段保持当前 yaw；
+- 正式轨迹接管后再按轨迹 yaw 跟随；
+- 这种模式更容易在交接时出现较大 yaw 修正，不推荐。
+
+十二、切入捕获和无停车交接
+--------------------------
+
+12.1 捕获条件
+-------------
+
+推荐同时满足：
+
+1. 雷达/导航位姿有效；
+2. 当前点进入 cut_in_capture_radius_mm；
+3. yaw 误差 <= cut_in_yaw_tolerance_ddeg；
+4. 接近速度方向与首段轨迹切线夹角
+       <= cut_in_tangent_tolerance_ddeg；
+5. 未越过任何 ARRIVAL/Gate；
+6. 首段附近投影有效。
+
+若设置 ALLOW_FIRST_SEGMENT_CAPTURE，还允许：
+
+- 车辆已经略过 CUT_IN 数学点；
+- 但仍位于首个 cut_in_straight_length_mm 范围内；
+- 横向距离 <= cut_in_capture_radius_mm；
+- 局部投影方向和 yaw 满足容差。
+
+这样可以避免高速下因为单个控制周期跨过 CUT_IN 而漏捕获。
+
+12.2 交接
+---------
+
+捕获成功后：
+
+1. 在首段有限窗口内计算投影；
+2. 设置：
+       s_actual = 投影进度
+       s_ref = s_actual
+3. 轨迹跟随器 CurrentVPathRef 初始化为切入速度/局部规划速度，
+   不得初始化为 0；
+4. 立即插值正式节点的：
+       x_ref/y_ref/yaw_ref
+       vx_ff/vy_ff/wz_ff
+5. 不调用 STOP Hold；
+6. 不执行到点位置保持；
+7. 不清零底盘速度命令；
+8. 继续正常的前馈+P修正控制。
+
+目标是让切入前后的速度命令连续，而不是：
+
+    直线到点 -> 停车 -> 再启动轨迹
+
+12.3 失败处理
+-------------
+
+出现以下情况必须报错或进入安全停车：
+
+- LIDAR_POSE_INVALID
+- START_OUT_OF_ALLOWED_REGION
+- CUT_IN_TIMEOUT
+- CUT_IN_CAPTURE_MISSED
+- CUT_IN_YAW_MISMATCH
+- CUT_IN_TANGENT_MISMATCH
+- CUT_IN_SPEED_UNREACHABLE
+- CUT_IN_PATH_UNSAFE（由上位机预检查发现）
+
+不得跳过 CUT_IN 后的 ARRIVAL/Gate 直接进入轨迹中段。
+
+十三、正式轨迹速度规划
+----------------------
+
+13.1 统一线加速度
+-----------------
+
+使用一个变量：
+
+    linear_accel_mmps2
+
+同时用于加速和减速。
+
+正向扫描：
+
+    v[i]^2 <= v[i-1]^2 + 2*a*ds
+
+反向扫描：
+
+    v[i]^2 <= v[i+1]^2 + 2*a*ds
+
+与以往不同，首节点边界条件不是 0，而是：
+
+    v[0] = cut_in_speed_mmps
+
+末节点：
+
+    v[end] = 0
+
+若其他约束使首节点不能达到 cut_in_speed：
+
+- 禁止导出；
+- 提示降低切入速度或调整首段路径；
+- 不得静默把首节点速度改低而仍保留原 cut_in_speed 字段。
+
+13.2 yaw 和角加速度
+-------------------
+
+    angular_accel_moving_radps2 = 2.0（当前推荐）
+    angular_accel_rotate_radps2 = 5.0（当前推荐）
+
+边走边转使用 moving 参数。
+
+STOP ARRIVAL 的最终纯旋转对准使用 rotate 参数。
+
+13.3 曲率和 yaw 限速
+--------------------
+
+    v_curve = sqrt(a_lat_max / max(abs(kappa), epsilon))
+    v_yaw   = wz_max / abs(dyaw/ds)
+
+13.4 四轮约束
+-------------
+
+生成器必须使用与 STM32 一致的麦轮逆运动学。
+
+建议：
+
+    wheel_plan_limit_rpm = 400~420
+    wheel_hard_limit_rpm = 450
+
+前馈轨迹正常使用 soft limit，为 P 修正留余量。
+
+运行时超过 450 rpm：
+
+- 四轮整体等比例缩放；
+- wheel_scale 反馈给 s_ref 推进；
+- 保留 max_ref_lead_mm 限制。
+
+十四、正式轨迹跟随
+------------------
+
+控制周期建议 5 ms。
+
+每周期：
+
+1. 更新实际位姿、速度和雷达/导航状态；
+2. 当前节点附近局部投影得到 s_actual；
+3. 更新时间域 CurrentVPathRef；
+4. 推进 s_ref；
+5. 施加 wheel_scale 和 max_ref_lead；
+6. 插值：
+       x_ref/y_ref/yaw_ref
+       vx_ff/vy_ff/wz_ff
+7. 控制：
+       vx_cmd_world = vx_ff + Kp_x*(x_ref-x_actual)
+       vy_cmd_world = vy_ff + Kp_y*(y_ref-y_actual)
+       wz_cmd       = wz_ff + Kp_yaw*(yaw_ref-yaw_actual)
+8. 世界系转车体系；
+9. 进入现有速度环、麦轮逆解、轮速限制和电机速度环。
+
+当前实测推荐：
+
+    Kp_x = 1.0
+    Kp_y = 1.0
+    Kp_yaw = 1.0
+
+PID 参数属于固件/调参配置，不写入 BIN。
+
+十五、机械动作结构
+------------------
+
+#pragma pack(push, 1)
+
+typedef struct
+{
+    uint8_t  action_seq;
+    uint8_t  action;
+    uint8_t  unlock_gate_id;
+    uint8_t  flags;
+
+    uint16_t timeout_ms;
+    uint16_t arm_s_mm;
+    uint16_t disarm_s_mm;
+    uint16_t accel_limit_mmps2;
+    uint16_t beta_limit_ddegps2;
+    uint16_t speed_limit_mmps;
+    uint16_t stable_time_ms;
+    uint16_t reserved;
+} BeanMechanicalActionV32_t;
+
+#pragma pack(pop)
+
+Python struct：
+
+    <BBBBHHHHHHHH
+
+action_size 固定 20。
+
+动作编号：
+
+#define PATH_ACT_NONE                 0x00U
+
+#define PATH_ACT_PREP_PICK_1          0x11U
+#define PATH_ACT_PREP_PICK_2L         0x12U
+#define PATH_ACT_PREP_PICK_2R         0x13U
+#define PATH_ACT_PREP_PICK_3          0x14U
+#define PATH_ACT_PICK                 0x20U
+
+#define PATH_ACT_STORE_1              0x31U
+#define PATH_ACT_STORE_2              0x32U
+#define PATH_ACT_STORE_3              0x33U
+
+#define PATH_ACT_DUMP                 0x40U
+#define PATH_ACT_PREP_DUMP_1          0x41U
+#define PATH_ACT_PREP_DUMP_2          0x42U
+#define PATH_ACT_PREP_DUMP_3          0x43U
+
+PREP_DUMP 只更新 pending_dump_mask，不开门。
+
+DUMP 才锁存 pending_dump_mask、开门、等待、关门并清空 mask。
+
+十六、动作 flags 和 Gate
+------------------------
+
+#define ACTION_FLAG_NONE             0x00U
+#define ACTION_FLAG_LOCKED           0x01U
+#define ACTION_FLAG_HOLD_PATH        0x02U
+#define ACTION_FLAG_REQUIRED_AT_END  0x04U
+
+#define ACTION_GATE_ACCEL            0xFEU
+#define ACTION_GATE_UNCONDITIONAL    0xFFU
+
+规则：
+
+1. 编号 Gate：0~gate_count-1；
+2. 0xFE：加速度条件 Gate，只存在于动作中；
+3. 0xFF：无条件动作；
+4. HOLD_PATH 只能用于编号 Gate；
+5. 0xFE 禁止 HOLD_PATH；
+6. 切入段中不触发编号 Gate；
+7. V3.2 第一阶段机械 FIFO 从正式轨迹切入成功后开始执行；
+8. CUT_IN 本身不得解锁 PICK、DUMP 或其他机械动作。
+
+0xFE 条件：
+
+    s_actual >= arm_s_mm
+    s_actual <= disarm_s_mm（若不为 0xFFFF）
+    a_actual_xy <= accel_limit_mmps2
+    abs(beta_actual_z) <= beta_limit_ddegps2（若非 0）
+    speed_actual <= speed_limit_mmps（若非 0）
+
+条件连续满足 stable_time_ms 后解锁。
+
+十七、倒豆
+----------
+
+保留 V3.1 设计：
+
+1. PREP_DUMP_1/2/3 可组合；
+2. DUMP 前 pending_dump_mask 必须非 0；
+3. DUMP 可使用：
+       编号 ARRIVAL|GATE|STOP + HOLD_PATH
+       0xFE 低加速度区 + 无 HOLD_PATH
+4. DUMP 完成后清空 pending_dump_mask；
+5. 文件结束时 mask 必须为 0；
+6. 找不到安全低加速度区时，生成器必须提示改为停车倒豆。
+
+十八、高速区和高加速度区显示
+----------------------------
+
+生成器必须提供：
+
+    [显示高速区]
+    [显示高线加速度区]
+
+建议同时提供：
+
+    [显示高角加速度区]
+    [显示切入段预览]
+    [显示切入捕获范围]
+
+高速区：
+
+    hypot(vx_ff, vy_ff) > speed_overlay_threshold_mmps
+
+高线加速度区：
+
+    hypot(ax_plan, ay_plan) > accel_overlay_threshold_mmps2
+
+高角加速度区：
+
+    abs(beta_plan) > beta_overlay_threshold
+
+要求：
+
+1. 基于最终规划结果；
+2. 连续区间覆盖显示；
+3. 阈值可编辑；
+4. 悬停显示 s、速度、线加速度、角加速度、最大轮速；
+5. 显示配置保存在 JSON，不写入 BIN；
+6. CUT_IN 圆形捕获范围可视化；
+7. 用户输入一个预览雷达初始点时，显示 STM32 将计算的直线切入段；
+8. 显示切入段是否足以达到 cut_in_speed。
+
+十九、JSON 工程格式
+-------------------
+
+格式：
+
+    HJMB_PATH_EDITOR_JSON_V32
+
+建议：
+
+{
+  "format": "HJMB_PATH_EDITOR_JSON_V32",
+  "traj_id": 0,
+
+  "field": {
+    "width_mm": 4000,
+    "height_mm": 2000
+  },
+
+  "planner": {
+    "max_speed_mmps": 2000,
+    "nominal_spacing_mm": 25,
+    "max_spacing_mm": 50,
+
+    "linear_accel_mmps2": 1200,
+    "lateral_accel_mmps2": 0,
+
+    "angular_accel_moving_radps2": 2.0,
+    "angular_accel_rotate_radps2": 5.0,
+
+    "wheel_plan_limit_rpm": 420,
+    "wheel_hard_limit_rpm": 450,
+    "max_ref_lead_mm": 50
+  },
+
+  "cut_in": {
+    "capture_radius_mm": 100,
+    "target_speed_mmps": 800,
+    "approach_max_speed_mmps": 800,
+    "straight_length_mm": 500,
+    "yaw_tolerance_ddeg": 100,
+    "tangent_tolerance_ddeg": 150,
+    "align_yaw": true,
+    "allow_first_segment_capture": true
+  },
+
+  "start_region": {
+    "enabled": false,
+    "polygon_mm": []
+  },
+
+  "preview_initial_pose": {
+    "enabled": false,
+    "x_mm": 0,
+    "y_mm": 0,
+    "yaw_ddeg": 0
+  },
+
+  "overlay": {
+    "show_high_speed": false,
+    "speed_threshold_mmps": 1500,
+    "show_high_accel": false,
+    "accel_threshold_mmps2": 800,
+    "show_high_beta": false,
+    "beta_threshold_radps2": 2.0,
+    "show_cut_in_capture": true,
+    "show_cut_in_preview": true
+  },
+
+  "controller_preview": {
+    "kp_x": 1.0,
+    "kp_y": 1.0,
+    "kp_yaw": 1.0
+  },
+
+  "vehicle_profile": {},
+  "mechanism_profile": {},
+  "collision_check_enabled": false,
+  "reachability_check_enabled": false,
+
+  "points": [
+    {
+      "point_id": 0,
+      "type": "CUT_IN",
+      "x_mm": 500,
+      "y_mm": 500,
+      "yaw_ddeg": 0,
+      "yaw_mode": "FIXED"
+    },
+    {
+      "point_id": 1,
+      "type": "WAYPOINT",
+      "x_mm": 1200,
+      "y_mm": 500,
+      "yaw_mode": "INHERIT",
+      "corner_trim_mm": 200,
+      "exact_pass": false,
+      "max_speed_mmps": 1800
+    },
+    {
+      "point_id": 2,
+      "type": "ARRIVAL",
+      "x_mm": 2000,
+      "y_mm": 900,
+      "yaw_ddeg": 900,
+      "yaw_mode": "FIXED",
+      "stop_required": true,
+      "gate_id": 0,
+      "scan": true,
+      "is_end": false
+    },
+    {
+      "point_id": 3,
+      "type": "ARRIVAL",
+      "x_mm": 3500,
+      "y_mm": 1500,
+      "yaw_ddeg": 0,
+      "yaw_mode": "FIXED",
+      "stop_required": true,
+      "gate_id": 255,
+      "scan": false,
+      "is_end": true
+    }
+  ],
+
+  "actions": []
+}
+
+二十、生成器校验
+----------------
+
+必须检查：
+
+1. 恰好一个 CUT_IN；
+2. CUT_IN 是 points[0]；
+3. CUT_IN 精确对应第一个轨迹节点；
+4. CUT_IN 不设置 STOP/GATE；
+5. cut_in_speed > 0；
+6. approach_max_speed >= cut_in_speed；
+7. 首节点速度等于 cut_in_speed；
+8. 首段满足 cut_in_straight_length；
+9. 首段不存在停车/扫码/机械 Gate；
+10. 首段曲率、yaw 变化和轮速允许 cut_in_speed；
+11. 至少一个 ARRIVAL 被标记 is_end；
+12. 只能有一个 END；
+13. END 必须 STOP；
+14. ARRIVAL 精确经过；
+15. 普通 WAYPOINT 可圆角；
+16. exact_pass WAYPOINT 精确经过；
+17. 所有编号 Gate 连续、唯一、按路径顺序；
+18. 动作 FIFO 无死锁；
+19. 0xFE 条件合法；
+20. PREP_DUMP/DUMP mask 合法；
+21. CRC、结构大小、offset、reserved 正确。
+
+二十一、STM32 加载校验
+----------------------
+
+必须检查：
+
+1. magic="HJMB"；
+2. version=32；
+3. header_size=64；
+4. node_size=16；
+5. action_size=20；
+6. FILE_FLAG_LIDAR_CUT_IN 已设置；
+7. 首节点 CUT_IN 且 s=0；
+8. 首节点不是 STOP/GATE；
+9. 首节点速度与 cut_in_speed 一致；
+10. approach_max_speed >= cut_in_speed；
+11. 捕获半径非 0；
+12. CUT_IN 唯一；
+13. END 唯一且 STOP；
+14. 文件 CRC32 正确；
+15. 所有动作和 Gate 规则正确。
+
+二十二、CRC32
+-------------
+
+使用 CRC-32/IEEE，与 zlib.crc32 一致：
+
+    "123456789" -> 0xCBF43926
+
+计算时 file_crc32 字段置 0，对完整文件计算后小端写回。
+
+二十三、推荐运行状态机
+----------------------
+
+    PATH_STATE_IDLE
+        ->
+    PATH_STATE_WAIT_LIDAR_POSE
+        ->
+    PATH_STATE_APPROACH_CUT_IN
+        ->
+    PATH_STATE_CAPTURE_CUT_IN
+        ->
+    PATH_STATE_FOLLOW_TRAJECTORY
+        ->
+    PATH_STATE_HOLD_GATE（按需）
+        ->
+    PATH_STATE_FINISHED
+
+异常进入：
+
+    PATH_STATE_ERROR
+    或安全停车状态
+
+切入成功前：
+
+- s_ref/s_actual 不属于正式轨迹；
+- 不触发编号 Gate；
+- 不执行正式机械 FIFO；
+- 不把正式轨迹首速度初始化为 0。
+
+二十四、关键结论
+----------------
+
+1. 初始位置由激光雷达实时给出，不写入文件；
+2. CUT_IN 是正式轨迹唯一入口，且必须是首节点；
+3. STM32 在线计算从真实初始点到 CUT_IN 的直线；
+4. CUT_IN 是捕获区域，不要求高速时命中一个数学点；
+5. cut_in_speed_mmps 可由用户设置；
+6. CUT_IN 不停车，轨迹跟随器速度状态不得清零；
+7. WAYPOINT 用于路线塑形和手动途径点；
+8. ARRIVAL 用于必须精确到达的位置，可选择停车或带速度通过；
+9. END 是最后一个 ARRIVAL 的属性；
+10. 切入后的首段应保持足够长的直线或近直线；
+11. 若切入方向、yaw 或速度不满足条件，不能盲目跳入正式轨迹；
+12. PREP_DUMP、DUMP、0xFE 加速度 Gate 和分区显示继续沿用。

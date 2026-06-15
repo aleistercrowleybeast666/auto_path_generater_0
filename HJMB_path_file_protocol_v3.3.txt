@@ -1,0 +1,658 @@
+HJMB 搬运豆子机器人空间轨迹文件协议 V3.3
+================================================
+
+一、版本范围
+------------
+
+本文档定义 HJMB V3.3 空间轨迹 JSON 配置、BIN 文件、yaw 锚点规划、激光雷达
+切入、机械动作 FIFO、编号 Gate 和 0xFE 加速度条件 Gate。
+
+V3.3 与 V3.2 及更早版本不兼容，不要求生成器或固件兼容旧协议。
+
+V3.3 相比 V3.2 的核心变化：
+
+1. WAYPOINT 不再决定 yaw；
+2. WAYPOINT 的 JSON 字段 yaw_ddeg 固定为 0xFF，表示未指定；
+3. 删除 yaw_mode，不再提供 FIXED、INHERIT、TANGENT；
+4. CUT_IN 提供正式轨迹起始 yaw；
+5. ARRIVAL 提供后续 yaw 锚点；
+6. 相邻 yaw 锚点之间由生成器在整段路径上平滑分配 yaw；
+7. yaw 规划必须同时满足最大角速度、移动角加速度和麦轮轮速限制；
+8. WAYPOINT 在编辑器中不显示方向线和 yaw 拖拽控制点；
+9. BIN 稠密节点仍保存实际 yaw 和 wz，不把 0xFF 写入节点 yaw；
+10. Header.version 改为 33，并新增必需文件标志
+    FILE_FLAG_ARRIVAL_YAW_ANCHORS；
+11. 暂存动作定义为 PREP_STORE_1/2/3 + STORE；
+12. 放豆动作定义为 DROP_1/2/3/12/23，不提供 DROP_13 和 DROP_123。
+
+二、文件名和字节序
+------------------
+
+路径：
+
+    /TRJ/P0000.BIN ~ /TRJ/P0359.BIN
+
+文件名数字必须与 traj_id 一致。
+
+多字节字段使用 Little-Endian。
+
+单位：
+
+    x/y/s                 mm
+    vx/vy                 mm/s
+    线加速度              mm/s^2
+    yaw                   0.1 度，ddeg
+    wz                    ddeg/s
+    角加速度              ddeg/s^2
+    时间                  ms
+
+reserved 字段必须为 0。
+
+三、文件总体结构
+----------------
+
+    +-----------------------------------------+
+    | BeanTrajectoryHeaderV33_t       64 bytes|
+    +-----------------------------------------+
+    | BeanTrajectoryNodeV33_t[]       16 bytes|
+    +-----------------------------------------+
+    | BeanMechanicalActionV33_t[]     20 bytes|
+    +-----------------------------------------+
+
+    file_size = 64 + node_count*16 + action_count*20
+
+限制：
+
+    node_count    2~2500
+    action_count  0~32
+    gate_count    0~32
+    total_length  0~65535 mm
+    traj_id       0~359
+
+四、文件头 BeanTrajectoryHeaderV33_t
+------------------------------------
+
+#pragma pack(push, 1)
+
+typedef struct
+{
+    char     magic[4];                      // "HJMB"
+    uint8_t  version;                       // 固定 33
+    uint8_t  header_size;                   // 固定 64
+    uint8_t  node_size;                     // 固定 16
+    uint8_t  action_size;                   // 固定 20
+
+    uint16_t traj_id;                       // 0~359
+    uint16_t flags;                         // FILE_FLAG_*
+
+    uint16_t field_width_mm;                // 固定 4000
+    uint16_t field_height_mm;               // 固定 2000
+    uint16_t nominal_spacing_mm;            // 1~50，建议 25
+    uint16_t node_count;                    // 2~2500
+
+    uint8_t  action_count;                  // 0~32
+    uint8_t  gate_count;                    // 仅统计编号 Gate
+    uint16_t reserved0;                     // 0
+
+    uint32_t file_crc32;                    // 计算时本字段置 0
+    uint32_t node_offset;                   // 固定 64
+    uint32_t action_offset;                 // 64 + node_count*16
+    uint32_t total_length_mm;               // 从 CUT_IN 开始
+    uint32_t planned_time_ms;               // 仅正式轨迹
+    uint32_t reserved1;                     // 0
+
+    uint16_t cut_in_capture_radius_mm;
+    uint16_t cut_in_speed_mmps;
+    uint16_t approach_max_speed_mmps;
+    uint16_t cut_in_straight_length_mm;
+
+    uint16_t cut_in_yaw_tolerance_ddeg;
+    uint16_t cut_in_tangent_tolerance_ddeg;
+    uint16_t approach_flags;
+    uint16_t reserved2;                     // 0
+} BeanTrajectoryHeaderV33_t;
+
+#pragma pack(pop)
+
+Python struct：
+
+    <4sBBBBHHHHHHBBHIIIIIIHHHHHHHH
+
+结构大小必须为 64 bytes。
+
+文件 flags：
+
+#define FILE_FLAG_SPATIAL_TRAJECTORY    0x0001U
+#define FILE_FLAG_WORLD_VELOCITY        0x0002U
+#define FILE_FLAG_ACCEL_GATE_USED       0x0004U
+#define FILE_FLAG_LIDAR_CUT_IN          0x0008U
+#define FILE_FLAG_ARRIVAL_YAW_ANCHORS   0x0010U
+
+V3.3 必须设置：
+
+    SPATIAL_TRAJECTORY
+    WORLD_VELOCITY
+    LIDAR_CUT_IN
+    ARRIVAL_YAW_ANCHORS
+
+任一动作使用 unlock_gate_id=0xFE 时必须设置 ACCEL_GATE_USED。
+
+五、空间轨迹节点 BeanTrajectoryNodeV33_t
+----------------------------------------
+
+#pragma pack(push, 1)
+
+typedef struct
+{
+    uint16_t s_mm;
+    int16_t  x_mm;
+    int16_t  y_mm;
+    int16_t  yaw_ddeg;       // 生成后的实际 yaw，不使用 0xFF 哨兵语义
+    int16_t  vx_mmps;        // 世界坐标系前馈
+    int16_t  vy_mmps;
+    int16_t  wz_ddegps;      // 生成后的实际角速度
+    uint8_t  gate_id;
+    uint8_t  flags;
+} BeanTrajectoryNodeV33_t;
+
+#pragma pack(pop)
+
+Python struct：
+
+    <HhhhhhhBB
+
+节点 gate_id：
+
+    0x00~gate_count-1   编号 Gate
+    0xFF                非 Gate
+
+0xFE 只允许作为机械动作 unlock_gate_id，不允许写入节点 gate_id。
+
+节点 flags：
+
+#define TRAJ_FLAG_NONE       0x00U
+#define TRAJ_FLAG_GATE       0x01U
+#define TRAJ_FLAG_STOP       0x02U
+#define TRAJ_FLAG_SCAN       0x04U
+#define TRAJ_FLAG_SLOW_ZONE  0x08U
+#define TRAJ_FLAG_CUT_IN     0x10U
+#define TRAJ_FLAG_ARRIVAL    0x20U
+#define TRAJ_FLAG_WAYPOINT   0x40U
+#define TRAJ_FLAG_END        0x80U
+
+节点规则：
+
+1. 首节点必须 s_mm=0，并设置 CUT_IN；
+2. CUT_IN 全文件只能出现一次；
+3. 首节点不得设置 STOP 或 GATE；
+4. 首节点合成线速度必须等于 cut_in_speed_mmps，允许整数化误差；
+5. 最后一个节点必须设置 ARRIVAL|END|STOP；
+6. END 全文件只能出现一次；
+7. STOP 节点 vx/vy/wz 必须为 0；
+8. CUT_IN 和所有 ARRIVAL 是 yaw 锚点，其节点 wz_ddegps 必须为 0；
+9. ARRIVAL 节点 yaw 必须精确等于对应编辑点指定 yaw；
+10. 普通 WAYPOINT 可被圆角绕过，不要求在 BIN 中保留节点；
+11. exact_pass=true 的 WAYPOINT 必须保留 TRAJ_FLAG_WAYPOINT 节点；
+12. BIN 中任何节点的 yaw_ddeg 都是实际角度，不使用 0xFF 表示未指定。
+
+六、编辑器点类型
+----------------
+
+V3.3 只提供 CUT_IN、WAYPOINT、ARRIVAL 三种编辑点。
+
+6.1 CUT_IN
+----------
+
+- 全路线唯一，必须位于第 0 行；
+- 必须精确经过；
+- 不停车，不绑定编号 Gate；
+- yaw_ddeg 是正式轨迹的第一个 yaw 锚点；
+- 编辑器显示方向线和 yaw 拖拽控制点；
+- 正式轨迹 s=0 从此处开始。
+
+6.2 WAYPOINT
+------------
+
+- 只决定 x/y 路线形状、圆角、精确通过和局部速度上限；
+- 不决定 yaw；
+- JSON 中 yaw_ddeg 必须为 0xFF；
+- 不允许 yaw_mode 字段；
+- 编辑器不显示方向线和 yaw 拖拽控制点；
+- 不允许 STOP、Gate、SCAN 或 END；
+- exact_pass=false 时允许被局部二次贝塞尔圆角绕过；
+- exact_pass=true 时曲线必须精确经过，但仍不成为 yaw 锚点。
+
+6.3 ARRIVAL
+-----------
+
+- 轨迹必须精确经过；
+- yaw_ddeg 是实际目标 yaw，也是 yaw 锚点；
+- 编辑器显示方向线和 yaw 拖拽控制点；
+- 可设置 stop_required、Gate、SCAN 和 END；
+- stop_required=false 时允许带线速度通过，但锚点瞬间 wz 必须为 0；
+- stop_required=true 时 vx/vy/wz 必须为 0；
+- 最后一个 ARRIVAL 必须同时设置 END 和 STOP。
+
+七、V3.3 yaw 规划
+-----------------
+
+7.1 锚点
+-------
+
+yaw 锚点序列只包括：
+
+    CUT_IN
+    所有 ARRIVAL
+
+WAYPOINT 无论是否 exact_pass，都不得加入 yaw 锚点序列。
+
+至少必须存在：
+
+    1 个 CUT_IN
+    1 个 END ARRIVAL
+
+相邻锚点角度默认按最短方向展开，单段 yaw 变化限制在 [-180°, +180°] 的等价
+范围内。V3.3 不使用隐式多圈旋转；若确有多圈需求，应设计新的显式字段。
+
+7.2 五次平滑分配
+----------------
+
+相邻锚点：
+
+    A = (s0, yaw0)
+    B = (s1, yaw1)
+    L = s1 - s0
+    u = clamp((s-s0)/L, 0, 1)
+
+平滑函数：
+
+    h(u)   = 10u^3 - 15u^4 + 6u^5
+    h'(u)  = 30u^2 - 60u^3 + 30u^4
+    h''(u) = 60u - 180u^2 + 120u^3
+
+角度：
+
+    yaw(s) = yaw0 + delta_yaw*h(u)
+
+空间一阶导：
+
+    q(s) = dyaw/ds = delta_yaw*h'(u)/L
+
+空间二阶导：
+
+    q'(s) = d^2yaw/ds^2 = delta_yaw*h''(u)/L^2
+
+该函数满足：
+
+    h(0)=0
+    h(1)=1
+    h'(0)=h'(1)=0
+    h''(0)=h''(1)=0
+
+因此每个 CUT_IN/ARRIVAL 锚点处规划角速度自然回到 0，不依赖固件临时截断。
+
+7.3 物理限制
+------------
+
+生成器必须联合规划线速度和 yaw：
+
+    wz   = q*v
+    beta = q*a_t + q'*v^2
+
+必须满足：
+
+    abs(wz)   <= max_wz_radps
+    abs(beta) <= angular_accel_moving_radps2
+    a_total   <= linear_accel_mmps2
+    四轮转速  <= wheel_plan_limit_rpm
+
+若固定路径长度不足以在上述限制内完成 yaw 变化，生成器必须降低线速度。
+
+若即使速度趋近 0 仍无法满足配置或锚点冲突，必须拒绝导出，不得修改 ARRIVAL
+目标 yaw，也不得让 WAYPOINT 暗中成为 yaw 锚点。
+
+7.4 固件跟随
+------------
+
+固件不需要重新执行稀疏 yaw 规划。BIN 已保存每个稠密节点的：
+
+    yaw_ddeg
+    wz_ddegps
+
+固件按 s 在相邻节点间插值 x/y/yaw/vx/vy/wz，并继续使用前馈加位置/yaw 修正。
+
+八、路径几何和采样
+------------------
+
+普通 WAYPOINT 使用局部二次贝塞尔圆角：
+
+    d = min(corner_trim_mm, 0.45*|AB|, 0.45*|BC|)
+    Q(t) = (1-t)^2*P_in + 2(1-t)t*B + t^2*P_out
+
+要求：
+
+1. CUT_IN、ARRIVAL、exact_pass WAYPOINT 必须精确经过；
+2. 普通 WAYPOINT 可以被圆角绕过；
+3. 不使用易过冲的全局高阶位置曲线；
+4. nominal_spacing_mm 建议 25 mm；
+5. 任意相邻节点间距不得超过 50 mm；
+6. ARRIVAL、STOP、Gate 附近应细化采样；
+7. 相邻节点 yaw 变化建议不超过 3°。
+
+九、切入段
+----------
+
+激光雷达实时初始位姿不写入 BIN。
+
+运行流程：
+
+    雷达初始位姿
+        -> 固件在线生成直线切入段
+        -> CUT_IN 捕获区域
+        -> V3.3 正式空间轨迹
+
+切入段：
+
+    P(lambda) = P0 + lambda*(Pc-P0)
+
+若设置 APPROACH_FLAG_ALIGN_YAW_TO_CUT_IN，切入过程中 yaw 应平滑趋近 CUT_IN
+yaw。切入点不是停车点，切换时速度状态不得清零。
+
+approach_flags：
+
+#define APPROACH_FLAG_LIDAR_REQUIRED              0x0001U
+#define APPROACH_FLAG_NO_STOP_AT_CUT_IN            0x0002U
+#define APPROACH_FLAG_ALIGN_YAW_TO_CUT_IN          0x0004U
+#define APPROACH_FLAG_ALLOW_FIRST_SEGMENT_CAPTURE  0x0008U
+
+前两位必须设置。
+
+十、正式轨迹速度
+----------------
+
+首节点边界：
+
+    v[0] = cut_in_speed_mmps
+
+末节点和所有 STOP：
+
+    v = 0
+
+线加速度正向/反向扫描：
+
+    v[i]^2 <= v[i-1]^2 + 2*a*ds
+    v[i]^2 <= v[i+1]^2 + 2*a*ds
+
+同时叠加：
+
+    曲率横向加速度限制
+    合成线加速度限制
+    yaw 角速度限制
+    yaw 角加速度限制
+    麦轮规划软限制
+    编辑点 max_speed_mmps
+
+十一、机械动作 BeanMechanicalActionV33_t
+-----------------------------------------
+
+#pragma pack(push, 1)
+
+typedef struct
+{
+    uint8_t  action_seq;
+    uint8_t  action;
+    uint8_t  unlock_gate_id;
+    uint8_t  flags;
+
+    uint16_t timeout_ms;
+    uint16_t arm_s_mm;
+    uint16_t disarm_s_mm;
+    uint16_t accel_limit_mmps2;
+    uint16_t beta_limit_ddegps2;
+    uint16_t speed_limit_mmps;
+    uint16_t stable_time_ms;
+    uint16_t reserved;
+} BeanMechanicalActionV33_t;
+
+#pragma pack(pop)
+
+Python struct：
+
+    <BBBBHHHHHHHH
+
+action_size 固定 20。
+
+动作编号：
+
+#define PATH_ACT_NONE                 0x00U
+#define PATH_ACT_PREP_PICK_1          0x11U
+#define PATH_ACT_PREP_PICK_2L         0x12U
+#define PATH_ACT_PREP_PICK_2R         0x13U
+#define PATH_ACT_PREP_PICK_3          0x14U
+#define PATH_ACT_PICK                 0x20U
+#define PATH_ACT_DROP_1               0x31U
+#define PATH_ACT_DROP_2               0x32U
+#define PATH_ACT_DROP_3               0x33U
+#define PATH_ACT_DROP_12              0x34U
+#define PATH_ACT_DROP_23              0x35U
+#define PATH_ACT_STORE                0x40U
+#define PATH_ACT_PREP_STORE_1         0x41U
+#define PATH_ACT_PREP_STORE_2         0x42U
+#define PATH_ACT_PREP_STORE_3         0x43U
+
+暂存动作语义：
+
+1. PREP_STORE_1/2/3 选择目标暂存仓并完成预备机构动作；
+2. 随后的 STORE 将豆子放入已选择的暂存仓；
+3. STORE 必须消费一个尚未消费的 PREP_STORE；
+4. 一个 PREP_STORE 只能被一个 STORE 消费；
+5. 未执行 STORE 前禁止再次 PREP_STORE；
+6. 文件结束时不得残留 pending_store_slot。
+
+放豆动作语义：
+
+1. DROP 表示从暂存区放到场地放豆区域；
+2. DROP_1、DROP_2、DROP_3 分别放出单个暂存仓；
+3. DROP_12 同时放出暂存仓 1 和 2；
+4. DROP_23 同时放出暂存仓 2 和 3；
+5. 不定义 DROP_13；
+6. 不定义 DROP_123；
+7. DROP 不需要 PREP_STORE；
+8. DROP 动作自身携带要放出的暂存仓组合。
+
+动作 flags：
+
+#define ACTION_FLAG_NONE             0x00U
+#define ACTION_FLAG_LOCKED           0x01U
+#define ACTION_FLAG_HOLD_PATH        0x02U
+#define ACTION_FLAG_REQUIRED_AT_END  0x04U
+
+Gate：
+
+#define ACTION_GATE_ACCEL            0xFEU
+#define ACTION_GATE_UNCONDITIONAL    0xFFU
+
+规则：
+
+1. 编号 Gate 为 0~gate_count-1；
+2. 0xFE 只存在于机械动作；
+3. HOLD_PATH 只能用于编号 Gate；
+4. 0xFE 禁止 HOLD_PATH；
+5. PICK 必须引用 ARRIVAL|GATE|STOP；
+6. 停车 DROP 必须引用 ARRIVAL|GATE|STOP 并设置 HOLD_PATH；
+7. 低加速度 DROP 可使用 0xFE，但禁止 HOLD_PATH；
+8. DROP 禁止使用 0xFF 无条件 Gate；
+9. PREP_STORE 和 STORE 不参与 DROP 组合选择；
+10. STORE 必须消费一个 pending_store_slot；
+11. 文件结束时 pending_store_slot 必须为 0。
+
+0xFE 条件：
+
+    s_actual >= arm_s_mm
+    s_actual <= disarm_s_mm（若不为 0xFFFF）
+    a_actual_xy <= accel_limit_mmps2
+    abs(beta_actual_z) <= beta_limit_ddegps2（若非 0）
+    speed_actual <= speed_limit_mmps（若非 0）
+
+条件连续满足 stable_time_ms 后解锁。
+
+十二、JSON 工程格式
+-------------------
+
+格式：
+
+    HJMB_PATH_EDITOR_JSON_V33
+
+JSON 只保存人工配置，不保存自动生成的稠密节点、速度曲线或分析结果。
+
+示例：
+
+{
+  "format": "HJMB_PATH_EDITOR_JSON_V33",
+  "traj_id": 0,
+  "field": {
+    "width_mm": 4000,
+    "height_mm": 2000
+  },
+  "planner": {
+    "max_speed_mmps": 2000,
+    "nominal_spacing_mm": 25,
+    "max_spacing_mm": 50,
+    "linear_accel_mmps2": 1200,
+    "lateral_accel_mmps2": 1200,
+    "max_wz_radps": 4.0,
+    "angular_accel_moving_radps2": 2.0,
+    "angular_accel_rotate_radps2": 5.0
+  },
+  "cut_in": {
+    "capture_radius_mm": 100,
+    "target_speed_mmps": 800,
+    "approach_max_speed_mmps": 1000,
+    "straight_length_mm": 500,
+    "yaw_tolerance_ddeg": 100,
+    "tangent_tolerance_ddeg": 150,
+    "align_yaw": true,
+    "allow_first_segment_capture": true
+  },
+  "points": [
+    {
+      "point_id": 0,
+      "type": "CUT_IN",
+      "x_mm": -1500,
+      "y_mm": 0,
+      "yaw_ddeg": 0,
+      "exact_pass": true
+    },
+    {
+      "point_id": 1,
+      "type": "WAYPOINT",
+      "x_mm": -500,
+      "y_mm": 200,
+      "yaw_ddeg": 255,
+      "corner_trim_mm": 180,
+      "exact_pass": false
+    },
+    {
+      "point_id": 2,
+      "type": "ARRIVAL",
+      "x_mm": 800,
+      "y_mm": 500,
+      "yaw_ddeg": 900,
+      "stop_required": true,
+      "gate_id": 0,
+      "scan": true,
+      "is_end": false
+    },
+    {
+      "point_id": 3,
+      "type": "ARRIVAL",
+      "x_mm": 1700,
+      "y_mm": 500,
+      "yaw_ddeg": 0,
+      "stop_required": true,
+      "gate_id": 255,
+      "scan": false,
+      "is_end": true
+    }
+  ],
+  "actions": []
+}
+
+JSON 校验：
+
+1. format 必须为 HJMB_PATH_EDITOR_JSON_V33；
+2. 不接受 V3.2 或更早 JSON；
+3. 不允许 yaw_mode；
+4. WAYPOINT.yaw_ddeg 必须为 255，即 0xFF；
+5. CUT_IN/ARRIVAL.yaw_ddeg 是实际 int16_t ddeg；
+6. 必须恰好一个 CUT_IN，且位于第 0 行；
+7. 必须恰好一个 END ARRIVAL，且位于最后一行；
+8. 编号 Gate 必须按路径顺序连续。
+
+十三、生成器界面要求
+--------------------
+
+1. WAYPOINT yaw 显示为只读 0xFF；
+2. WAYPOINT 不显示方向线和 yaw 控制点；
+3. CUT_IN 和 ARRIVAL 显示方向线和 yaw 控制点；
+4. 修改点类型为 WAYPOINT 时自动把 yaw_ddeg 设为 0xFF；
+5. 修改 WAYPOINT 为 CUT_IN/ARRIVAL 时若原值为 0xFF，默认实际 yaw 为 0；
+6. 规划结果应显示稠密节点的实际 yaw、wz 和 beta；
+7. JSON 导入后必须重新规划；
+8. BIN 导出前必须执行完整 V3.3 静态校验。
+
+十四、生成器必须检查
+--------------------
+
+1. Header、Node、Action 结构大小正确；
+2. version=33；
+3. 必需文件 flags 全部设置；
+4. WAYPOINT yaw_ddeg=0xFF；
+5. yaw 锚点只来自 CUT_IN/ARRIVAL；
+6. 每个锚点精确达到配置 yaw；
+7. 每个锚点规划 wz=0；
+8. abs(wz) 不超过 max_wz_radps；
+9. abs(beta) 不超过 angular_accel_moving_radps2；
+10. 合成线加速度和麦轮转速不超限；
+11. CUT_IN 首速度正确；
+12. END ARRIVAL 停车；
+13. Gate、动作 FIFO、PREP_STORE/STORE 配对和 DROP 组合合法；
+14. offset、reserved、长度和 CRC 正确。
+
+十五、STM32 加载检查
+--------------------
+
+1. magic="HJMB"；
+2. version=33；
+3. header_size=64；
+4. node_size=16；
+5. action_size=20；
+6. FILE_FLAG_ARRIVAL_YAW_ANCHORS 已设置；
+7. 首节点 CUT_IN 且 s=0；
+8. 首节点不是 STOP/GATE；
+9. CUT_IN 和 ARRIVAL 节点 wz=0；
+10. 最后节点 ARRIVAL|END|STOP；
+11. CUT_IN、END 唯一；
+12. Gate 和动作合法；
+13. CRC32 正确。
+
+十六、CRC32
+-----------
+
+使用 CRC-32/IEEE，与 zlib.crc32 一致：
+
+    "123456789" -> 0xCBF43926
+
+计算时将 Header.file_crc32 置 0，对完整文件计算 CRC 后按小端写回。
+
+十七、关键结论
+--------------
+
+1. WAYPOINT 只塑造位置路径，不决定 yaw；
+2. WAYPOINT 配置 yaw 固定为 0xFF，且不显示角度控制；
+3. CUT_IN 和 ARRIVAL 是唯一 yaw 锚点；
+4. yaw 在锚点之间平滑分配，并由物理限制决定允许线速度；
+5. BIN 节点始终保存实际 yaw/wz，固件不处理 0xFF 哨兵；
+6. V3.3 Header.version 固定为 33；
+7. V3.3 必须设置 FILE_FLAG_ARRIVAL_YAW_ANCHORS；
+8. V3.2 JSON/BIN 不兼容，必须重新生成。
