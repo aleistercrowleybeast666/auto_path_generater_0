@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""HJMB V3.3 yaw, speed, wheel, action, and time planning."""
+"""HJMB V3.5 yaw, speed, wheel, action, and time planning."""
 from __future__ import annotations
 
 import bisect
@@ -7,28 +7,21 @@ import math
 from dataclasses import replace
 from typing import Dict, List, Optional, Sequence, Tuple
 
-from path_geometry import generate_geometry, validate_cut_in_straight
+from path_geometry import generate_geometry
 from path_models import (
-    ACTION_FLAG_HOLD_PATH,
-    ACTION_FLAG_LOCKED,
-    ACTION_FLAG_REQUIRED_AT_END,
-    ACTION_GATE_ACCEL,
-    ACTION_GATE_UNCONDITIONAL,
+    ACTION_MODE_ASYNC,
+    ACTION_MODE_CODES,
+    ACTION_MODE_KINEMATIC,
+    ACTION_MODE_STOP_AND_WAIT,
     ACTIONS,
+    ArrivalDepartureLock,
+    DROP_ACTIONS,
     MAX_ACTIONS,
+    MAX_ARRIVALS,
     MAX_NODES,
     MAX_TRAJ_ID,
-    DROP_ACTIONS,
+    PATH_ACT_STORE,
     PREP_STORE_ACTION_SLOTS,
-    TRAJ_FLAG_ARRIVAL,
-    TRAJ_FLAG_CUT_IN,
-    TRAJ_FLAG_END,
-    TRAJ_FLAG_GATE,
-    TRAJ_FLAG_SCAN,
-    TRAJ_FLAG_STOP,
-    TRAJ_FLAG_WAYPOINT,
-    VALID_ACTION_FLAGS_MASK,
-    CutInPreviewResult,
     EditPoint,
     GeometryResult,
     GeometrySample,
@@ -36,13 +29,21 @@ from path_models import (
     PathProject,
     PlanResult,
     PlanSummary,
+    POINT_TYPE_ARRIVAL,
+    POINT_TYPE_START,
+    POINT_TYPE_WAYPOINT,
+    ResolvedMechanicalAction,
+    TRAJ_FLAG_ARRIVAL,
+    TRAJ_FLAG_END,
+    TRAJ_FLAG_START,
+    TRAJ_FLAG_WAYPOINT,
     TrajectoryNode,
     VehicleProfile,
-    PATH_ACT_PICK,
-    PATH_ACT_STORE,
-    POINT_TYPE_ARRIVAL,
-    POINT_TYPE_CUT_IN,
-    POINT_TYPE_WAYPOINT,
+    YAW_ROTATION_CCW_ONLY,
+    YAW_ROTATION_CW_ONLY,
+    YAW_ROTATION_POLICIES,
+    YAW_ROTATION_SHORTEST,
+    resolve_edit_points,
 )
 
 SPEED_EPS_MMPS = 1e-6
@@ -59,33 +60,59 @@ def _clamp(value: float, lower: float, upper: float) -> float:
     return max(lower, min(upper, value))
 
 
+def _normalized_delta(target_rad: float, reference_rad: float) -> float:
+    delta = target_rad - reference_rad
+    while delta > math.pi:
+        delta -= 2.0 * math.pi
+    while delta < -math.pi:
+        delta += 2.0 * math.pi
+    if abs(delta) < 1e-12:
+        return 0.0
+    return delta
+
+
+def _yaw_delta_by_policy(
+    start_rad: float,
+    target_rad: float,
+    policy: str,
+) -> float:
+    delta = _normalized_delta(target_rad, start_rad)
+    if policy == YAW_ROTATION_SHORTEST:
+        return delta
+    if policy == YAW_ROTATION_CW_ONLY:
+        return delta if delta <= 0.0 else delta - 2.0 * math.pi
+    if policy == YAW_ROTATION_CCW_ONLY:
+        return delta if delta >= 0.0 else delta + 2.0 * math.pi
+    raise ValueError(f"planner.yaw_rotation_policy={policy!r} 非法")
+
+
 def _unwrap_near(angle_rad: float, reference_rad: float) -> float:
-    while angle_rad - reference_rad > math.pi:
-        angle_rad -= 2.0 * math.pi
-    while angle_rad - reference_rad < -math.pi:
-        angle_rad += 2.0 * math.pi
-    return angle_rad
+    return reference_rad + _normalized_delta(angle_rad, reference_rad)
 
 
 def _plan_yaw(
     points: Sequence[EditPoint],
     geometry: GeometryResult,
+    policy: str,
 ) -> Tuple[List[float], List[float], List[float]]:
-    """Plan yaw from CUT_IN/ARRIVAL anchors; WAYPOINT never anchors yaw."""
+    """Plan yaw from START/ARRIVAL anchors; WAYPOINT never anchors yaw."""
+    if policy not in YAW_ROTATION_POLICIES:
+        raise ValueError(f"planner.yaw_rotation_policy={policy!r} 非法")
     anchors: List[Tuple[float, float]] = []
     previous_yaw: Optional[float] = None
     for index, point in enumerate(points):
-        if point.type not in (POINT_TYPE_CUT_IN, POINT_TYPE_ARRIVAL):
+        if point.type not in (POINT_TYPE_START, POINT_TYPE_ARRIVAL):
             continue
         point_s = geometry.point_s_mm[index]
-        yaw = math.radians(point.yaw_ddeg / 10.0)
+        raw_yaw = math.radians(point.yaw_ddeg / 10.0)
+        yaw = raw_yaw
         if previous_yaw is not None:
-            yaw = _unwrap_near(yaw, previous_yaw)
+            yaw = previous_yaw + _yaw_delta_by_policy(previous_yaw, raw_yaw, policy)
         anchors.append((point_s, yaw))
         previous_yaw = yaw
 
     if len(anchors) < 2:
-        raise ValueError("V3.3 yaw 规划至少需要 CUT_IN 和 END ARRIVAL 两个 yaw 锚点")
+        raise ValueError("V3.5 yaw 规划至少需要 START 和一个 ARRIVAL 两个 yaw 锚点")
 
     yaw_values: List[float] = []
     q_values: List[float] = []
@@ -187,6 +214,7 @@ def _point_speed_limit(
 
 def _local_speed_limits(
     project: PathProject,
+    points: Sequence[EditPoint],
     geometry: GeometryResult,
     yaw_values: Sequence[float],
     q_values: Sequence[float],
@@ -202,9 +230,7 @@ def _local_speed_limits(
     sources: List[str] = []
     wheel_units: List[float] = []
     stop_by_source = {
-        index
-        for index, point in enumerate(project.points)
-        if point.type == POINT_TYPE_ARRIVAL and point.stop_required
+        index for index, point in enumerate(points) if point.type == POINT_TYPE_ARRIVAL
     }
     for index, sample in enumerate(geometry.samples):
         candidates: List[Tuple[float, str]] = [
@@ -212,7 +238,7 @@ def _local_speed_limits(
             (
                 _point_speed_limit(
                     sample.s_mm,
-                    project.points,
+                    points,
                     geometry.point_s_mm,
                     planner.max_speed_mmps,
                 ),
@@ -259,7 +285,7 @@ def _local_speed_limits(
                 )
             )
         if sample.source_point in stop_by_source:
-            candidates.append((0.0, "stop boundary"))
+            candidates.append((0.0, "arrival stop"))
         value, source = min(candidates, key=lambda item: item[0])
         limits.append(max(0.0, value))
         sources.append(source)
@@ -308,20 +334,14 @@ def _plan_speed(
     q_prime_values: Sequence[float],
     local_limits: Sequence[float],
 ) -> Tuple[List[float], int]:
-    target_speed = float(project.cut_in.target_speed_mmps)
-    if local_limits[0] + SPEED_TOLERANCE_MMPS < target_speed:
-        raise ValueError(
-            f"CUT_IN 目标速度 {target_speed:.1f} mm/s 超过首节点局部上限 "
-            f"{local_limits[0]:.1f} mm/s"
-        )
     speeds = list(local_limits)
-    speeds[0] = target_speed
+    speeds[0] = 0.0
     speeds[-1] = 0.0
 
     converged_iteration = project.planner.max_iterations
     for iteration in range(project.planner.max_iterations):
         previous_speeds = list(speeds)
-        speeds[0] = target_speed
+        speeds[0] = 0.0
         for index in range(len(speeds) - 1):
             ds = geometry.samples[index + 1].s_mm - geometry.samples[index].s_mm
             interval = _acceleration_interval(
@@ -367,12 +387,7 @@ def _plan_speed(
                 )
             )
             if index == 0:
-                if candidate + SPEED_TOLERANCE_MMPS < target_speed:
-                    raise ValueError(
-                        "CUT_IN 目标速度无法在后续 STOP/曲率约束前安全减速；"
-                        "请降低切入速度或调整首段"
-                    )
-                speeds[index] = target_speed
+                speeds[index] = 0.0
             else:
                 speeds[index] = min(speeds[index], local_limits[index], candidate)
 
@@ -420,19 +435,14 @@ def _plan_speed(
                         )
                     ),
                 )
-            elif actual_accel < lower:
+            elif actual_accel < lower and index > 0:
                 candidate = math.sqrt(
                     max(
                         0.0,
                         speeds[index + 1] * speeds[index + 1] - 2.0 * lower * ds,
                     )
                 )
-                if index == 0 and candidate + SPEED_TOLERANCE_MMPS < target_speed:
-                    raise ValueError(
-                        "CUT_IN 目标速度在首段合成加速度/beta 约束下不可行"
-                    )
-                if index > 0:
-                    speeds[index] = min(speeds[index], candidate)
+                speeds[index] = min(speeds[index], candidate)
 
         maximum_change = max(
             abs(current - previous)
@@ -445,38 +455,46 @@ def _plan_speed(
     for index, speed in enumerate(speeds):
         if not math.isfinite(speed) or speed < -SPEED_EPS_MMPS:
             raise ValueError(f"s={geometry.samples[index].s_mm:.1f} mm 规划出非法速度")
+    speeds[0] = 0.0
+    speeds[-1] = 0.0
     return speeds, converged_iteration
 
 
+def _arrival_ids(points: Sequence[EditPoint]) -> Dict[int, int]:
+    result: Dict[int, int] = {}
+    next_arrival_id = 0
+    for index, point in enumerate(points):
+        if point.type == POINT_TYPE_ARRIVAL:
+            result[index] = next_arrival_id
+            next_arrival_id += 1
+    return result
+
+
 def _node_flags(
-    project: PathProject,
+    points: Sequence[EditPoint],
     source_point: Optional[int],
+    arrival_id_by_source: Dict[int, int],
 ) -> Tuple[int, int]:
     if source_point is None:
         return 0, 0xFF
-    point = project.points[source_point]
+    point = points[source_point]
     flags = 0
-    gate_id = 0xFF
-    if point.type == POINT_TYPE_CUT_IN:
-        flags |= TRAJ_FLAG_CUT_IN
+    arrival_id = 0xFF
+    if point.type == POINT_TYPE_START:
+        flags |= TRAJ_FLAG_START
     elif point.type == POINT_TYPE_ARRIVAL:
         flags |= TRAJ_FLAG_ARRIVAL
-        if point.stop_required:
-            flags |= TRAJ_FLAG_STOP
-        if point.scan:
-            flags |= TRAJ_FLAG_SCAN
-        if point.gate_id != 0xFF:
-            flags |= TRAJ_FLAG_GATE
-            gate_id = point.gate_id
-        if point.is_end:
+        arrival_id = arrival_id_by_source[source_point]
+        if source_point == len(points) - 1:
             flags |= TRAJ_FLAG_END
     elif point.type == POINT_TYPE_WAYPOINT and point.exact_pass:
         flags |= TRAJ_FLAG_WAYPOINT
-    return flags, gate_id
+    return flags, arrival_id
 
 
 def _build_nodes(
     project: PathProject,
+    points: Sequence[EditPoint],
     geometry: GeometryResult,
     yaw_values: Sequence[float],
     q_values: Sequence[float],
@@ -486,6 +504,7 @@ def _build_nodes(
 ) -> List[TrajectoryNode]:
     nodes: List[TrajectoryNode] = []
     segment_accels: List[float] = []
+    arrival_id_by_source = _arrival_ids(points)
     for previous_index in range(len(geometry.samples) - 1):
         ds = (
             geometry.samples[previous_index + 1].s_mm
@@ -535,8 +554,8 @@ def _build_nodes(
         vx = sample.tangent_x * speed
         vy = sample.tangent_y * speed
         wz = q_values[index] * speed
-        flags, gate_id = _node_flags(project, sample.source_point)
-        if flags & TRAJ_FLAG_STOP:
+        flags, arrival_id = _node_flags(points, sample.source_point, arrival_id_by_source)
+        if flags & (TRAJ_FLAG_START | TRAJ_FLAG_ARRIVAL):
             speed = 0.0
             vx = 0.0
             vy = 0.0
@@ -557,7 +576,7 @@ def _build_nodes(
                 vx_mmps=vx,
                 vy_mmps=vy,
                 wz_radps=wz,
-                gate_id=gate_id,
+                arrival_id=arrival_id,
                 flags=flags,
                 speed_mmps=speed,
                 a_t_mmps2=a_t,
@@ -573,65 +592,6 @@ def _build_nodes(
             )
         )
     return nodes
-
-
-def estimate_cut_in_preview(project: PathProject) -> CutInPreviewResult:
-    preview = project.preview_initial_pose
-    if not preview.enabled:
-        return CutInPreviewResult(enabled=False)
-    if not project.points:
-        return CutInPreviewResult(
-            enabled=True, warning="没有 CUT_IN 点，无法估算切入段"
-        )
-    cut_in = project.points[0]
-    distance = math.hypot(cut_in.x_mm - preview.x_mm, cut_in.y_mm - preview.y_mm)
-    initial_speed = max(0.0, preview.initial_speed_mmps)
-    final_speed = float(project.cut_in.target_speed_mmps)
-    maximum_speed = float(project.cut_in.approach_max_speed_mmps)
-    accel = float(project.planner.linear_accel_mmps2)
-    result = CutInPreviewResult(enabled=True, distance_mm=distance)
-    if accel <= 0 or maximum_speed <= 0 or final_speed <= 0:
-        result.warning = "切入速度或加速度参数非法"
-        return result
-    if initial_speed > maximum_speed + SPEED_TOLERANCE_MMPS:
-        result.warning = "预览初速度超过 approach_max_speed"
-        return result
-
-    minimum_distance = abs(final_speed * final_speed - initial_speed * initial_speed) / (
-        2.0 * accel
-    )
-    if distance + 1e-6 < minimum_distance:
-        result.warning = (
-            f"距离不足：至少需要 {minimum_distance:.1f} mm 才能从 "
-            f"{initial_speed:.1f} mm/s 到达 {final_speed:.1f} mm/s"
-        )
-        return result
-
-    peak_sq = accel * distance + 0.5 * (
-        initial_speed * initial_speed + final_speed * final_speed
-    )
-    unconstrained_peak = math.sqrt(max(0.0, peak_sq))
-    if unconstrained_peak <= maximum_speed + 1e-6:
-        peak = max(unconstrained_peak, initial_speed, final_speed)
-        time_s = abs(peak - initial_speed) / accel + abs(peak - final_speed) / accel
-    else:
-        peak = maximum_speed
-        accel_distance = max(
-            0.0, (peak * peak - initial_speed * initial_speed) / (2.0 * accel)
-        )
-        decel_distance = max(
-            0.0, (peak * peak - final_speed * final_speed) / (2.0 * accel)
-        )
-        cruise_distance = max(0.0, distance - accel_distance - decel_distance)
-        time_s = (
-            abs(peak - initial_speed) / accel
-            + abs(peak - final_speed) / accel
-            + cruise_distance / max(peak, SPEED_EPS_MMPS)
-        )
-    result.reachable = True
-    result.peak_speed_mmps = peak
-    result.time_ms = int(round(time_s * 1000.0))
-    return result
 
 
 def _integrate_formal_time(nodes: Sequence[TrajectoryNode]) -> int:
@@ -652,167 +612,304 @@ def _integrate_formal_time(nodes: Sequence[TrajectoryNode]) -> int:
 def _estimate_mechanical_wait(project: PathProject) -> int:
     total = 0
     for action in project.actions:
+        if action.mode != ACTION_MODE_STOP_AND_WAIT:
+            continue
         name = ACTIONS.get(action.action, "")
         duration = project.mechanism_profile.action_duration_ms.get(name, 0)
-        if action.flags & ACTION_FLAG_HOLD_PATH:
-            total += duration
-        elif action.flags & ACTION_FLAG_REQUIRED_AT_END:
-            total += duration
+        total += duration + action.post_wait_ms
     return total
 
 
-def _find_accel_gate_window(
-    project: PathProject,
-    nodes: Sequence[TrajectoryNode],
+def _point_lookup(
+    points: Sequence[EditPoint],
+    geometry: GeometryResult,
+) -> Dict[int, Tuple[int, EditPoint, float]]:
+    lookup: Dict[int, Tuple[int, EditPoint, float]] = {}
+    for index, point in enumerate(points):
+        lookup[point.point_id] = (index, point, geometry.point_s_mm[index])
+    return lookup
+
+
+def _segment_time_ms(previous: TrajectoryNode, current: TrajectoryNode) -> float:
+    ds = current.s_mm - previous.s_mm
+    denominator = previous.speed_mmps + current.speed_mmps
+    if ds <= DISTANCE_EPS_MM:
+        return 0.0
+    if denominator <= SPEED_EPS_MMPS:
+        return 0.0
+    return 2000.0 * ds / denominator
+
+
+def _action_conditions_met(action: MechanicalAction, node: TrajectoryNode) -> bool:
+    if action.speed_limit_mmps and node.speed_mmps > action.speed_limit_mmps:
+        return False
+    if action.accel_limit_mmps2 and node.a_total_mmps2 > action.accel_limit_mmps2:
+        return False
+    wz_ddegps = abs(math.degrees(node.wz_radps) * 10.0)
+    if action.wz_limit_ddegps and wz_ddegps > action.wz_limit_ddegps:
+        return False
+    beta_ddegps2 = abs(math.degrees(node.beta_radps2) * 10.0)
+    if action.beta_limit_ddegps2 and beta_ddegps2 > action.beta_limit_ddegps2:
+        return False
+    return True
+
+
+def _find_kinematic_check_start(
     action: MechanicalAction,
-) -> Optional[Tuple[int, int]]:
-    required_ms = (
-        action.stable_time_ms
-        + project.mechanism_profile.action_duration_ms.get(
-            ACTIONS.get(action.action, ""),
-            0,
-        )
-        + project.mechanism_profile.drop_safety_margin_ms
-    )
-    accumulated_ms = 0.0
-    start_index: Optional[int] = None
-    for index, node in enumerate(nodes):
-        beta_ddegps2 = abs(math.degrees(node.beta_radps2) * 10.0)
-        condition = (
-            (action.accel_limit_mmps2 == 0 or node.a_total_mmps2 <= action.accel_limit_mmps2)
-            and (
-                action.beta_limit_ddegps2 == 0
-                or beta_ddegps2 <= action.beta_limit_ddegps2
-            )
-            and (
-                action.speed_limit_mmps == 0
-                or node.speed_mmps <= action.speed_limit_mmps
-            )
-            and not (node.flags & TRAJ_FLAG_STOP)
-        )
-        if not condition:
-            accumulated_ms = 0.0
-            start_index = None
+    nodes: Sequence[TrajectoryNode],
+    lower_bound_s_mm: float,
+) -> Optional[int]:
+    stable_required_ms = float(action.stable_time_ms)
+    stable_start_s: Optional[float] = None
+    stable_time_ms = 0.0
+    previous: Optional[TrajectoryNode] = None
+    previous_ok = False
+
+    for node in nodes:
+        if node.s_mm + DISTANCE_EPS_MM < lower_bound_s_mm:
+            previous = node
+            previous_ok = False
             continue
-        if start_index is None:
-            start_index = index
-        if index > start_index:
-            previous = nodes[index - 1]
-            ds = node.s_mm - previous.s_mm
-            denominator = node.speed_mmps + previous.speed_mmps
-            if denominator > SPEED_EPS_MMPS:
-                accumulated_ms += 2000.0 * ds / denominator
-        if accumulated_ms + 1e-6 >= required_ms:
-            return int(round(nodes[start_index].s_mm)), int(round(node.s_mm))
+        ok = _action_conditions_met(action, node)
+        if ok and stable_start_s is None:
+            stable_start_s = max(node.s_mm, lower_bound_s_mm)
+            stable_time_ms = 0.0
+        if ok and previous is not None and previous_ok:
+            stable_time_ms += _segment_time_ms(previous, node)
+            if stable_time_ms + 1e-6 >= stable_required_ms:
+                return int(round(stable_start_s if stable_start_s is not None else node.s_mm))
+        elif not ok:
+            stable_start_s = None
+            stable_time_ms = 0.0
+        previous = node
+        previous_ok = ok
     return None
 
 
-def _prepare_accel_gate_actions(
-    project: PathProject,
-    nodes: Sequence[TrajectoryNode],
-) -> None:
-    for action in project.actions:
-        if action.action not in DROP_ACTIONS or action.unlock_gate_id != ACTION_GATE_ACCEL:
+def _arrival_s_by_id(
+    points: Sequence[EditPoint],
+    geometry: GeometryResult,
+) -> Dict[int, float]:
+    return {
+        arrival_id: geometry.point_s_mm[index]
+        for index, arrival_id in _arrival_ids(points).items()
+    }
+
+
+def _fallback_arrival_after(
+    arrival_s_by_id: Dict[int, float],
+    lower_bound_s_mm: float,
+) -> Tuple[int, int]:
+    ordered = sorted(arrival_s_by_id.items(), key=lambda item: item[1])
+    for arrival_id, arrival_s in ordered:
+        if arrival_s > lower_bound_s_mm + DISTANCE_EPS_MM:
+            return arrival_id, int(round(arrival_s))
+    arrival_id, arrival_s = ordered[-1]
+    return arrival_id, int(round(arrival_s))
+
+
+def _derive_departure_locks(
+    actions: Sequence[ResolvedMechanicalAction],
+) -> List[ArrivalDepartureLock]:
+    by_arrival: Dict[int, List[int]] = {}
+    for action in actions:
+        if action.mode != ACTION_MODE_STOP_AND_WAIT:
             continue
-        window = _find_accel_gate_window(project, nodes, action)
-        if window is None:
-            raise ValueError(
-                f"机械动作 {action.action_seq} 的 0xFE "
-                f"{ACTIONS[action.action]} 找不到满足 a_total、beta、speed "
-                "和持续时间要求的区间；请改为停车 DROP"
+        by_arrival.setdefault(action.arrival_id, []).append(action.action_seq)
+    return [
+        ArrivalDepartureLock(
+            arrival_id=arrival_id,
+            departure_action_seq=max(action_seqs),
+            bound_action_seqs=sorted(action_seqs),
+        )
+        for arrival_id, action_seqs in sorted(by_arrival.items())
+    ]
+
+
+def resolve_actions(
+    project: PathProject,
+    points: Sequence[EditPoint],
+    geometry: GeometryResult,
+    nodes: Sequence[TrajectoryNode],
+) -> List[ResolvedMechanicalAction]:
+    errors = validate_actions(project, points, geometry)
+    if errors:
+        raise ValueError("\n".join(errors))
+
+    lookup = _point_lookup(points, geometry)
+    arrival_id_by_source = _arrival_ids(points)
+    arrival_id_by_point_id = {
+        points[index].point_id: arrival_id
+        for index, arrival_id in arrival_id_by_source.items()
+    }
+    total_length = geometry.samples[-1].s_mm
+    resolved: List[ResolvedMechanicalAction] = []
+    for row, action in enumerate(project.actions):
+        if action.mode == ACTION_MODE_STOP_AND_WAIT:
+            arrival_point_id = action.arrival_point_id
+            if arrival_point_id is None:
+                raise ValueError(f"机械动作 {row} STOP_AND_WAIT 缺少 arrival_point_id")
+            if arrival_point_id not in lookup:
+                raise ValueError(f"机械动作 {row} 引用不存在的 arrival_point_id={arrival_point_id}")
+            _index, point, _s_mm = lookup[arrival_point_id]
+            if point.type != POINT_TYPE_ARRIVAL:
+                raise ValueError(f"机械动作 {row} STOP_AND_WAIT 只能引用 ARRIVAL")
+            resolved.append(
+                ResolvedMechanicalAction(
+                    action_seq=action.action_seq,
+                    action=action.action,
+                    mode=action.mode,
+                    arrival_id=arrival_id_by_point_id[arrival_point_id],
+                    timeout_ms=action.timeout_ms,
+                    post_wait_ms=action.post_wait_ms,
+                    check_start_s_mm=0xFFFF,
+                    accel_limit_mmps2=0,
+                    beta_limit_ddegps2=0,
+                    wz_limit_ddegps=0,
+                    speed_limit_mmps=0,
+                    stable_time_ms=0,
+                    execution_hint="ARRIVAL_STOP",
+                )
             )
-        action.arm_s_mm, action.disarm_s_mm = window
+            continue
+
+        if action.mode == ACTION_MODE_ASYNC:
+            resolved.append(
+                ResolvedMechanicalAction(
+                    action_seq=action.action_seq,
+                    action=action.action,
+                    mode=action.mode,
+                    arrival_id=0xFF,
+                    timeout_ms=action.timeout_ms,
+                    post_wait_ms=action.post_wait_ms,
+                    check_start_s_mm=0xFFFF,
+                    accel_limit_mmps2=0,
+                    beta_limit_ddegps2=0,
+                    wz_limit_ddegps=0,
+                    speed_limit_mmps=0,
+                    stable_time_ms=0,
+                    execution_hint="FIFO_HEAD",
+                )
+            )
+            continue
+
+        if action.mode == ACTION_MODE_KINEMATIC:
+            lower_bound_s = 0.0
+            for previous_action in reversed(project.actions[:row]):
+                if previous_action.mode != ACTION_MODE_STOP_AND_WAIT:
+                    continue
+                previous_arrival = previous_action.arrival_point_id
+                if previous_arrival is not None and previous_arrival in lookup:
+                    lower_bound_s = lookup[previous_arrival][2]
+                    break
+            check_start = _find_kinematic_check_start(action, nodes, lower_bound_s)
+            execution_hint = "MOVING"
+            fallback_arrival_id = None
+            if check_start is None:
+                fallback_arrival_id, check_start = _fallback_arrival_after(
+                    _arrival_s_by_id(points, geometry),
+                    lower_bound_s,
+                )
+                execution_hint = "ARRIVAL_FALLBACK"
+            resolved.append(
+                ResolvedMechanicalAction(
+                    action_seq=action.action_seq,
+                    action=action.action,
+                    mode=action.mode,
+                    arrival_id=0xFF,
+                    timeout_ms=action.timeout_ms,
+                    post_wait_ms=action.post_wait_ms,
+                    check_start_s_mm=check_start,
+                    accel_limit_mmps2=action.accel_limit_mmps2,
+                    beta_limit_ddegps2=action.beta_limit_ddegps2,
+                    wz_limit_ddegps=action.wz_limit_ddegps,
+                    speed_limit_mmps=action.speed_limit_mmps,
+                    stable_time_ms=action.stable_time_ms,
+                    execution_hint=execution_hint,
+                    fallback_arrival_id=fallback_arrival_id,
+                )
+            )
+            continue
+        raise ValueError(f"机械动作 {row} mode={action.mode!r} 非法")
+    return resolved
 
 
 def validate_actions(
     project: PathProject,
-    nodes: Sequence[TrajectoryNode],
+    points: Sequence[EditPoint],
+    geometry: Optional[GeometryResult] = None,
 ) -> List[str]:
     errors: List[str] = []
     if len(project.actions) > MAX_ACTIONS:
         errors.append(f"机械动作数量不能超过 {MAX_ACTIONS}")
         return errors
-    gate_nodes = {
-        node.gate_id: node
-        for node in nodes
-        if node.flags & TRAJ_FLAG_GATE and node.gate_id != 0xFF
-    }
-    expected_gates = list(range(len(gate_nodes)))
-    if sorted(gate_nodes) != expected_gates:
-        errors.append(f"轨迹 Gate 必须连续为 {expected_gates}，当前为 {sorted(gate_nodes)}")
 
     pending_store_slot = 0
-    previous_numbered_gate = -1
-    previous_blocking_s = 0.0
+    arrival_point_ids = {point.point_id for point in points if point.type == POINT_TYPE_ARRIVAL}
     for row, action in enumerate(project.actions):
         if action.action_seq != row:
             errors.append(f"机械动作 {row} 的 action_seq={action.action_seq}，应为 {row}")
         if action.action not in ACTIONS:
             errors.append(f"机械动作 {row} 的 action=0x{action.action:02X} 非法")
-        if action.flags & ~VALID_ACTION_FLAGS_MASK:
-            errors.append(f"机械动作 {row} 的 flags 含未定义位")
+        if action.mode not in ACTION_MODE_CODES:
+            errors.append(f"机械动作 {row} mode={action.mode!r} 非法")
+        if action.timeout_ms <= 0:
+            errors.append(f"机械动作 {row} timeout_ms 必须大于 0")
         for field_name in (
             "timeout_ms",
-            "arm_s_mm",
-            "disarm_s_mm",
+            "post_wait_ms",
             "accel_limit_mmps2",
             "beta_limit_ddegps2",
+            "wz_limit_ddegps",
             "speed_limit_mmps",
             "stable_time_ms",
         ):
             value = getattr(action, field_name)
-            if not 0 <= value <= 0xFFFF:
+            if field_name.endswith("offset_mm"):
+                if not -0x8000 <= value <= 0x7FFF:
+                    errors.append(f"机械动作 {row} 的 {field_name}={value} 超出 int16_t")
+            elif not 0 <= value <= 0xFFFF:
                 errors.append(f"机械动作 {row} 的 {field_name}={value} 超出 uint16_t")
 
-        locked = bool(action.flags & ACTION_FLAG_LOCKED)
-        hold_path = bool(action.flags & ACTION_FLAG_HOLD_PATH)
-        gate_id = action.unlock_gate_id
-        if gate_id == ACTION_GATE_UNCONDITIONAL:
-            if locked:
-                errors.append(f"机械动作 {row} 使用 0xFF 时不能设置 LOCKED")
-            if hold_path:
-                errors.append(f"机械动作 {row} 使用 0xFF 时不能设置 HOLD_PATH")
-        elif gate_id == ACTION_GATE_ACCEL:
-            if not locked:
-                errors.append(f"机械动作 {row} 使用 0xFE 时必须设置 LOCKED")
-            if hold_path:
-                errors.append(f"机械动作 {row} 使用 0xFE 时禁止 HOLD_PATH")
-            if action.disarm_s_mm != 0xFFFF and action.disarm_s_mm < action.arm_s_mm:
-                errors.append(f"机械动作 {row} 的 disarm_s_mm 小于 arm_s_mm")
-            if action.arm_s_mm > nodes[-1].s_mm:
-                errors.append(f"机械动作 {row} 的 arm_s_mm 超出轨迹总长度")
-            if (
-                action.disarm_s_mm != 0xFFFF
-                and action.disarm_s_mm > nodes[-1].s_mm
-            ):
-                errors.append(f"机械动作 {row} 的 disarm_s_mm 超出轨迹总长度")
-            if (
-                action.disarm_s_mm != 0xFFFF
-                and action.disarm_s_mm + 1e-6 < previous_blocking_s
-            ):
-                errors.append(
-                    f"机械动作 {row} 的 0xFE 窗口在前序 Gate 之后不可达，存在 FIFO 死锁风险"
+        if action.mode == ACTION_MODE_STOP_AND_WAIT:
+            if action.arrival_point_id not in arrival_point_ids:
+                errors.append(f"机械动作 {row} STOP_AND_WAIT 必须引用 ARRIVAL")
+            if any(
+                (
+                    action.accel_limit_mmps2,
+                    action.beta_limit_ddegps2,
+                    action.wz_limit_ddegps,
+                    action.speed_limit_mmps,
+                    action.stable_time_ms,
                 )
-        elif gate_id in gate_nodes:
-            if not locked:
-                errors.append(f"机械动作 {row} 引用编号 Gate 时必须设置 LOCKED")
-            if gate_id < previous_numbered_gate:
-                errors.append(f"机械动作 {row} 的编号 Gate 倒退，存在 FIFO 死锁风险")
-            previous_numbered_gate = gate_id
-            previous_blocking_s = max(previous_blocking_s, gate_nodes[gate_id].s_mm)
-        else:
-            errors.append(f"机械动作 {row} 引用不存在的 Gate {gate_id}")
-
-        if action.action == PATH_ACT_PICK:
-            gate_node = gate_nodes.get(gate_id)
-            if gate_node is None or not (
-                gate_node.flags & TRAJ_FLAG_ARRIVAL
-                and gate_node.flags & TRAJ_FLAG_GATE
-                and gate_node.flags & TRAJ_FLAG_STOP
             ):
-                errors.append(f"机械动作 {row} PICK 必须引用 ARRIVAL|GATE|STOP")
-            if not hold_path:
-                errors.append(f"机械动作 {row} PICK 必须设置 HOLD_PATH")
+                errors.append(f"机械动作 {row} STOP_AND_WAIT 含无效运动限制字段")
+        elif action.mode == ACTION_MODE_ASYNC:
+            if any(
+                (
+                    action.arrival_point_id is not None,
+                    action.accel_limit_mmps2,
+                    action.beta_limit_ddegps2,
+                    action.wz_limit_ddegps,
+                    action.speed_limit_mmps,
+                    action.stable_time_ms,
+                )
+            ):
+                errors.append(f"机械动作 {row} ASYNC 含无效 arrival 或运动限制字段")
+        elif action.mode == ACTION_MODE_KINEMATIC:
+            if action.arrival_point_id is not None:
+                errors.append(f"机械动作 {row} KINEMATIC 含无效 arrival 字段")
+            if not any(
+                (
+                    action.accel_limit_mmps2,
+                    action.beta_limit_ddegps2,
+                    action.wz_limit_ddegps,
+                    action.speed_limit_mmps,
+                )
+            ):
+                errors.append(f"机械动作 {row} KINEMATIC 至少需要一个运动限制")
+            if action.stable_time_ms <= 0:
+                errors.append(f"机械动作 {row} KINEMATIC stable_time_ms 必须大于 0")
 
         if action.action in PREP_STORE_ACTION_SLOTS:
             if pending_store_slot != 0:
@@ -826,27 +923,7 @@ def validate_actions(
                 errors.append(f"机械动作 {row} STORE 前没有 PREP_STORE")
             pending_store_slot = 0
         elif action.action in DROP_ACTIONS:
-            if gate_id not in (ACTION_GATE_ACCEL, ACTION_GATE_UNCONDITIONAL):
-                gate_node = gate_nodes.get(gate_id)
-                if gate_node is None or not (
-                    gate_node.flags & TRAJ_FLAG_ARRIVAL
-                    and gate_node.flags & TRAJ_FLAG_GATE
-                    and gate_node.flags & TRAJ_FLAG_STOP
-                ):
-                    errors.append(
-                        f"机械动作 {row} 停车 {ACTIONS[action.action]} "
-                        "必须引用 ARRIVAL|GATE|STOP"
-                    )
-                if not hold_path:
-                    errors.append(
-                        f"机械动作 {row} 停车 {ACTIONS[action.action]} "
-                        "必须设置 HOLD_PATH"
-                    )
-            if gate_id == ACTION_GATE_UNCONDITIONAL:
-                errors.append(
-                    f"机械动作 {row} {ACTIONS[action.action]} "
-                    "不能使用 0xFF 无条件 Gate"
-                )
+            pass
     if pending_store_slot:
         errors.append(
             f"文件结束时 pending_store_slot={pending_store_slot}，"
@@ -855,29 +932,118 @@ def validate_actions(
     return errors
 
 
-def _validate_nodes(project: PathProject, nodes: Sequence[TrajectoryNode]) -> List[str]:
+def validate_resolved_actions(
+    actions: Sequence[ResolvedMechanicalAction],
+    total_length_mm: float,
+    arrival_count: int,
+) -> List[str]:
+    errors: List[str] = []
+    pending_store_slot = 0
+    previous_stop_arrival_id = -1
+    quantized_total_length_mm = int(round(total_length_mm))
+    for row, action in enumerate(actions):
+        if action.action_seq != row:
+            errors.append(f"action[{row}].action_seq={action.action_seq}，应为 {row}")
+        if action.action not in ACTIONS:
+            errors.append(f"action[{row}].action=0x{action.action:02X} 非法")
+        if action.mode not in ACTION_MODE_CODES:
+            errors.append(f"action[{row}].mode={action.mode!r} 非法")
+        if action.timeout_ms <= 0:
+            errors.append(f"action[{row}].timeout_ms 必须大于 0")
+        if not 0 <= action.post_wait_ms <= 0xFFFF:
+            errors.append(f"action[{row}].post_wait_ms 超出 uint16_t")
+        if action.mode == ACTION_MODE_STOP_AND_WAIT:
+            if not 0 <= action.arrival_id < arrival_count:
+                errors.append(f"action[{row}] STOP_AND_WAIT arrival_id 非法")
+            if action.arrival_id < previous_stop_arrival_id:
+                errors.append(f"action[{row}] STOP_AND_WAIT arrival_id 必须按 action_seq 非递减")
+            previous_stop_arrival_id = max(previous_stop_arrival_id, action.arrival_id)
+            if action.check_start_s_mm != 0xFFFF:
+                errors.append(f"action[{row}] STOP_AND_WAIT check_start_s_mm 必须为 0xFFFF")
+            if any(
+                (
+                    action.accel_limit_mmps2,
+                    action.beta_limit_ddegps2,
+                    action.wz_limit_ddegps,
+                    action.speed_limit_mmps,
+                    action.stable_time_ms,
+                )
+            ):
+                errors.append(f"action[{row}] STOP_AND_WAIT 运动限制必须为 0")
+        elif action.mode == ACTION_MODE_ASYNC:
+            if action.arrival_id != 0xFF or action.check_start_s_mm != 0xFFFF:
+                errors.append(f"action[{row}] ASYNC arrival/check_start 字段非法")
+            if any(
+                (
+                    action.accel_limit_mmps2,
+                    action.beta_limit_ddegps2,
+                    action.wz_limit_ddegps,
+                    action.speed_limit_mmps,
+                    action.stable_time_ms,
+                )
+            ):
+                errors.append(f"action[{row}] ASYNC 运动限制必须为 0")
+        elif action.mode == ACTION_MODE_KINEMATIC:
+            if action.arrival_id != 0xFF:
+                errors.append(f"action[{row}] KINEMATIC arrival_id 必须为 0xFF")
+            if not 0 <= action.check_start_s_mm <= quantized_total_length_mm:
+                errors.append(f"action[{row}] KINEMATIC check_start_s_mm 超出轨迹范围")
+            if not any(
+                (
+                    action.accel_limit_mmps2,
+                    action.beta_limit_ddegps2,
+                    action.wz_limit_ddegps,
+                    action.speed_limit_mmps,
+                )
+            ):
+                errors.append(f"action[{row}] KINEMATIC 至少需要一个运动限制")
+            if action.stable_time_ms <= 0:
+                errors.append(f"action[{row}] KINEMATIC stable_time_ms 必须大于 0")
+        if action.action in PREP_STORE_ACTION_SLOTS:
+            if pending_store_slot != 0:
+                errors.append(f"action[{row}] PREP_STORE 缺少前序 STORE")
+            pending_store_slot = PREP_STORE_ACTION_SLOTS[action.action]
+        elif action.action == PATH_ACT_STORE:
+            if pending_store_slot == 0:
+                errors.append(f"action[{row}] STORE 前没有 PREP_STORE")
+            pending_store_slot = 0
+    if pending_store_slot:
+        errors.append("文件结束时 pending_store_slot 未清空")
+    return errors
+
+
+def _validate_nodes(
+    project: PathProject,
+    points: Sequence[EditPoint],
+    nodes: Sequence[TrajectoryNode],
+) -> List[str]:
     errors: List[str] = []
     if not (2 <= len(nodes) <= MAX_NODES):
         errors.append(f"规划节点数量必须为 2~{MAX_NODES}，当前为 {len(nodes)}")
         return errors
     if nodes[-1].s_mm > 0xFFFF:
         errors.append(f"轨迹总长度 {nodes[-1].s_mm:.1f} mm 超过 uint16_t 上限 65535 mm")
-    if not nodes[0].flags & TRAJ_FLAG_CUT_IN:
-        errors.append("首节点必须设置 CUT_IN")
-    if nodes[0].flags & (TRAJ_FLAG_STOP | TRAJ_FLAG_GATE):
-        errors.append("CUT_IN 首节点禁止 STOP/GATE")
-    if abs(nodes[0].speed_mmps - project.cut_in.target_speed_mmps) > SPEED_TOLERANCE_MMPS:
-        errors.append("CUT_IN 首节点速度与 cut_in.target_speed_mmps 不一致")
+    if not nodes[0].flags & TRAJ_FLAG_START:
+        errors.append("首节点必须设置 START")
+    if nodes[0].flags & (TRAJ_FLAG_ARRIVAL | TRAJ_FLAG_WAYPOINT | TRAJ_FLAG_END):
+        errors.append("START 首节点禁止 ARRIVAL/WAYPOINT/END")
+    if nodes[0].arrival_id != 0xFF:
+        errors.append("START 首节点 arrival_id 必须为 0xFF")
+    if nodes[0].speed_mmps > SPEED_TOLERANCE_MMPS or abs(nodes[0].wz_radps) > 0.01:
+        errors.append("START 首节点前馈速度必须为 0")
     last_flags = nodes[-1].flags
-    if (
-        last_flags & (TRAJ_FLAG_ARRIVAL | TRAJ_FLAG_END | TRAJ_FLAG_STOP)
-        != TRAJ_FLAG_ARRIVAL | TRAJ_FLAG_END | TRAJ_FLAG_STOP
-    ):
-        errors.append("末节点必须设置 ARRIVAL|END|STOP")
-    if sum(bool(node.flags & TRAJ_FLAG_CUT_IN) for node in nodes) != 1:
-        errors.append("CUT_IN 节点必须全文件唯一")
+    if last_flags & (TRAJ_FLAG_ARRIVAL | TRAJ_FLAG_END) != TRAJ_FLAG_ARRIVAL | TRAJ_FLAG_END:
+        errors.append("末节点必须设置 ARRIVAL|END")
+    if sum(bool(node.flags & TRAJ_FLAG_START) for node in nodes) != 1:
+        errors.append("START 节点必须全文件唯一")
     if sum(bool(node.flags & TRAJ_FLAG_END) for node in nodes) != 1:
         errors.append("END 节点必须全文件唯一")
+
+    arrival_ids = [node.arrival_id for node in nodes if node.flags & TRAJ_FLAG_ARRIVAL]
+    if arrival_ids != list(range(len(arrival_ids))):
+        errors.append(f"arrival_id 必须按路径连续，当前为 {arrival_ids}")
+    if len(arrival_ids) > MAX_ARRIVALS:
+        errors.append(f"arrival_count 不能超过 {MAX_ARRIVALS}")
 
     previous_s = -1.0
     previous_yaw = nodes[0].yaw_rad
@@ -885,12 +1051,17 @@ def _validate_nodes(project: PathProject, nodes: Sequence[TrajectoryNode]) -> Li
         if node.s_mm <= previous_s and index != 0:
             errors.append(f"节点 {index} 的 s_mm 未严格递增")
         previous_s = node.s_mm
-        if node.flags & TRAJ_FLAG_STOP and (
-            abs(node.vx_mmps) > SPEED_TOLERANCE_MMPS
-            or abs(node.vy_mmps) > SPEED_TOLERANCE_MMPS
-            or abs(node.wz_radps) > 0.01
-        ):
-            errors.append(f"STOP 节点 {index} 的前馈速度不为 0")
+        if node.flags & TRAJ_FLAG_ARRIVAL:
+            if node.arrival_id == 0xFF:
+                errors.append(f"ARRIVAL 节点 {index} 缺少 arrival_id")
+            if (
+                abs(node.vx_mmps) > SPEED_TOLERANCE_MMPS
+                or abs(node.vy_mmps) > SPEED_TOLERANCE_MMPS
+                or abs(node.wz_radps) > 0.01
+            ):
+                errors.append(f"ARRIVAL 节点 {index} 的前馈速度不为 0")
+        elif node.arrival_id != 0xFF:
+            errors.append(f"非 ARRIVAL 节点 {index} arrival_id 必须为 0xFF")
         if node.a_total_mmps2 > project.planner.linear_accel_mmps2 + ACCEL_TOLERANCE_MMPS2:
             errors.append(
                 f"节点 {index} s={node.s_mm:.1f} 的 a_total={node.a_total_mmps2:.1f} "
@@ -910,40 +1081,30 @@ def _validate_nodes(project: PathProject, nodes: Sequence[TrajectoryNode]) -> Li
                 f"节点 {index} s={node.s_mm:.1f} 的轮速 {node.max_wheel_rpm:.2f} rpm "
                 "超过规划软限制"
             )
-        if index > 0 and abs(node.yaw_rad - previous_yaw) > math.pi:
-            errors.append(f"节点 {index} 的 yaw 出现超过 180° 的跳变")
+        if index > 0 and abs(node.yaw_rad - previous_yaw) > 2.0 * math.pi + 1e-6:
+            errors.append(f"节点 {index} 的 yaw 出现异常跳变")
         previous_yaw = node.yaw_rad
         if node.source_point is not None:
-            source = project.points[node.source_point]
-            if source.type in (POINT_TYPE_CUT_IN, POINT_TYPE_ARRIVAL):
+            source = points[node.source_point]
+            if source.type in (POINT_TYPE_START, POINT_TYPE_ARRIVAL):
                 expected_yaw = _unwrap_near(
                     math.radians(source.yaw_ddeg / 10.0),
                     node.yaw_rad,
                 )
                 if abs(node.yaw_rad - expected_yaw) > 1e-8:
                     errors.append(
-                        f"yaw 锚点 {node.source_point} 未精确达到指定角度"
+                        f"yaw 锚点 {source.point_id} 未精确达到指定角度"
                     )
                 if abs(node.wz_radps) > 1e-8:
                     errors.append(
-                        f"yaw 锚点 {node.source_point} 的规划角速度必须为 0"
+                        f"yaw 锚点 {source.point_id} 的规划角速度必须为 0"
                     )
-        if (
-            node.s_mm <= project.cut_in.straight_length_mm + 1e-6
-            and node.speed_mmps + SPEED_TOLERANCE_MMPS
-            < project.cut_in.target_speed_mmps
-        ):
-            errors.append(
-                f"CUT_IN 直线段 s={node.s_mm:.1f} mm 的速度 {node.speed_mmps:.1f} "
-                f"低于目标速度 {project.cut_in.target_speed_mmps} mm/s"
-            )
     return errors
 
 
 def _build_summary(
     project: PathProject,
     nodes: Sequence[TrajectoryNode],
-    preview: CutInPreviewResult,
 ) -> PlanSummary:
     formal_time_ms = _integrate_formal_time(nodes)
     mechanical_wait_ms = _estimate_mechanical_wait(project)
@@ -961,13 +1122,11 @@ def _build_summary(
             2.0 * project.planner.linear_accel_mmps2 / 3.0
         ):
             high_accel_length += ds
-    cut_in_time_ms = preview.time_ms if preview.enabled and preview.reachable else 0
     return PlanSummary(
         total_length_mm=nodes[-1].s_mm,
         formal_time_ms=formal_time_ms,
-        cut_in_preview_time_ms=cut_in_time_ms,
         mechanical_wait_time_ms=mechanical_wait_ms,
-        estimated_total_time_ms=formal_time_ms + cut_in_time_ms + mechanical_wait_ms,
+        estimated_total_time_ms=formal_time_ms + mechanical_wait_ms,
         max_speed_mmps=max(node.speed_mmps for node in nodes),
         max_a_total_mmps2=max(node.a_total_mmps2 for node in nodes),
         max_a_n_mmps2=max(node.a_n_mmps2 for node in nodes),
@@ -985,7 +1144,7 @@ def validate_project_config(project: PathProject) -> List[str]:
     if not 0 <= project.traj_id <= MAX_TRAJ_ID:
         errors.append(f"traj_id 必须为 0~{MAX_TRAJ_ID}")
     if project.field.width_mm != 4000 or project.field.height_mm != 2000:
-        errors.append("V3.3 field.width_mm/height_mm 必须固定为 4000/2000")
+        errors.append("V3.5 field.width_mm/height_mm 必须固定为 4000/2000")
     planner = project.planner
     if planner.max_speed_mmps <= 0:
         errors.append("planner.max_speed_mmps 必须大于 0")
@@ -995,18 +1154,12 @@ def validate_project_config(project: PathProject) -> List[str]:
         errors.append("planner.max_wz_radps 必须大于 0")
     if planner.angular_accel_moving_radps2 <= 0:
         errors.append("planner.angular_accel_moving_radps2 必须大于 0")
+    if planner.yaw_rotation_policy not in YAW_ROTATION_POLICIES:
+        errors.append("planner.yaw_rotation_policy 非法")
     if not 1 <= planner.nominal_spacing_mm <= 50:
         errors.append("planner.nominal_spacing_mm 必须为 1~50")
     if not 1 <= planner.max_spacing_mm <= 50:
         errors.append("planner.max_spacing_mm 必须为 1~50")
-    if project.cut_in.capture_radius_mm <= 0:
-        errors.append("cut_in.capture_radius_mm 必须大于 0")
-    if project.cut_in.target_speed_mmps <= 0:
-        errors.append("cut_in.target_speed_mmps 必须大于 0")
-    if project.cut_in.target_speed_mmps > planner.max_speed_mmps:
-        errors.append("cut_in.target_speed_mmps 不能超过 planner.max_speed_mmps")
-    if project.cut_in.approach_max_speed_mmps < project.cut_in.target_speed_mmps:
-        errors.append("cut_in.approach_max_speed_mmps 必须不小于 target_speed_mmps")
     vehicle = project.vehicle_profile
     if vehicle.wheel_radius_mm <= 0 or vehicle.rotation_radius_mm <= 0:
         errors.append("车辆轮半径和旋转半径必须大于 0")
@@ -1014,6 +1167,13 @@ def validate_project_config(project: PathProject) -> List[str]:
         errors.append("wheel_plan_limit_rpm 必须大于 0")
     if vehicle.wheel_hard_limit_rpm < vehicle.wheel_plan_limit_rpm:
         errors.append("wheel_hard_limit_rpm 必须不小于 wheel_plan_limit_rpm")
+    for label, config in (
+        ("start_check", project.start_check),
+        ("arrival_check", project.arrival_check),
+    ):
+        for field_name, value in vars(config).items():
+            if value < 0:
+                errors.append(f"{label}.{field_name} 不能为负数")
     return errors
 
 
@@ -1021,16 +1181,17 @@ def plan_project(project: PathProject) -> PlanResult:
     config_errors = validate_project_config(project)
     if config_errors:
         raise ValueError("\n".join(config_errors))
-    geometry = generate_geometry(project.points, project.planner)
-    straight_errors = validate_cut_in_straight(
-        geometry, project.points, project.cut_in.straight_length_mm
-    )
-    if straight_errors:
-        raise ValueError("\n".join(straight_errors))
+    points = resolve_edit_points(project)
+    geometry = generate_geometry(points, project.planner)
 
-    yaw_values, q_values, q_prime_values = _plan_yaw(project.points, geometry)
+    yaw_values, q_values, q_prime_values = _plan_yaw(
+        points,
+        geometry,
+        project.planner.yaw_rotation_policy,
+    )
     local_limits, constraint_sources, _wheel_units = _local_speed_limits(
         project,
+        points,
         geometry,
         yaw_values,
         q_values,
@@ -1045,6 +1206,7 @@ def plan_project(project: PathProject) -> PlanResult:
     )
     nodes = _build_nodes(
         project,
+        points,
         geometry,
         yaw_values,
         q_values,
@@ -1052,31 +1214,34 @@ def plan_project(project: PathProject) -> PlanResult:
         speeds,
         constraint_sources,
     )
-    planned_actions = clone_actions(project.actions)
-    planned_project = replace(project, actions=planned_actions)
-    action_errors = validate_actions(planned_project, nodes)
+    action_errors = validate_actions(project, points, geometry)
     if action_errors:
         raise ValueError("\n".join(action_errors))
-    _prepare_accel_gate_actions(planned_project, nodes)
-    errors = _validate_nodes(project, nodes)
-    errors.extend(validate_actions(planned_project, nodes))
+    resolved_actions = resolve_actions(project, points, geometry, nodes)
+    departure_locks = _derive_departure_locks(resolved_actions)
+    errors = _validate_nodes(project, points, nodes)
+    errors.extend(
+        validate_resolved_actions(
+            resolved_actions,
+            nodes[-1].s_mm,
+            sum(bool(node.flags & TRAJ_FLAG_ARRIVAL) for node in nodes),
+        )
+    )
     if errors:
         raise ValueError("\n".join(errors))
 
-    preview = estimate_cut_in_preview(project)
-    summary = _build_summary(project, nodes, preview)
+    summary = _build_summary(project, nodes)
     warnings = [
         f"速度规划在 {convergence_iterations} 次正反向扫描内收敛",
         project.vehicle_profile.geometry_note,
+        "mechanical_wait_time_ms 是编辑器估算，不写入 BIN 且不代表确定执行时间",
     ]
-    if preview.enabled and not preview.reachable:
-        warnings.append(preview.warning)
     return PlanResult(
         nodes=nodes,
-        actions=planned_actions,
+        actions=resolved_actions,
         summary=summary,
-        cut_in_preview=preview,
         warnings=warnings,
+        departure_locks=departure_locks,
     )
 
 

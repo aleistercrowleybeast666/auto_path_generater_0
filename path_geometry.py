@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""V3.3 sparse-point geometry and arc-length resampling."""
+"""V3.5 sparse-point geometry and arc-length resampling."""
 from __future__ import annotations
 
 import bisect
@@ -13,8 +13,9 @@ from path_models import (
     GeometrySample,
     PlannerConfig,
     POINT_TYPE_ARRIVAL,
-    POINT_TYPE_CUT_IN,
+    POINT_TYPE_START,
     POINT_TYPE_WAYPOINT,
+    POINT_TYPES,
     YAW_UNSPECIFIED_DDEG,
 )
 
@@ -127,19 +128,21 @@ def validate_edit_points(points: Sequence[EditPoint]) -> List[str]:
         errors.append(f"编辑点数量必须为 2~100，当前为 {len(points)}")
         return errors
 
-    cut_in_rows = [index for index, point in enumerate(points) if point.type == POINT_TYPE_CUT_IN]
-    if cut_in_rows != [0]:
-        errors.append(f"必须恰好有一个 CUT_IN 且位于第 0 行，当前位置为 {cut_in_rows}")
+    start_rows = [index for index, point in enumerate(points) if point.type == POINT_TYPE_START]
+    if start_rows != [0]:
+        errors.append(f"必须恰好有一个 START 且位于第 0 行，当前位置为 {start_rows}")
+    if points[-1].type != POINT_TYPE_ARRIVAL:
+        errors.append("最后一行必须是 ARRIVAL，并自动作为 END")
+    arrival_rows = [index for index, point in enumerate(points) if point.type == POINT_TYPE_ARRIVAL]
+    if not arrival_rows:
+        errors.append("至少需要一个 ARRIVAL")
 
-    end_rows = [index for index, point in enumerate(points) if point.is_end]
-    if len(end_rows) != 1:
-        errors.append(f"必须恰好有一个 END ARRIVAL，当前数量为 {len(end_rows)}")
-
-    gate_ids: List[int] = []
+    point_ids: set[int] = set()
     for index, point in enumerate(points):
-        if point.point_id != index:
-            errors.append(f"编辑点 {index} 的 point_id={point.point_id}，应为 {index}")
-        if point.type not in (POINT_TYPE_CUT_IN, POINT_TYPE_WAYPOINT, POINT_TYPE_ARRIVAL):
+        if point.point_id in point_ids:
+            errors.append(f"point_id={point.point_id} 重复")
+        point_ids.add(point.point_id)
+        if point.type not in POINT_TYPES:
             errors.append(f"编辑点 {index} 的 type={point.type!r} 非法")
         if not (-32768 <= point.x_mm <= 32767 and -32768 <= point.y_mm <= 32767):
             errors.append(f"编辑点 {index} 的坐标超出 int16_t 范围")
@@ -151,33 +154,15 @@ def validate_edit_points(points: Sequence[EditPoint]) -> List[str]:
                 )
         elif not (-32768 <= point.yaw_ddeg <= 32767):
             errors.append(f"编辑点 {index} 的 yaw_ddeg 超出 int16_t 范围")
+        if point.type == POINT_TYPE_START:
+            if index != 0:
+                errors.append(f"编辑点 {index} 的 START 只能位于第 0 行")
+            if point.max_speed_mmps or point.corner_trim_mm or not point.exact_pass:
+                errors.append("START 不允许 max_speed/corner_trim，并必须精确经过")
         if point.max_speed_mmps < 0:
             errors.append(f"编辑点 {index} 的 max_speed_mmps 不能为负数")
         if point.corner_trim_mm < 0:
             errors.append(f"编辑点 {index} 的 corner_trim_mm 不能为负数")
-        if point.type == POINT_TYPE_CUT_IN:
-            if index != 0:
-                errors.append(f"编辑点 {index} 的 CUT_IN 只能位于第 0 行")
-            if point.stop_required or point.gate_id != 0xFF or point.scan or point.is_end:
-                errors.append("CUT_IN 不允许 STOP、Gate、SCAN 或 END")
-        if point.type == POINT_TYPE_WAYPOINT:
-            if point.stop_required or point.gate_id != 0xFF or point.scan or point.is_end:
-                errors.append(f"WAYPOINT {index} 不允许 STOP、Gate、SCAN 或 END")
-        if point.type == POINT_TYPE_ARRIVAL:
-            if point.gate_id != 0xFF:
-                if not 0 <= point.gate_id < 32:
-                    errors.append(f"ARRIVAL {index} 的 gate_id 必须为 0xFF 或 0~31")
-                else:
-                    gate_ids.append(point.gate_id)
-            if point.is_end and not point.stop_required:
-                errors.append(f"END ARRIVAL {index} 必须设置 stop_required")
-        elif point.gate_id != 0xFF:
-            errors.append(f"编辑点 {index} 不是 ARRIVAL，不能设置 Gate")
-
-    if gate_ids != list(range(len(gate_ids))):
-        errors.append(f"编号 Gate 必须按路径顺序连续，当前为 {gate_ids}")
-    if end_rows and end_rows[0] != len(points) - 1:
-        errors.append("END ARRIVAL 必须是最后一个编辑点")
 
     for index in range(1, len(points)):
         previous = (points[index - 1].x_mm, points[index - 1].y_mm)
@@ -520,51 +505,3 @@ def generate_geometry(
                 f"{planner.max_spacing_mm} mm"
             )
     return GeometryResult(samples=samples, point_s_mm=point_s_mm)
-
-
-def validate_cut_in_straight(
-    geometry: GeometryResult,
-    points: Sequence[EditPoint],
-    straight_length_mm: float,
-) -> List[str]:
-    errors: List[str] = []
-    if straight_length_mm <= 0:
-        errors.append("cut_in.straight_length_mm 必须大于 0")
-        return errors
-    if geometry.samples[-1].s_mm + 1e-6 < straight_length_mm:
-        errors.append(
-            f"正式轨迹总长 {geometry.samples[-1].s_mm:.1f} mm 小于切入直线要求 "
-            f"{straight_length_mm:.1f} mm"
-        )
-        return errors
-
-    first = geometry.samples[0]
-    for sample in geometry.samples:
-        if sample.s_mm > straight_length_mm + 1e-6:
-            break
-        tangent_change = _angle_between(
-            (first.tangent_x, first.tangent_y),
-            (sample.tangent_x, sample.tangent_y),
-        )
-        if tangent_change > math.radians(3.0):
-            errors.append(
-                f"CUT_IN 后 s={sample.s_mm:.1f} mm 切线变化 "
-                f"{math.degrees(tangent_change):.2f}°，超过近直线限制 3°"
-            )
-            break
-
-    for index, point in enumerate(points[1:], start=1):
-        point_s = geometry.point_s_mm[index]
-        if point_s > straight_length_mm + 1e-6:
-            continue
-        if (
-            point.stop_required
-            or point.scan
-            or point.gate_id != 0xFF
-            or point.type == POINT_TYPE_ARRIVAL
-        ):
-            errors.append(
-                f"CUT_IN 后 {straight_length_mm:.0f} mm 内的编辑点 {index} "
-                "包含 ARRIVAL、STOP、SCAN 或 Gate"
-            )
-    return errors

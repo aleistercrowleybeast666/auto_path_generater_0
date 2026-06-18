@@ -1,0 +1,60 @@
+{
+  "fixed_sites": [
+    {
+      "site_id": 0,
+      "site_key": "P_START",
+      "x_mm": -201,
+      "y_mm": 0,
+      "yaw_ddeg": 0
+    },
+    {
+      "site_id": 1,
+      "site_key": "P_PICK_1",
+      "x_mm": 1502,
+      "y_mm": 503,
+      "yaw_ddeg": 0
+    },
+    {
+      "site_id": 2,
+      "site_key": "P_PICK_2L",
+      "x_mm": 1307,
+      "y_mm": 319,
+      "yaw_ddeg": -541
+    },
+    {
+      "site_id": 3,
+      "site_key": "P_PICK_2R",
+      "x_mm": 1307,
+      "y_mm": -307,
+      "yaw_ddeg": 502
+    },
+    {
+      "site_id": 4,
+      "site_key": "P_PICK_3",
+      "x_mm": 1497,
+      "y_mm": -497,
+      "yaw_ddeg": 0
+    },
+    {
+      "site_id": 5,
+      "site_key": "P_DROP_1",
+      "x_mm": -1464,
+      "y_mm": 425,
+      "yaw_ddeg": 255
+    },
+    {
+      "site_id": 6,
+      "site_key": "P_DROP_2",
+      "x_mm": -1447,
+      "y_mm": 0,
+      "yaw_ddeg": 255
+    },
+    {
+      "site_id": 7,
+      "site_key": "P_DROP_3",
+      "x_mm": -1458,
+      "y_mm": -380,
+      "yaw_ddeg": 255
+    }
+  ]
+}

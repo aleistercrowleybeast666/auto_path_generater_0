@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Shared V3.3 trajectory overlay bands and hover text."""
+"""Shared V3.5 trajectory overlay bands and hover text."""
 from __future__ import annotations
 
 from typing import List, Tuple

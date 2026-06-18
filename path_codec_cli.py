@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""HJMB V3.3 JSON/BIN codec and command-line planner."""
+"""HJMB V3.5 JSON/BIN codec and command-line planner."""
 from __future__ import annotations
 
 import argparse
@@ -12,61 +12,55 @@ from pathlib import Path
 from typing import List, Optional
 
 from path_models import (
-    ACTION_GATE_ACCEL,
+    ACTION_MODE_CODES,
+    ACTION_MODE_NAMES_BY_CODE,
+    ACTION_MODE_STOP_AND_WAIT,
     ACTIONS,
     MAX_ACTIONS,
-    MAX_GATES,
+    MAX_ARRIVALS,
     MAX_NODES,
     MAX_TRAJ_ID,
-    MechanicalAction,
-    ParsedTrajectoryV33,
+    PATH_MODE_FIXED_8,
+    ParsedTrajectoryV35,
     PathProject,
     PlanResult,
+    ResolvedMechanicalAction,
     TRAJ_FLAG_ARRIVAL,
-    TRAJ_FLAG_CUT_IN,
     TRAJ_FLAG_END,
-    TRAJ_FLAG_GATE,
-    TRAJ_FLAG_STOP,
-    TrajectoryHeaderV33,
+    TRAJ_FLAG_START,
+    TRAJ_FLAG_WAYPOINT,
+    TrajectoryHeaderV35,
     TrajectoryNode,
+    VALID_TRAJ_FLAGS_MASK,
 )
-from trajectory_planner import plan_project, validate_actions
+from trajectory_planner import plan_project, validate_resolved_actions
 
 MAGIC = b"HJMB"
-VERSION = 33
+VERSION = 35
 HEADER_SIZE = 64
 NODE_SIZE = 16
-ACTION_SIZE = 20
+ACTION_SIZE = 22
 HEADER_FMT = "<4sBBBBHHHHHHBBHIIIIIIHHHHHHHH"
 NODE_FMT = "<HhhhhhhBB"
-ACTION_FMT = "<BBBBHHHHHHHH"
+ACTION_FMT = "<BBBBHHHHHHHHH"
 CRC32_OFFSET = 24
 
 FILE_FLAG_SPATIAL_TRAJECTORY = 0x0001
 FILE_FLAG_WORLD_VELOCITY = 0x0002
-FILE_FLAG_ACCEL_GATE_USED = 0x0004
-FILE_FLAG_LIDAR_CUT_IN = 0x0008
-FILE_FLAG_ARRIVAL_YAW_ANCHORS = 0x0010
+FILE_FLAG_FIXED_DIRECT_START = 0x0004
+FILE_FLAG_ARRIVAL_ALWAYS_STOP = 0x0008
+FILE_FLAG_ACTION_STATUS_REQUIRED = 0x0010
+FILE_FLAG_FIXED_8_SOURCE = 0x0020
+FILE_FLAG_AUTO_ACTION_START = 0x0040
 REQUIRED_FILE_FLAGS = (
     FILE_FLAG_SPATIAL_TRAJECTORY
     | FILE_FLAG_WORLD_VELOCITY
-    | FILE_FLAG_LIDAR_CUT_IN
-    | FILE_FLAG_ARRIVAL_YAW_ANCHORS
+    | FILE_FLAG_FIXED_DIRECT_START
+    | FILE_FLAG_ARRIVAL_ALWAYS_STOP
+    | FILE_FLAG_ACTION_STATUS_REQUIRED
+    | FILE_FLAG_AUTO_ACTION_START
 )
-VALID_FILE_FLAGS = REQUIRED_FILE_FLAGS | FILE_FLAG_ACCEL_GATE_USED
-
-APPROACH_FLAG_LIDAR_REQUIRED = 0x0001
-APPROACH_FLAG_NO_STOP_AT_CUT_IN = 0x0002
-APPROACH_FLAG_ALIGN_YAW_TO_CUT_IN = 0x0004
-APPROACH_FLAG_ALLOW_FIRST_SEGMENT_CAPTURE = 0x0008
-REQUIRED_APPROACH_FLAGS = (
-    APPROACH_FLAG_LIDAR_REQUIRED | APPROACH_FLAG_NO_STOP_AT_CUT_IN
-)
-VALID_APPROACH_FLAGS = (
-    REQUIRED_APPROACH_FLAGS
-    | APPROACH_FLAG_ALIGN_YAW_TO_CUT_IN
-    | APPROACH_FLAG_ALLOW_FIRST_SEGMENT_CAPTURE
-)
+VALID_FILE_FLAGS = REQUIRED_FILE_FLAGS | FILE_FLAG_FIXED_8_SOURCE
 
 assert struct.calcsize(HEADER_FMT) == HEADER_SIZE
 assert struct.calcsize(NODE_FMT) == NODE_SIZE
@@ -102,14 +96,8 @@ def save_project_json(project: PathProject, path: Path) -> None:
     )
 
 
-def gate_count_from_nodes(nodes: List[TrajectoryNode]) -> int:
-    return len(
-        {
-            node.gate_id
-            for node in nodes
-            if node.flags & TRAJ_FLAG_GATE and node.gate_id != 0xFF
-        }
-    )
+def arrival_count_from_nodes(nodes: List[TrajectoryNode]) -> int:
+    return sum(bool(node.flags & TRAJ_FLAG_ARRIVAL) for node in nodes)
 
 
 def _check_int_range(value: int, lower: int, upper: int, field_name: str) -> int:
@@ -140,7 +128,7 @@ def _quantize_node(node: TrajectoryNode, index: int) -> tuple:
         32767,
         f"node[{index}].wz_ddegps",
     )
-    _check_int_range(node.gate_id, 0, 0xFF, f"node[{index}].gate_id")
+    _check_int_range(node.arrival_id, 0, 0xFF, f"node[{index}].arrival_id")
     _check_int_range(node.flags, 0, 0xFF, f"node[{index}].flags")
     return (
         s_mm,
@@ -150,22 +138,23 @@ def _quantize_node(node: TrajectoryNode, index: int) -> tuple:
         vx_mmps,
         vy_mmps,
         wz_ddegps,
-        node.gate_id,
+        node.arrival_id,
         node.flags,
     )
 
 
-def _pack_action(action: MechanicalAction, index: int) -> bytes:
+def _pack_action(action: ResolvedMechanicalAction, index: int) -> bytes:
     values = (
         action.action_seq,
         action.action,
-        action.unlock_gate_id,
-        action.flags,
+        ACTION_MODE_CODES[action.mode],
+        action.arrival_id,
         action.timeout_ms,
-        action.arm_s_mm,
-        action.disarm_s_mm,
+        action.post_wait_ms,
+        action.check_start_s_mm,
         action.accel_limit_mmps2,
         action.beta_limit_ddegps2,
+        action.wz_limit_ddegps,
         action.speed_limit_mmps,
         action.stable_time_ms,
         0,
@@ -177,8 +166,22 @@ def _pack_action(action: MechanicalAction, index: int) -> bytes:
     return struct.pack(ACTION_FMT, *values)
 
 
+def _integrate_quantized_time(nodes: List[TrajectoryNode]) -> int:
+    time_ms = 0.0
+    for previous, current in zip(nodes[:-1], nodes[1:]):
+        ds = current.s_mm - previous.s_mm
+        denominator = previous.speed_mmps + current.speed_mmps
+        if ds > 0 and denominator <= 1e-6:
+            raise ValueError(
+                f"s={previous.s_mm:.0f}~{current.s_mm:.0f} mm 两端速度均为 0"
+            )
+        if ds > 0:
+            time_ms += 2000.0 * ds / denominator
+    return int(round(time_ms))
+
+
 class PathCodec:
-    """Strict V3.3 codec. Earlier HJMB formats are deliberately rejected."""
+    """Strict V3.5 codec. Earlier HJMB formats are deliberately rejected."""
 
     @staticmethod
     def build_bin(project: PathProject, plan: Optional[PlanResult] = None) -> bytes:
@@ -190,18 +193,13 @@ class PathCodec:
             raise ValueError(f"node_count 必须为 2~{MAX_NODES}")
         if len(actions) > MAX_ACTIONS:
             raise ValueError(f"action_count 不能超过 {MAX_ACTIONS}")
-        gate_count = gate_count_from_nodes(nodes)
-        if gate_count > MAX_GATES:
-            raise ValueError(f"gate_count 不能超过 {MAX_GATES}")
+        arrival_count = arrival_count_from_nodes(nodes)
+        if not 1 <= arrival_count <= MAX_ARRIVALS:
+            raise ValueError(f"arrival_count 必须为 1~{MAX_ARRIVALS}")
 
         file_flags = REQUIRED_FILE_FLAGS
-        if any(action.unlock_gate_id == ACTION_GATE_ACCEL for action in actions):
-            file_flags |= FILE_FLAG_ACCEL_GATE_USED
-        approach_flags = REQUIRED_APPROACH_FLAGS
-        if project.cut_in.align_yaw:
-            approach_flags |= APPROACH_FLAG_ALIGN_YAW_TO_CUT_IN
-        if project.cut_in.allow_first_segment_capture:
-            approach_flags |= APPROACH_FLAG_ALLOW_FIRST_SEGMENT_CAPTURE
+        if project.path_mode == PATH_MODE_FIXED_8:
+            file_flags |= FILE_FLAG_FIXED_8_SOURCE
 
         node_offset = HEADER_SIZE
         action_offset = HEADER_SIZE + len(nodes) * NODE_SIZE
@@ -225,7 +223,7 @@ class PathCodec:
             project.planner.nominal_spacing_mm,
             len(nodes),
             len(actions),
-            gate_count,
+            arrival_count,
             0,
             0,
             node_offset,
@@ -233,14 +231,14 @@ class PathCodec:
             total_length_mm,
             plan.summary.formal_time_ms,
             0,
-            project.cut_in.capture_radius_mm,
-            project.cut_in.target_speed_mmps,
-            project.cut_in.approach_max_speed_mmps,
-            project.cut_in.straight_length_mm,
-            project.cut_in.yaw_tolerance_ddeg,
-            project.cut_in.tangent_tolerance_ddeg,
-            approach_flags,
-            0,
+            project.start_check.position_tolerance_mm,
+            project.start_check.yaw_tolerance_ddeg,
+            project.start_check.stable_time_ms,
+            project.arrival_check.position_tolerance_mm,
+            project.arrival_check.yaw_tolerance_ddeg,
+            project.arrival_check.speed_tolerance_mmps,
+            project.arrival_check.wz_tolerance_ddegps,
+            project.arrival_check.stable_time_ms,
         )
         payload = bytearray()
         previous_s = -1
@@ -265,10 +263,10 @@ class PathCodec:
     def parse_bin(
         data: bytes,
         expected_traj_id: Optional[int] = None,
-    ) -> ParsedTrajectoryV33:
+    ) -> ParsedTrajectoryV35:
         if len(data) < HEADER_SIZE:
             raise ValueError(
-                f"文件太短：{len(data)} 字节，无法读取 {HEADER_SIZE} 字节 V3.3 Header"
+                f"文件太短：{len(data)} 字节，无法读取 {HEADER_SIZE} 字节 V3.5 Header"
             )
         values = struct.unpack(HEADER_FMT, data[:HEADER_SIZE])
         (
@@ -284,28 +282,28 @@ class PathCodec:
             nominal_spacing_mm,
             node_count,
             action_count,
-            gate_count,
+            arrival_count,
             reserved0,
             file_crc32,
             node_offset,
             action_offset,
             total_length_mm,
-            planned_time_ms,
+            planned_motion_time_ms,
             reserved1,
-            capture_radius_mm,
-            cut_in_speed_mmps,
-            approach_max_speed_mmps,
-            straight_length_mm,
-            yaw_tolerance_ddeg,
-            tangent_tolerance_ddeg,
-            approach_flags,
-            reserved2,
+            start_pos_tolerance_mm,
+            start_yaw_tolerance_ddeg,
+            start_stable_time_ms,
+            arrival_pos_tolerance_mm,
+            arrival_yaw_tolerance_ddeg,
+            arrival_speed_tolerance_mmps,
+            arrival_wz_tolerance_ddegps,
+            arrival_stable_time_ms,
         ) = values
         if magic != MAGIC:
             raise ValueError(f"Header.magic={magic!r}，期望 {MAGIC!r}")
         if version != VERSION:
             raise ValueError(
-                f"不兼容的 HJMB BIN version={version}；仅支持 V3.3({VERSION})"
+                f"不兼容的 HJMB BIN version={version}；仅支持 V3.5({VERSION})"
             )
         if header_size != HEADER_SIZE:
             raise ValueError(f"Header.header_size={header_size}，期望 {HEADER_SIZE}")
@@ -323,28 +321,20 @@ class PathCodec:
             raise ValueError(f"Header.node_count={node_count}，应为 2~{MAX_NODES}")
         if not 0 <= action_count <= MAX_ACTIONS:
             raise ValueError(f"Header.action_count={action_count}，应为 0~{MAX_ACTIONS}")
-        if not 0 <= gate_count <= MAX_GATES:
-            raise ValueError(f"Header.gate_count={gate_count}，应为 0~{MAX_GATES}")
+        if not 1 <= arrival_count <= MAX_ARRIVALS:
+            raise ValueError(f"Header.arrival_count={arrival_count}，应为 1~{MAX_ARRIVALS}")
         if field_width_mm != 4000 or field_height_mm != 2000:
             raise ValueError("Header.field_width_mm/field_height_mm 必须为 4000/2000")
         if not 1 <= nominal_spacing_mm <= 50:
             raise ValueError("Header.nominal_spacing_mm 必须为 1~50")
-        if reserved0 != 0 or reserved1 != 0 or reserved2 != 0:
-            raise ValueError("Header.reserved0/reserved1/reserved2 必须全部为 0")
+        if reserved0 != 0 or reserved1 != 0:
+            raise ValueError("Header.reserved0/reserved1 必须全部为 0")
         if file_flags & REQUIRED_FILE_FLAGS != REQUIRED_FILE_FLAGS:
             raise ValueError(
-                f"Header.flags=0x{file_flags:04X} 缺少 V3.3 必需标志"
+                f"Header.flags=0x{file_flags:04X} 缺少 V3.5 必需标志"
             )
         if file_flags & ~VALID_FILE_FLAGS:
             raise ValueError(f"Header.flags 含未定义位 0x{file_flags & ~VALID_FILE_FLAGS:04X}")
-        if approach_flags & REQUIRED_APPROACH_FLAGS != REQUIRED_APPROACH_FLAGS:
-            raise ValueError("Header.approach_flags 缺少 LIDAR_REQUIRED/NO_STOP")
-        if approach_flags & ~VALID_APPROACH_FLAGS:
-            raise ValueError("Header.approach_flags 含未定义位")
-        if capture_radius_mm == 0 or cut_in_speed_mmps == 0:
-            raise ValueError("Header 切入捕获半径和切入速度必须大于 0")
-        if approach_max_speed_mmps < cut_in_speed_mmps:
-            raise ValueError("Header.approach_max_speed_mmps 小于 cut_in_speed_mmps")
         if node_offset != HEADER_SIZE:
             raise ValueError(f"Header.node_offset={node_offset}，期望 {HEADER_SIZE}")
         expected_action_offset = HEADER_SIZE + node_count * NODE_SIZE
@@ -368,9 +358,9 @@ class PathCodec:
         nodes: List[TrajectoryNode] = []
         offset = node_offset
         previous_s = -1
-        cut_in_count = 0
+        start_count = 0
         end_count = 0
-        gate_ids: List[int] = []
+        parsed_arrival_ids: List[int] = []
         for index in range(node_count):
             (
                 s_mm,
@@ -380,7 +370,7 @@ class PathCodec:
                 vx_mmps,
                 vy_mmps,
                 wz_ddegps,
-                gate_id,
+                arrival_id,
                 flags,
             ) = struct.unpack(NODE_FMT, data[offset : offset + NODE_SIZE])
             if index == 0 and s_mm != 0:
@@ -388,22 +378,30 @@ class PathCodec:
             if index > 0 and s_mm <= previous_s:
                 raise ValueError(f"node[{index}].s_mm={s_mm} 未严格递增")
             previous_s = s_mm
-            if gate_id == ACTION_GATE_ACCEL:
-                raise ValueError(f"node[{index}].gate_id 禁止使用 0xFE")
-            if flags & TRAJ_FLAG_GATE:
-                if gate_id == 0xFF:
-                    raise ValueError(f"node[{index}] 设置 GATE 但 gate_id=0xFF")
-                gate_ids.append(gate_id)
-            elif gate_id != 0xFF:
-                raise ValueError(f"node[{index}] 未设置 GATE 但 gate_id={gate_id}")
-            if flags & TRAJ_FLAG_STOP and any((vx_mmps, vy_mmps, wz_ddegps)):
-                raise ValueError(f"STOP node[{index}] 的 vx/vy/wz 必须为 0")
-            if flags & (TRAJ_FLAG_CUT_IN | TRAJ_FLAG_ARRIVAL) and wz_ddegps != 0:
-                raise ValueError(
-                    f"V3.3 yaw 锚点 node[{index}] 的 wz_ddegps 必须为 0"
-                )
-            cut_in_count += bool(flags & TRAJ_FLAG_CUT_IN)
-            end_count += bool(flags & TRAJ_FLAG_END)
+            if flags & ~VALID_TRAJ_FLAGS_MASK:
+                raise ValueError(f"node[{index}].flags 含 V3.5 保留位")
+            if flags & TRAJ_FLAG_START:
+                start_count += 1
+                if index != 0:
+                    raise ValueError("START 只能出现在首节点")
+                if flags & (TRAJ_FLAG_ARRIVAL | TRAJ_FLAG_WAYPOINT | TRAJ_FLAG_END):
+                    raise ValueError("START 节点不能同时设置 ARRIVAL/WAYPOINT/END")
+                if arrival_id != 0xFF:
+                    raise ValueError("START 节点 arrival_id 必须为 0xFF")
+                if any((vx_mmps, vy_mmps, wz_ddegps)):
+                    raise ValueError("START 节点 vx/vy/wz 必须为 0")
+            if flags & TRAJ_FLAG_ARRIVAL:
+                parsed_arrival_ids.append(arrival_id)
+                if arrival_id == 0xFF:
+                    raise ValueError(f"ARRIVAL node[{index}] arrival_id 不能为 0xFF")
+                if any((vx_mmps, vy_mmps, wz_ddegps)):
+                    raise ValueError(f"ARRIVAL node[{index}] vx/vy/wz 必须为 0")
+            elif arrival_id != 0xFF:
+                raise ValueError(f"非 ARRIVAL node[{index}] arrival_id 必须为 0xFF")
+            if flags & TRAJ_FLAG_END:
+                end_count += 1
+                if index != node_count - 1 or not flags & TRAJ_FLAG_ARRIVAL:
+                    raise ValueError("END 只能出现在最后一个 ARRIVAL")
             speed = math.hypot(vx_mmps, vy_mmps)
             nodes.append(
                 TrajectoryNode(
@@ -414,56 +412,40 @@ class PathCodec:
                     vx_mmps=float(vx_mmps),
                     vy_mmps=float(vy_mmps),
                     wz_radps=math.radians(wz_ddegps / 10.0),
-                    gate_id=gate_id,
+                    arrival_id=arrival_id,
                     flags=flags,
                     speed_mmps=speed,
                 )
             )
             offset += NODE_SIZE
 
-        if not nodes[0].flags & TRAJ_FLAG_CUT_IN:
-            raise ValueError("首节点必须设置 CUT_IN")
-        if nodes[0].flags & (TRAJ_FLAG_STOP | TRAJ_FLAG_GATE):
-            raise ValueError("首节点 CUT_IN 禁止 STOP/GATE")
-        if abs(nodes[0].speed_mmps - cut_in_speed_mmps) > 2.0:
+        if start_count != 1:
+            raise ValueError("START 必须全文件唯一")
+        if not nodes[0].flags & TRAJ_FLAG_START:
+            raise ValueError("首节点必须设置 START")
+        if nodes[-1].flags & (TRAJ_FLAG_ARRIVAL | TRAJ_FLAG_END) != (
+            TRAJ_FLAG_ARRIVAL | TRAJ_FLAG_END
+        ):
+            raise ValueError("末节点必须设置 ARRIVAL|END")
+        if end_count != 1:
+            raise ValueError("END 必须全文件唯一")
+        if parsed_arrival_ids != list(range(arrival_count)):
             raise ValueError(
-                f"首节点速度 {nodes[0].speed_mmps:.1f} 与 Header.cut_in_speed "
-                f"{cut_in_speed_mmps} 不一致"
+                f"arrival_id 必须按路径连续为 {list(range(arrival_count))}，"
+                f"当前为 {parsed_arrival_ids}"
             )
-        required_last = TRAJ_FLAG_ARRIVAL | TRAJ_FLAG_END | TRAJ_FLAG_STOP
-        if nodes[-1].flags & required_last != required_last:
-            raise ValueError("末节点必须设置 ARRIVAL|END|STOP")
-        if cut_in_count != 1 or end_count != 1:
-            raise ValueError("CUT_IN 和 END 必须各出现一次")
         if nodes[-1].s_mm != total_length_mm:
             raise ValueError(
                 f"末节点 s_mm={nodes[-1].s_mm:.0f} 与 total_length_mm={total_length_mm} 不一致"
             )
-        integrated_time_ms = 0.0
-        for previous, current in zip(nodes[:-1], nodes[1:]):
-            ds = current.s_mm - previous.s_mm
-            denominator = previous.speed_mmps + current.speed_mmps
-            if ds > 0 and denominator <= 1e-6:
-                raise ValueError(
-                    f"s={previous.s_mm:.0f}~{current.s_mm:.0f} mm 两端速度均为 0"
-                )
-            integrated_time_ms += 2000.0 * ds / denominator
-        if abs(round(integrated_time_ms) - planned_time_ms) > 25:
+        integrated_time_ms = _integrate_quantized_time(nodes)
+        if abs(integrated_time_ms - planned_motion_time_ms) > 25:
             raise ValueError(
-                f"Header.planned_time_ms={planned_time_ms} 与量化节点积分 "
-                f"{round(integrated_time_ms)} ms 不一致"
-            )
-        unique_gate_ids = []
-        for gate_id in gate_ids:
-            if gate_id not in unique_gate_ids:
-                unique_gate_ids.append(gate_id)
-        if unique_gate_ids != list(range(gate_count)):
-            raise ValueError(
-                f"编号 Gate 必须按路径连续为 {list(range(gate_count))}，"
-                f"当前为 {unique_gate_ids}"
+                f"Header.planned_motion_time_ms={planned_motion_time_ms} 与量化节点积分 "
+                f"{integrated_time_ms} ms 不一致"
             )
 
-        actions: List[MechanicalAction] = []
+        actions: List[ResolvedMechanicalAction] = []
         for index in range(action_count):
             action_values = struct.unpack(
                 ACTION_FMT, data[offset : offset + ACTION_SIZE]
@@ -471,47 +453,46 @@ class PathCodec:
             (
                 action_seq,
                 action,
-                unlock_gate_id,
-                flags,
+                mode_code,
+                arrival_id,
                 timeout_ms,
-                arm_s_mm,
-                disarm_s_mm,
+                post_wait_ms,
+                check_start_s_mm,
                 accel_limit_mmps2,
                 beta_limit_ddegps2,
+                wz_limit_ddegps,
                 speed_limit_mmps,
                 stable_time_ms,
                 reserved,
             ) = action_values
             if reserved != 0:
                 raise ValueError(f"action[{index}].reserved={reserved}，必须为 0")
+            mode = ACTION_MODE_NAMES_BY_CODE.get(mode_code)
+            if mode is None:
+                raise ValueError(f"action[{index}].mode={mode_code} 非法")
             actions.append(
-                MechanicalAction(
+                ResolvedMechanicalAction(
                     action_seq=action_seq,
                     action=action,
-                    unlock_gate_id=unlock_gate_id,
-                    flags=flags,
+                    mode=mode,
+                    arrival_id=arrival_id,
                     timeout_ms=timeout_ms,
-                    arm_s_mm=arm_s_mm,
-                    disarm_s_mm=disarm_s_mm,
+                    post_wait_ms=post_wait_ms,
+                    check_start_s_mm=check_start_s_mm,
                     accel_limit_mmps2=accel_limit_mmps2,
                     beta_limit_ddegps2=beta_limit_ddegps2,
+                    wz_limit_ddegps=wz_limit_ddegps,
                     speed_limit_mmps=speed_limit_mmps,
                     stable_time_ms=stable_time_ms,
                 )
             )
             offset += ACTION_SIZE
 
-        dummy_project = PathProject(actions=actions)
-        action_errors = validate_actions(dummy_project, nodes)
+        action_errors = validate_resolved_actions(actions, nodes[-1].s_mm, arrival_count)
         if action_errors:
-            raise ValueError("V3.3 动作/Gate 校验失败：\n" + "\n".join(action_errors))
-        accel_flag_expected = any(
-            action.unlock_gate_id == ACTION_GATE_ACCEL for action in actions
-        )
-        if accel_flag_expected != bool(file_flags & FILE_FLAG_ACCEL_GATE_USED):
-            raise ValueError("FILE_FLAG_ACCEL_GATE_USED 与动作中的 0xFE Gate 不一致")
+            raise ValueError("V3.5 机械动作校验失败：\n" + "\n".join(action_errors))
 
-        header = TrajectoryHeaderV33(
+        header = TrajectoryHeaderV35(
             traj_id=traj_id,
             flags=file_flags,
             field_width_mm=field_width_mm,
@@ -519,32 +500,33 @@ class PathCodec:
             nominal_spacing_mm=nominal_spacing_mm,
             node_count=node_count,
             action_count=action_count,
-            gate_count=gate_count,
+            arrival_count=arrival_count,
             file_crc32=file_crc32,
             node_offset=node_offset,
             action_offset=action_offset,
             total_length_mm=total_length_mm,
-            planned_time_ms=planned_time_ms,
-            cut_in_capture_radius_mm=capture_radius_mm,
-            cut_in_speed_mmps=cut_in_speed_mmps,
-            approach_max_speed_mmps=approach_max_speed_mmps,
-            cut_in_straight_length_mm=straight_length_mm,
-            cut_in_yaw_tolerance_ddeg=yaw_tolerance_ddeg,
-            cut_in_tangent_tolerance_ddeg=tangent_tolerance_ddeg,
-            approach_flags=approach_flags,
+            planned_motion_time_ms=planned_motion_time_ms,
+            start_pos_tolerance_mm=start_pos_tolerance_mm,
+            start_yaw_tolerance_ddeg=start_yaw_tolerance_ddeg,
+            start_stable_time_ms=start_stable_time_ms,
+            arrival_pos_tolerance_mm=arrival_pos_tolerance_mm,
+            arrival_yaw_tolerance_ddeg=arrival_yaw_tolerance_ddeg,
+            arrival_speed_tolerance_mmps=arrival_speed_tolerance_mmps,
+            arrival_wz_tolerance_ddegps=arrival_wz_tolerance_ddegps,
+            arrival_stable_time_ms=arrival_stable_time_ms,
         )
-        return ParsedTrajectoryV33(header=header, nodes=nodes, actions=actions)
+        return ParsedTrajectoryV35(header=header, nodes=nodes, actions=actions)
 
     @staticmethod
     def load_bin(
         data: bytes,
         expected_traj_id: Optional[int] = None,
-    ) -> ParsedTrajectoryV33:
+    ) -> ParsedTrajectoryV35:
         if len(data) < 5:
             raise ValueError("文件太短，无法识别 HJMB 版本")
         if data[4] != VERSION:
             raise ValueError(
-                f"不兼容的 HJMB BIN version={data[4]}，请使用旧版编辑器转换或重新绘制"
+                f"不兼容的 HJMB BIN version={data[4]}，V3.5 不兼容旧 BIN"
             )
         return PathCodec.parse_bin(data, expected_traj_id)
 
@@ -569,14 +551,35 @@ def json_to_bin(
 def _print_summary(project: PathProject, plan: PlanResult) -> None:
     summary = plan.summary
     print(f"traj_id={project.traj_id}")
+    print(f"path_mode={project.path_mode}")
     print(f"edit_point_count={len(project.points)}")
     print(f"node_count={len(plan.nodes)}")
+    print(f"arrival_count={arrival_count_from_nodes(plan.nodes)}")
     print(f"action_count={len(plan.actions)}")
-    print(f"gate_count={gate_count_from_nodes(plan.nodes)}")
+    modes = ",".join(action.mode for action in plan.actions) or "-"
+    print(f"action_modes={modes}")
+    auto_starts = [
+        f"{action.action_seq}:{action.check_start_s_mm}:{action.execution_hint}"
+        for action in plan.actions
+        if action.check_start_s_mm != 0xFFFF
+    ]
+    print(f"auto_check_start_s_mm={','.join(auto_starts) if auto_starts else '-'}")
+    locks = [
+        f"{lock.arrival_id}->{lock.departure_action_seq}"
+        for lock in plan.departure_locks
+    ]
+    print(f"departure_locks={','.join(locks) if locks else '-'}")
+    print(f"start_check={project.start_check.position_tolerance_mm},"
+          f"{project.start_check.yaw_tolerance_ddeg},"
+          f"{project.start_check.stable_time_ms}")
+    print(f"arrival_check={project.arrival_check.position_tolerance_mm},"
+          f"{project.arrival_check.yaw_tolerance_ddeg},"
+          f"{project.arrival_check.speed_tolerance_mmps},"
+          f"{project.arrival_check.wz_tolerance_ddegps},"
+          f"{project.arrival_check.stable_time_ms}")
     print(f"total_length_mm={summary.total_length_mm:.1f}")
-    print(f"formal_time_ms={summary.formal_time_ms}")
-    print(f"cut_in_preview_time_ms={summary.cut_in_preview_time_ms}")
-    print(f"mechanical_wait_time_ms={summary.mechanical_wait_time_ms}")
+    print(f"planned_motion_time_ms={summary.formal_time_ms}")
+    print(f"mechanical_wait_time_ms_estimate={summary.mechanical_wait_time_ms}")
     print(f"estimated_total_time_ms={summary.estimated_total_time_ms}")
     print(f"max_speed_mmps={summary.max_speed_mmps:.1f}")
     print(f"max_a_total_mmps2={summary.max_a_total_mmps2:.1f}")
@@ -590,12 +593,12 @@ def _print_summary(project: PathProject, plan: PlanResult) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="HJMB V3.3 空间轨迹生成/校验工具")
+    parser = argparse.ArgumentParser(description="HJMB V3.5 空间轨迹生成/校验工具")
     subparsers = parser.add_subparsers(dest="cmd", required=True)
-    build_parser = subparsers.add_parser("build", help="V3.3 JSON 规划并生成 BIN")
+    build_parser = subparsers.add_parser("build", help="V3.5 JSON 规划并生成 BIN")
     build_parser.add_argument("json")
     build_parser.add_argument("bin")
-    check_parser = subparsers.add_parser("check", help="严格校验 V3.3 BIN")
+    check_parser = subparsers.add_parser("check", help="严格校验 V3.5 BIN")
     check_parser.add_argument("bin")
     summary_parser = subparsers.add_parser("summary", help="规划并输出统计摘要")
     summary_parser.add_argument("json")
@@ -618,32 +621,19 @@ def main() -> None:
         print(f"traj_id={header.traj_id}")
         print(f"version={VERSION}")
         print(f"node_count={header.node_count}")
+        print(f"arrival_count={header.arrival_count}")
         print(f"action_count={header.action_count}")
-        print(f"gate_count={header.gate_count}")
-        print(f"total_length_mm={header.total_length_mm}")
-        print(f"planned_time_ms={header.planned_time_ms}")
-        print(f"crc32=0x{header.file_crc32:08X}")
-        print(f"max_feed_speed_mmps={max(node.speed_mmps for node in parsed.nodes):.1f}")
-        for index, node in enumerate(parsed.nodes):
-            if node.flags:
-                print(
-                    f"node[{index}]: s={node.s_mm:.0f}, flags=0x{node.flags:02X}, "
-                    f"gate=0x{node.gate_id:02X}, v={node.speed_mmps:.1f}"
-                )
-        for action in parsed.actions:
-            print(
-                f"action[{action.action_seq}]: {ACTIONS.get(action.action, hex(action.action))}, "
-                f"gate=0x{action.unlock_gate_id:02X}, flags=0x{action.flags:02X}, "
-                f"arm={action.arm_s_mm}, disarm={action.disarm_s_mm}"
-            )
-        print("OK: V3.3 BIN validation passed")
+        print(f"planned_motion_time_ms={header.planned_motion_time_ms}")
+        print(f"CRC32=0x{header.file_crc32:08X}")
+        print("OK: V3.5 BIN validation passed")
         return
-
     project = load_project_json(Path(args.json))
     plan = plan_project(project)
     _print_summary(project, plan)
     if args.cmd == "plan":
-        print("OK: planning and validation passed")
+        data = PathCodec.build_bin(project, plan)
+        PathCodec.parse_bin(data, expected_traj_id=project.traj_id)
+        print("OK: V3.5 plan validation passed")
 
 
 if __name__ == "__main__":

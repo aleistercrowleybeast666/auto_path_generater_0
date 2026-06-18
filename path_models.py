@@ -1,28 +1,47 @@
 # -*- coding: utf-8 -*-
-"""HJMB V3.3 project, trajectory, and protocol-neutral data models."""
+"""HJMB V3.5 project, trajectory, and protocol data models."""
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field as dc_field
+from dataclasses import asdict, dataclass, field as dc_field, replace
 from typing import Dict, List, Optional, Tuple
 
-PROJECT_FORMAT = "HJMB_PATH_EDITOR_JSON_V33"
+PROJECT_FORMAT = "HJMB_PATH_EDITOR_JSON_V35"
 
-POINT_TYPE_CUT_IN = "CUT_IN"
+POINT_TYPE_START = "START"
 POINT_TYPE_WAYPOINT = "WAYPOINT"
 POINT_TYPE_ARRIVAL = "ARRIVAL"
-POINT_TYPES = (POINT_TYPE_CUT_IN, POINT_TYPE_WAYPOINT, POINT_TYPE_ARRIVAL)
+POINT_TYPES = (POINT_TYPE_START, POINT_TYPE_WAYPOINT, POINT_TYPE_ARRIVAL)
 
-YAW_UNSPECIFIED_DDEG = 0xFF
+PATH_MODE_FREE = "FREE"
+PATH_MODE_FIXED_8 = "FIXED_8"
+PATH_MODES = (PATH_MODE_FREE, PATH_MODE_FIXED_8)
 
-ACTION_FLAG_LOCKED = 0x01
-ACTION_FLAG_HOLD_PATH = 0x02
-ACTION_FLAG_REQUIRED_AT_END = 0x04
-VALID_ACTION_FLAGS_MASK = (
-    ACTION_FLAG_LOCKED | ACTION_FLAG_HOLD_PATH | ACTION_FLAG_REQUIRED_AT_END
+YAW_ROTATION_SHORTEST = "SHORTEST"
+YAW_ROTATION_CW_ONLY = "CW_ONLY"
+YAW_ROTATION_CCW_ONLY = "CCW_ONLY"
+YAW_ROTATION_POLICIES = (
+    YAW_ROTATION_SHORTEST,
+    YAW_ROTATION_CW_ONLY,
+    YAW_ROTATION_CCW_ONLY,
 )
 
-ACTION_GATE_ACCEL = 0xFE
-ACTION_GATE_UNCONDITIONAL = 0xFF
+YAW_UNSPECIFIED_DDEG = 0xFF
+SITE_ID_FREE = 0xFF
+
+ACTION_MODE_STOP_AND_WAIT = "STOP_AND_WAIT"
+ACTION_MODE_ASYNC = "ASYNC"
+ACTION_MODE_KINEMATIC = "KINEMATIC"
+ACTION_MODE_NAMES = (
+    ACTION_MODE_STOP_AND_WAIT,
+    ACTION_MODE_ASYNC,
+    ACTION_MODE_KINEMATIC,
+)
+ACTION_MODE_CODES = {
+    ACTION_MODE_STOP_AND_WAIT: 0,
+    ACTION_MODE_ASYNC: 1,
+    ACTION_MODE_KINEMATIC: 2,
+}
+ACTION_MODE_NAMES_BY_CODE = {code: name for name, code in ACTION_MODE_CODES.items()}
 
 PATH_ACT_PREP_PICK_1 = 0x11
 PATH_ACT_PREP_PICK_2L = 0x12
@@ -69,20 +88,69 @@ DROP_ACTIONS = (
     PATH_ACT_DROP_23,
 )
 
-TRAJ_FLAG_GATE = 0x01
-TRAJ_FLAG_STOP = 0x02
-TRAJ_FLAG_SCAN = 0x04
-TRAJ_FLAG_SLOW_ZONE = 0x08
-TRAJ_FLAG_CUT_IN = 0x10
-TRAJ_FLAG_ARRIVAL = 0x20
-TRAJ_FLAG_WAYPOINT = 0x40
-TRAJ_FLAG_END = 0x80
+TRAJ_FLAG_START = 0x01
+TRAJ_FLAG_ARRIVAL = 0x02
+TRAJ_FLAG_WAYPOINT = 0x04
+TRAJ_FLAG_END = 0x08
+VALID_TRAJ_FLAGS_MASK = (
+    TRAJ_FLAG_START | TRAJ_FLAG_ARRIVAL | TRAJ_FLAG_WAYPOINT | TRAJ_FLAG_END
+)
 
 MAX_EDIT_POINTS = 100
 MAX_NODES = 2500
 MAX_ACTIONS = 32
-MAX_GATES = 32
+MAX_ARRIVALS = 32
 MAX_TRAJ_ID = 359
+
+FIXED_SITE_KEYS = (
+    "P_START",
+    "P_PICK_1",
+    "P_PICK_2L",
+    "P_PICK_2R",
+    "P_PICK_3",
+    "P_DROP_1",
+    "P_DROP_2",
+    "P_DROP_3",
+)
+
+
+def fixed_site_key_allows_yaw_override(site_key: str) -> bool:
+    return site_key.startswith("P_DROP_")
+
+REMOVED_TOP_LEVEL_FIELDS = {
+    "cut_in",
+    "preview_initial_pose",
+}
+REMOVED_POINT_FIELDS = {
+    "stop_required",
+    "gate_id",
+    "marker_id",
+    "scan",
+    "is_end",
+    "yaw_mode",
+}
+REMOVED_ACTION_FIELDS = {
+    "unlock_gate_id",
+    "flags",
+    "arm_s_mm",
+    "disarm_s_mm",
+    "min_wait_ms",
+    "trigger",
+    "trigger_point_id",
+    "trigger_offset_mm",
+    "trigger_s_mm",
+    "expire_s_mm",
+    "window_start",
+    "window_end",
+    "window_start_point_id",
+    "window_start_offset_mm",
+    "window_end_point_id",
+    "window_end_offset_mm",
+    "check_start_s_mm",
+    "departure_action_seq",
+    "completion_barrier",
+    "required_action_seq",
+}
 
 
 def parse_int(value, field_name: str = "value") -> int:
@@ -96,6 +164,12 @@ def parse_int(value, field_name: str = "value") -> int:
         raise ValueError(f"{field_name} 必须是十进制或 0x 前缀整数，当前为 {value!r}") from exc
 
 
+def parse_optional_int(value, field_name: str = "value") -> Optional[int]:
+    if value is None or value == "":
+        return None
+    return parse_int(value, field_name)
+
+
 def parse_float(value, field_name: str = "value") -> float:
     if isinstance(value, (int, float)) and not isinstance(value, bool):
         return float(value)
@@ -107,6 +181,11 @@ def parse_float(value, field_name: str = "value") -> float:
 
 def hex8(value: int) -> str:
     return f"0x{value & 0xFF:02X}"
+
+
+def _reject_fields(data: dict, removed: set[str], scope: str) -> None:
+    for field_name in sorted(removed & set(data)):
+        raise ValueError(f"V3.5 已删除 {scope}.{field_name}")
 
 
 @dataclass
@@ -132,12 +211,18 @@ class PlannerConfig:
     max_wz_radps: float = 4.0
     angular_accel_moving_radps2: float = 2.0
     angular_accel_rotate_radps2: float = 5.0
+    yaw_rotation_policy: str = YAW_ROTATION_SHORTEST
     max_ref_lead_mm: int = 50
     max_iterations: int = 40
     speed_convergence_mmps: float = 0.5
 
     @classmethod
     def from_dict(cls, data: dict) -> "PlannerConfig":
+        policy = str(
+            data.get("yaw_rotation_policy", YAW_ROTATION_SHORTEST)
+        ).upper()
+        if policy not in YAW_ROTATION_POLICIES:
+            raise ValueError(f"planner.yaw_rotation_policy={policy!r} 非法")
         return cls(
             max_speed_mmps=parse_int(data.get("max_speed_mmps", 2000), "planner.max_speed_mmps"),
             nominal_spacing_mm=parse_int(
@@ -159,6 +244,7 @@ class PlannerConfig:
                 data.get("angular_accel_rotate_radps2", 5.0),
                 "planner.angular_accel_rotate_radps2",
             ),
+            yaw_rotation_policy=policy,
             max_ref_lead_mm=parse_int(
                 data.get("max_ref_lead_mm", 50), "planner.max_ref_lead_mm"
             ),
@@ -171,44 +257,118 @@ class PlannerConfig:
 
 
 @dataclass
-class CutInConfig:
-    capture_radius_mm: int = 100
-    target_speed_mmps: int = 800
-    approach_max_speed_mmps: int = 1000
-    straight_length_mm: int = 500
-    yaw_tolerance_ddeg: int = 100
-    tangent_tolerance_ddeg: int = 150
-    align_yaw: bool = True
-    allow_first_segment_capture: bool = True
+class StartCheckConfig:
+    position_tolerance_mm: int = 30
+    yaw_tolerance_ddeg: int = 50
+    stable_time_ms: int = 100
 
     @classmethod
-    def from_dict(cls, data: dict) -> "CutInConfig":
+    def from_dict(cls, data: dict) -> "StartCheckConfig":
         return cls(
-            capture_radius_mm=parse_int(
-                data.get("capture_radius_mm", 100), "cut_in.capture_radius_mm"
-            ),
-            target_speed_mmps=parse_int(
-                data.get("target_speed_mmps", 800), "cut_in.target_speed_mmps"
-            ),
-            approach_max_speed_mmps=parse_int(
-                data.get("approach_max_speed_mmps", 1000),
-                "cut_in.approach_max_speed_mmps",
-            ),
-            straight_length_mm=parse_int(
-                data.get("straight_length_mm", 500), "cut_in.straight_length_mm"
+            position_tolerance_mm=parse_int(
+                data.get("position_tolerance_mm", 30),
+                "start_check.position_tolerance_mm",
             ),
             yaw_tolerance_ddeg=parse_int(
-                data.get("yaw_tolerance_ddeg", 100), "cut_in.yaw_tolerance_ddeg"
+                data.get("yaw_tolerance_ddeg", 50),
+                "start_check.yaw_tolerance_ddeg",
             ),
-            tangent_tolerance_ddeg=parse_int(
-                data.get("tangent_tolerance_ddeg", 150),
-                "cut_in.tangent_tolerance_ddeg",
-            ),
-            align_yaw=bool(data.get("align_yaw", True)),
-            allow_first_segment_capture=bool(
-                data.get("allow_first_segment_capture", True)
+            stable_time_ms=parse_int(
+                data.get("stable_time_ms", 100),
+                "start_check.stable_time_ms",
             ),
         )
+
+
+@dataclass
+class ArrivalCheckConfig:
+    position_tolerance_mm: int = 20
+    yaw_tolerance_ddeg: int = 30
+    speed_tolerance_mmps: int = 60
+    wz_tolerance_ddegps: int = 50
+    stable_time_ms: int = 100
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "ArrivalCheckConfig":
+        return cls(
+            position_tolerance_mm=parse_int(
+                data.get("position_tolerance_mm", 20),
+                "arrival_check.position_tolerance_mm",
+            ),
+            yaw_tolerance_ddeg=parse_int(
+                data.get("yaw_tolerance_ddeg", 30),
+                "arrival_check.yaw_tolerance_ddeg",
+            ),
+            speed_tolerance_mmps=parse_int(
+                data.get("speed_tolerance_mmps", 60),
+                "arrival_check.speed_tolerance_mmps",
+            ),
+            wz_tolerance_ddegps=parse_int(
+                data.get("wz_tolerance_ddegps", 50),
+                "arrival_check.wz_tolerance_ddegps",
+            ),
+            stable_time_ms=parse_int(
+                data.get("stable_time_ms", 100),
+                "arrival_check.stable_time_ms",
+            ),
+        )
+
+
+@dataclass
+class FixedSite:
+    site_id: int
+    site_key: str
+    x_mm: float = 0.0
+    y_mm: float = 0.0
+    yaw_ddeg: int = 0
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "FixedSite":
+        return cls(
+            site_id=parse_int(data.get("site_id", 0), "fixed_sites.site_id"),
+            site_key=str(data.get("site_key", "")),
+            x_mm=parse_float(data.get("x_mm", 0), "fixed_sites.x_mm"),
+            y_mm=parse_float(data.get("y_mm", 0), "fixed_sites.y_mm"),
+            yaw_ddeg=parse_int(data.get("yaw_ddeg", 0), "fixed_sites.yaw_ddeg"),
+        )
+
+
+def default_fixed_sites() -> List[FixedSite]:
+    return [FixedSite(site_id=index, site_key=key) for index, key in enumerate(FIXED_SITE_KEYS)]
+
+
+def validate_fixed_sites(sites: List[FixedSite]) -> List[str]:
+    errors: List[str] = []
+    if len(sites) != len(FIXED_SITE_KEYS):
+        errors.append(f"fixed_sites 必须恰好 8 行，当前为 {len(sites)}")
+        return errors
+    seen: set[int] = set()
+    for site in sites:
+        if site.site_id in seen:
+            errors.append(f"fixed_sites site_id={site.site_id} 重复")
+        seen.add(site.site_id)
+        if not 0 <= site.site_id < len(FIXED_SITE_KEYS):
+            errors.append(f"fixed_sites site_id={site.site_id} 必须为 0~7")
+            continue
+        expected_key = FIXED_SITE_KEYS[site.site_id]
+        if site.site_key != expected_key:
+            errors.append(
+                f"fixed_sites[{site.site_id}].site_key={site.site_key!r}，应为 {expected_key!r}"
+            )
+        if not (-32768 <= site.x_mm <= 32767 and -32768 <= site.y_mm <= 32767):
+            errors.append(f"fixed_sites[{site.site_id}] 坐标超出 int16_t 范围")
+        if not -32768 <= site.yaw_ddeg <= 32767:
+            errors.append(f"fixed_sites[{site.site_id}].yaw_ddeg 超出 int16_t 范围")
+        if (
+            site.yaw_ddeg == YAW_UNSPECIFIED_DDEG
+            and not fixed_site_key_allows_yaw_override(expected_key)
+        ):
+            errors.append(
+                f"fixed_sites[{site.site_id}].yaw_ddeg=0xFF 仅允许 DROP 固定点使用"
+            )
+    if seen != set(range(len(FIXED_SITE_KEYS))):
+        errors.append(f"fixed_sites site_id 必须恰好覆盖 0~7，当前为 {sorted(seen)}")
+    return errors
 
 
 @dataclass
@@ -238,36 +398,8 @@ class VehicleProfile:
                 data.get("wheel_hard_limit_rpm", 450),
                 "vehicle_profile.wheel_hard_limit_rpm",
             ),
-            mecanum_convention=str(
-                data.get("mecanum_convention", "X_FL_FR_RL_RR")
-            ),
-            geometry_note=str(
-                data.get("geometry_note", "示例初值，导出前请按实车核对")
-            ),
-        )
-
-
-@dataclass
-class PreviewInitialPose:
-    enabled: bool = False
-    x_mm: float = 0.0
-    y_mm: float = 0.0
-    yaw_ddeg: int = 0
-    initial_speed_mmps: float = 0.0
-
-    @classmethod
-    def from_dict(cls, data: dict) -> "PreviewInitialPose":
-        return cls(
-            enabled=bool(data.get("enabled", False)),
-            x_mm=parse_float(data.get("x_mm", 0), "preview_initial_pose.x_mm"),
-            y_mm=parse_float(data.get("y_mm", 0), "preview_initial_pose.y_mm"),
-            yaw_ddeg=parse_int(
-                data.get("yaw_ddeg", 0), "preview_initial_pose.yaw_ddeg"
-            ),
-            initial_speed_mmps=parse_float(
-                data.get("initial_speed_mmps", 0),
-                "preview_initial_pose.initial_speed_mmps",
-            ),
+            mecanum_convention=str(data.get("mecanum_convention", "X_FL_FR_RL_RR")),
+            geometry_note=str(data.get("geometry_note", "示例初值，导出前请按实车核对")),
         )
 
 
@@ -295,8 +427,6 @@ class StartRegion:
 class OverlayConfig:
     selected_analysis_mode: str = "normal"
     scale_mode: str = "planner"
-    show_cut_in_capture: bool = True
-    show_cut_in_preview: bool = True
     speed_threshold_mmps: int = 1500
     accel_threshold_mmps2: int = 800
     beta_threshold_radps2: float = 1.5
@@ -306,8 +436,6 @@ class OverlayConfig:
         return cls(
             selected_analysis_mode=str(data.get("selected_analysis_mode", "normal")),
             scale_mode=str(data.get("scale_mode", "planner")),
-            show_cut_in_capture=bool(data.get("show_cut_in_capture", True)),
-            show_cut_in_preview=bool(data.get("show_cut_in_preview", True)),
             speed_threshold_mmps=parse_int(
                 data.get("speed_threshold_mmps", 1500),
                 "overlay.speed_threshold_mmps",
@@ -365,14 +493,8 @@ class MechanismProfile:
     @classmethod
     def from_dict(cls, data: dict) -> "MechanismProfile":
         durations = _default_action_durations()
-        legacy_names = {
-            "STORE_1": "DROP_1",
-            "STORE_2": "DROP_2",
-            "STORE_3": "DROP_3",
-            "DUMP": "STORE",
-        }
         for name, value in data.get("action_duration_ms", {}).items():
-            target_name = legacy_names.get(str(name), str(name))
+            target_name = str(name).upper()
             if target_name in durations:
                 durations[target_name] = parse_int(
                     value, f"mechanism_profile.action_duration_ms.{name}"
@@ -380,10 +502,7 @@ class MechanismProfile:
         return cls(
             action_duration_ms=durations,
             drop_safety_margin_ms=parse_int(
-                data.get(
-                    "drop_safety_margin_ms",
-                    data.get("dump_safety_margin_ms", 300),
-                ),
+                data.get("drop_safety_margin_ms", 300),
                 "mechanism_profile.drop_safety_margin_ms",
             ),
         )
@@ -393,48 +512,34 @@ class MechanismProfile:
 class EditPoint:
     point_id: int = 0
     type: str = POINT_TYPE_WAYPOINT
+    site_id: int = SITE_ID_FREE
     x_mm: float = 0.0
     y_mm: float = 0.0
     yaw_ddeg: int = YAW_UNSPECIFIED_DDEG
     max_speed_mmps: int = 0
     corner_trim_mm: float = 200.0
     exact_pass: bool = False
-    stop_required: bool = False
-    gate_id: int = 0xFF
-    marker_id: int = 0xFF
-    scan: bool = False
-    is_end: bool = False
 
     @classmethod
     def from_dict(cls, data: dict) -> "EditPoint":
-        if "yaw_mode" in data:
-            raise ValueError("V3.3 已删除 point.yaw_mode")
+        _reject_fields(data, REMOVED_POINT_FIELDS, "point")
         point_type = str(data.get("type", POINT_TYPE_WAYPOINT)).upper()
-        default_yaw = (
-            YAW_UNSPECIFIED_DDEG
-            if point_type == POINT_TYPE_WAYPOINT
-            else 0
-        )
+        default_yaw = YAW_UNSPECIFIED_DDEG if point_type == POINT_TYPE_WAYPOINT else 0
+        default_site = SITE_ID_FREE
+        default_corner_trim = 0 if point_type == POINT_TYPE_START else 200
+        default_exact_pass = point_type == POINT_TYPE_START
         return cls(
             point_id=parse_int(data.get("point_id", 0), "point.point_id"),
             type=point_type,
+            site_id=parse_int(data.get("site_id", default_site), "point.site_id"),
             x_mm=parse_float(data.get("x_mm", 0), "point.x_mm"),
             y_mm=parse_float(data.get("y_mm", 0), "point.y_mm"),
-            yaw_ddeg=parse_int(
-                data.get("yaw_ddeg", default_yaw), "point.yaw_ddeg"
-            ),
-            max_speed_mmps=parse_int(
-                data.get("max_speed_mmps", 0), "point.max_speed_mmps"
-            ),
+            yaw_ddeg=parse_int(data.get("yaw_ddeg", default_yaw), "point.yaw_ddeg"),
+            max_speed_mmps=parse_int(data.get("max_speed_mmps", 0), "point.max_speed_mmps"),
             corner_trim_mm=parse_float(
-                data.get("corner_trim_mm", 200), "point.corner_trim_mm"
+                data.get("corner_trim_mm", default_corner_trim), "point.corner_trim_mm"
             ),
-            exact_pass=bool(data.get("exact_pass", False)),
-            stop_required=bool(data.get("stop_required", False)),
-            gate_id=parse_int(data.get("gate_id", 0xFF), "point.gate_id"),
-            marker_id=parse_int(data.get("marker_id", 0xFF), "point.marker_id"),
-            scan=bool(data.get("scan", False)),
-            is_end=bool(data.get("is_end", False)),
+            exact_pass=bool(data.get("exact_pass", default_exact_pass)),
         )
 
 
@@ -442,47 +547,107 @@ class EditPoint:
 class MechanicalAction:
     action_seq: int = 0
     action: int = PATH_ACT_PREP_PICK_1
-    unlock_gate_id: int = ACTION_GATE_UNCONDITIONAL
-    flags: int = 0
-    timeout_ms: int = 0
-    arm_s_mm: int = 0
-    disarm_s_mm: int = 0xFFFF
+    mode: str = ACTION_MODE_STOP_AND_WAIT
+    timeout_ms: int = 3000
+    post_wait_ms: int = 0
+    arrival_point_id: Optional[int] = None
     accel_limit_mmps2: int = 0
     beta_limit_ddegps2: int = 0
+    wz_limit_ddegps: int = 0
     speed_limit_mmps: int = 0
     stable_time_ms: int = 0
 
     @classmethod
     def from_dict(cls, data: dict) -> "MechanicalAction":
+        _reject_fields(data, REMOVED_ACTION_FIELDS, "action")
         action_value = data.get("action", PATH_ACT_PREP_PICK_1)
         if isinstance(action_value, str) and action_value.upper() in ACTION_CODES:
             action_value = ACTION_CODES[action_value.upper()]
+        mode = str(data.get("mode", ACTION_MODE_STOP_AND_WAIT)).upper()
+        if mode not in ACTION_MODE_NAMES:
+            raise ValueError(f"action.mode={mode!r} 非法")
+
+        limits = data.get("limits", {})
+        if mode != ACTION_MODE_KINEMATIC and "limits" in data:
+            raise ValueError(f"action {mode} 不允许配置 limits")
         return cls(
             action_seq=parse_int(data.get("action_seq", 0), "action.action_seq"),
             action=parse_int(action_value, "action.action"),
-            unlock_gate_id=parse_int(
-                data.get("unlock_gate_id", ACTION_GATE_UNCONDITIONAL),
-                "action.unlock_gate_id",
-            ),
-            flags=parse_int(data.get("flags", 0), "action.flags"),
-            timeout_ms=parse_int(data.get("timeout_ms", 0), "action.timeout_ms"),
-            arm_s_mm=parse_int(data.get("arm_s_mm", 0), "action.arm_s_mm"),
-            disarm_s_mm=parse_int(
-                data.get("disarm_s_mm", 0xFFFF), "action.disarm_s_mm"
+            mode=mode,
+            timeout_ms=parse_int(data.get("timeout_ms", 3000), "action.timeout_ms"),
+            post_wait_ms=parse_int(data.get("post_wait_ms", 0), "action.post_wait_ms"),
+            arrival_point_id=parse_optional_int(
+                data.get("arrival_point_id"), "action.arrival_point_id"
             ),
             accel_limit_mmps2=parse_int(
-                data.get("accel_limit_mmps2", 0), "action.accel_limit_mmps2"
+                data.get(
+                    "accel_limit_mmps2",
+                    limits.get("accel_limit_mmps2", 0),
+                ),
+                "action.limits.accel_limit_mmps2",
             ),
             beta_limit_ddegps2=parse_int(
-                data.get("beta_limit_ddegps2", 0), "action.beta_limit_ddegps2"
+                data.get("beta_limit_ddegps2", limits.get("beta_limit_ddegps2", 0)),
+                "action.limits.beta_limit_ddegps2",
+            ),
+            wz_limit_ddegps=parse_int(
+                data.get("wz_limit_ddegps", limits.get("wz_limit_ddegps", 0)),
+                "action.limits.wz_limit_ddegps",
             ),
             speed_limit_mmps=parse_int(
-                data.get("speed_limit_mmps", 0), "action.speed_limit_mmps"
+                data.get("speed_limit_mmps", limits.get("speed_limit_mmps", 0)),
+                "action.limits.speed_limit_mmps",
             ),
             stable_time_ms=parse_int(
-                data.get("stable_time_ms", 0), "action.stable_time_ms"
+                data.get("stable_time_ms", limits.get("stable_time_ms", 0)),
+                "action.limits.stable_time_ms",
             ),
         )
+
+    def to_config_dict(self) -> dict:
+        result = {
+            "action_seq": self.action_seq,
+            "action": ACTIONS.get(self.action, self.action),
+            "mode": self.mode,
+            "timeout_ms": self.timeout_ms,
+            "post_wait_ms": self.post_wait_ms,
+        }
+        if self.mode == ACTION_MODE_STOP_AND_WAIT:
+            result["arrival_point_id"] = self.arrival_point_id
+        elif self.mode == ACTION_MODE_KINEMATIC:
+            result["limits"] = {
+                "accel_limit_mmps2": self.accel_limit_mmps2,
+                "beta_limit_ddegps2": self.beta_limit_ddegps2,
+                "wz_limit_ddegps": self.wz_limit_ddegps,
+                "speed_limit_mmps": self.speed_limit_mmps,
+                "stable_time_ms": self.stable_time_ms,
+            }
+        return result
+
+
+@dataclass
+class ResolvedMechanicalAction:
+    action_seq: int
+    action: int
+    mode: str
+    arrival_id: int
+    timeout_ms: int
+    post_wait_ms: int
+    check_start_s_mm: int
+    accel_limit_mmps2: int
+    beta_limit_ddegps2: int
+    wz_limit_ddegps: int
+    speed_limit_mmps: int
+    stable_time_ms: int
+    execution_hint: str = ""
+    fallback_arrival_id: Optional[int] = None
+
+
+@dataclass
+class ArrivalDepartureLock:
+    arrival_id: int
+    departure_action_seq: int
+    bound_action_seqs: List[int]
 
 
 @dataclass
@@ -514,7 +679,7 @@ class TrajectoryNode:
     vx_mmps: float
     vy_mmps: float
     wz_radps: float
-    gate_id: int = 0xFF
+    arrival_id: int = 0xFF
     flags: int = 0
     speed_mmps: float = 0.0
     a_t_mmps2: float = 0.0
@@ -530,20 +695,9 @@ class TrajectoryNode:
 
 
 @dataclass
-class CutInPreviewResult:
-    enabled: bool = False
-    reachable: bool = False
-    distance_mm: float = 0.0
-    time_ms: int = 0
-    peak_speed_mmps: float = 0.0
-    warning: str = ""
-
-
-@dataclass
 class PlanSummary:
     total_length_mm: float = 0.0
     formal_time_ms: int = 0
-    cut_in_preview_time_ms: int = 0
     mechanical_wait_time_ms: int = 0
     estimated_total_time_ms: int = 0
     max_speed_mmps: float = 0.0
@@ -560,20 +714,23 @@ class PlanSummary:
 @dataclass
 class PlanResult:
     nodes: List[TrajectoryNode]
-    actions: List[MechanicalAction]
+    actions: List[ResolvedMechanicalAction]
     summary: PlanSummary
-    cut_in_preview: CutInPreviewResult
     warnings: List[str] = dc_field(default_factory=list)
+    departure_locks: List[ArrivalDepartureLock] = dc_field(default_factory=list)
 
 
 @dataclass
 class PathProject:
     traj_id: int = 0
+    path_mode: str = PATH_MODE_FREE
     field: FieldConfig = dc_field(default_factory=FieldConfig)
     planner: PlannerConfig = dc_field(default_factory=PlannerConfig)
-    cut_in: CutInConfig = dc_field(default_factory=CutInConfig)
+    start_check: StartCheckConfig = dc_field(default_factory=StartCheckConfig)
+    arrival_check: ArrivalCheckConfig = dc_field(default_factory=ArrivalCheckConfig)
+    fixed_sites: List[FixedSite] = dc_field(default_factory=default_fixed_sites)
+    route_meta: dict = dc_field(default_factory=dict)
     start_region: StartRegion = dc_field(default_factory=StartRegion)
-    preview_initial_pose: PreviewInitialPose = dc_field(default_factory=PreviewInitialPose)
     overlay: OverlayConfig = dc_field(default_factory=OverlayConfig)
     controller_preview: ControllerPreview = dc_field(default_factory=ControllerPreview)
     vehicle_profile: VehicleProfile = dc_field(default_factory=VehicleProfile)
@@ -585,21 +742,30 @@ class PathProject:
 
     @classmethod
     def from_dict(cls, data: dict) -> "PathProject":
+        _reject_fields(data, REMOVED_TOP_LEVEL_FIELDS, "project")
         project_format = data.get("format")
         if project_format != PROJECT_FORMAT:
             raise ValueError(
-                "工程格式不兼容，请使用旧版编辑器转换或按 V3.3 重新绘制；"
+                "工程格式不兼容，V3.5 不接受 V3.4 或更早 JSON；"
                 f"当前 format={project_format!r}"
             )
-        return cls(
+        path_mode = str(data.get("path_mode", PATH_MODE_FREE)).upper()
+        if path_mode not in PATH_MODES:
+            raise ValueError(f"path_mode={path_mode!r} 非法")
+        if "fixed_sites" in data:
+            fixed_sites = [FixedSite.from_dict(item) for item in data["fixed_sites"]]
+        else:
+            fixed_sites = default_fixed_sites()
+        project = cls(
             traj_id=parse_int(data.get("traj_id", 0), "traj_id"),
+            path_mode=path_mode,
             field=FieldConfig.from_dict(data.get("field", {})),
             planner=PlannerConfig.from_dict(data.get("planner", {})),
-            cut_in=CutInConfig.from_dict(data.get("cut_in", {})),
+            start_check=StartCheckConfig.from_dict(data.get("start_check", {})),
+            arrival_check=ArrivalCheckConfig.from_dict(data.get("arrival_check", {})),
+            fixed_sites=fixed_sites,
+            route_meta=dict(data.get("route_meta", {})),
             start_region=StartRegion.from_dict(data.get("start_region", {})),
-            preview_initial_pose=PreviewInitialPose.from_dict(
-                data.get("preview_initial_pose", {})
-            ),
             overlay=OverlayConfig.from_dict(data.get("overlay", {})),
             controller_preview=ControllerPreview.from_dict(
                 data.get("controller_preview", {})
@@ -613,29 +779,82 @@ class PathProject:
                 data.get("reachability_check_enabled", False)
             ),
             points=[EditPoint.from_dict(item) for item in data.get("points", [])],
-            actions=[
-                MechanicalAction.from_dict(item) for item in data.get("actions", [])
-            ],
+            actions=[MechanicalAction.from_dict(item) for item in data.get("actions", [])],
         )
+        return project
+
+    def _point_to_config_dict(self, point: EditPoint) -> dict:
+        base = {"point_id": point.point_id, "type": point.type}
+        if point.type == POINT_TYPE_WAYPOINT:
+            base.update(
+                {
+                    "site_id": SITE_ID_FREE,
+                    "x_mm": point.x_mm,
+                    "y_mm": point.y_mm,
+                    "yaw_ddeg": YAW_UNSPECIFIED_DDEG,
+                    "max_speed_mmps": point.max_speed_mmps,
+                    "corner_trim_mm": point.corner_trim_mm,
+                    "exact_pass": point.exact_pass,
+                }
+            )
+            return base
+        if self.path_mode == PATH_MODE_FIXED_8:
+            base["site_id"] = point.site_id
+            if point.site_id == SITE_ID_FREE:
+                base.update(
+                    {
+                        "x_mm": point.x_mm,
+                        "y_mm": point.y_mm,
+                        "yaw_ddeg": point.yaw_ddeg,
+                    }
+                )
+                return base
+            site = next(
+                (
+                    site
+                    for site in self.fixed_sites
+                    if site.site_id == point.site_id
+                ),
+                None,
+            )
+            if (
+                point.type == POINT_TYPE_ARRIVAL
+                and site is not None
+                and site.yaw_ddeg == YAW_UNSPECIFIED_DDEG
+            ):
+                base["yaw_ddeg"] = point.yaw_ddeg
+            return base
+        base.update(
+            {
+                "site_id": SITE_ID_FREE,
+                "x_mm": point.x_mm,
+                "y_mm": point.y_mm,
+                "yaw_ddeg": point.yaw_ddeg,
+            }
+        )
+        return base
 
     def to_config_dict(self) -> dict:
         """Serialize only editable configuration; planned nodes are never persisted."""
         return {
             "format": PROJECT_FORMAT,
             "traj_id": self.traj_id,
+            "path_mode": self.path_mode,
             "field": asdict(self.field),
             "planner": asdict(self.planner),
-            "cut_in": asdict(self.cut_in),
+            "start_check": asdict(self.start_check),
+            "arrival_check": asdict(self.arrival_check),
+            "fixed_sites": [asdict(site) for site in self.fixed_sites],
+            "route_meta": self.route_meta,
             "start_region": asdict(self.start_region),
-            "preview_initial_pose": asdict(self.preview_initial_pose),
             "overlay": asdict(self.overlay),
             "controller_preview": asdict(self.controller_preview),
             "vehicle_profile": asdict(self.vehicle_profile),
             "mechanism_profile": asdict(self.mechanism_profile),
             "collision_check_enabled": self.collision_check_enabled,
             "reachability_check_enabled": self.reachability_check_enabled,
-            "points": [asdict(point) for point in self.points],
-            "actions": [asdict(action) for action in self.actions],
+            "points": [self._point_to_config_dict(point) for point in self.points],
+            "actions": [action.to_config_dict() for action in self.actions],
         }
 
     def to_dict(self) -> dict:
@@ -643,7 +862,7 @@ class PathProject:
 
 
 @dataclass
-class TrajectoryHeaderV33:
+class TrajectoryHeaderV35:
     traj_id: int
     flags: int
     field_width_mm: int
@@ -651,26 +870,98 @@ class TrajectoryHeaderV33:
     nominal_spacing_mm: int
     node_count: int
     action_count: int
-    gate_count: int
+    arrival_count: int
     file_crc32: int
     node_offset: int
     action_offset: int
     total_length_mm: int
-    planned_time_ms: int
-    cut_in_capture_radius_mm: int
-    cut_in_speed_mmps: int
-    approach_max_speed_mmps: int
-    cut_in_straight_length_mm: int
-    cut_in_yaw_tolerance_ddeg: int
-    cut_in_tangent_tolerance_ddeg: int
-    approach_flags: int
+    planned_motion_time_ms: int
+    start_pos_tolerance_mm: int
+    start_yaw_tolerance_ddeg: int
+    start_stable_time_ms: int
+    arrival_pos_tolerance_mm: int
+    arrival_yaw_tolerance_ddeg: int
+    arrival_speed_tolerance_mmps: int
+    arrival_wz_tolerance_ddegps: int
+    arrival_stable_time_ms: int
 
 
 @dataclass
-class ParsedTrajectoryV33:
-    header: TrajectoryHeaderV33
+class ParsedTrajectoryV35:
+    header: TrajectoryHeaderV35
     nodes: List[TrajectoryNode]
-    actions: List[MechanicalAction]
+    actions: List[ResolvedMechanicalAction]
+
+
+def _fixed_site_by_id(project: PathProject) -> Dict[int, FixedSite]:
+    errors = validate_fixed_sites(project.fixed_sites)
+    if errors:
+        raise ValueError("\n".join(errors))
+    return {site.site_id: site for site in project.fixed_sites}
+
+
+def resolve_edit_points(project: PathProject) -> List[EditPoint]:
+    """Return resolved point copies for planning without mutating project.points."""
+    points: List[EditPoint] = []
+    fixed_sites = _fixed_site_by_id(project) if project.path_mode == PATH_MODE_FIXED_8 else {}
+    used_fixed_arrivals: set[int] = set()
+
+    for row, point in enumerate(project.points):
+        resolved = replace(point)
+        resolved.type = resolved.type.upper()
+        if resolved.type not in POINT_TYPES:
+            raise ValueError(f"point[{row}] type={resolved.type!r} 非法")
+        if row == 0 and resolved.type != POINT_TYPE_START:
+            raise ValueError("point[0] 必须为 START")
+        if row != 0 and resolved.type == POINT_TYPE_START:
+            raise ValueError("START 只能出现在 point[0]")
+        if resolved.type == POINT_TYPE_WAYPOINT:
+            if resolved.site_id != SITE_ID_FREE:
+                raise ValueError(f"point_id={resolved.point_id} WAYPOINT site_id 必须为 255")
+            resolved.yaw_ddeg = YAW_UNSPECIFIED_DDEG
+            points.append(resolved)
+            continue
+
+        if project.path_mode == PATH_MODE_FREE:
+            if resolved.site_id != SITE_ID_FREE:
+                raise ValueError(
+                    f"FREE point_id={resolved.point_id} 的 START/ARRIVAL site_id 必须为 255"
+                )
+            points.append(resolved)
+            continue
+
+        if resolved.type == POINT_TYPE_START and resolved.site_id != 0:
+            raise ValueError(f"FIXED_8 START point_id={resolved.point_id} 必须引用 site_id=0")
+        if resolved.type == POINT_TYPE_ARRIVAL:
+            if resolved.site_id == SITE_ID_FREE:
+                raise ValueError(
+                    f"FIXED_8 ARRIVAL point_id={resolved.point_id} 未选择固定点 site_id"
+                )
+            if resolved.site_id == 0:
+                raise ValueError(f"FIXED_8 ARRIVAL point_id={resolved.point_id} 不能引用 START site")
+            if resolved.site_id in used_fixed_arrivals:
+                raise ValueError(f"FIXED_8 ARRIVAL site_id={resolved.site_id} 在当前路径中重复")
+            used_fixed_arrivals.add(resolved.site_id)
+        site = fixed_sites.get(resolved.site_id)
+        if site is None:
+            raise ValueError(
+                f"FIXED_8 point_id={resolved.point_id} 引用了不存在的 site_id={resolved.site_id}"
+            )
+        resolved.x_mm = site.x_mm
+        resolved.y_mm = site.y_mm
+        if site.yaw_ddeg == YAW_UNSPECIFIED_DDEG:
+            if not fixed_site_key_allows_yaw_override(site.site_key):
+                raise ValueError(
+                    f"FIXED_8 site_id={site.site_id} 不能使用 yaw_ddeg=0xFF"
+                )
+            if resolved.yaw_ddeg == YAW_UNSPECIFIED_DDEG:
+                raise ValueError(
+                    f"FIXED_8 ARRIVAL point_id={resolved.point_id} 缺少 yaw 覆盖值"
+                )
+        else:
+            resolved.yaw_ddeg = site.yaw_ddeg
+        points.append(resolved)
+    return points
 
 
 def make_default_project() -> PathProject:
