@@ -1,0 +1,3965 @@
+{
+  "format": "HJMB_LEG_LIBRARY_JSON_V40",
+  "legs": [
+    {
+      "analysis": {
+        "max_metrics": {
+          "max_wheel_rpm": 0.0
+        },
+        "planned_time_ms": 400,
+        "total_length_mm": 400
+      },
+      "control_points": [],
+      "hashes": {
+        "dependency_hashes": {},
+        "planner_algorithm_version": "PHASE6_LEG_OPTIMIZER_V1",
+        "self_hash32": "0xA1076512",
+        "validity_hash": "f5a9b6716b72c27af01bd0a63f2a63547f7d70eac668d286134bad25826b6557"
+      },
+      "key": {
+        "from_state_id": "DROP_STEP_1",
+        "route_family": "PICK_3_TO_1",
+        "to_state_id": "DROP_STEP_2",
+        "topology_profile": "S_RTL_SYNTHETIC"
+      },
+      "leg_id": "LEG_001A859522C7",
+      "nodes": [
+        {
+          "arrival_state_id": "DROP_STEP_1",
+          "flags": 6,
+          "local_s_mm": 0,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 0,
+          "y_mm": 500,
+          "yaw_ddeg": -900
+        },
+        {
+          "arrival_state_id": "DROP_STEP_2",
+          "flags": 6,
+          "local_s_mm": 400,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 400,
+          "y_mm": 500,
+          "yaw_ddeg": 450
+        }
+      ],
+      "review": {
+        "approved": true,
+        "locked": false,
+        "notes": "synthetic example leg",
+        "state": "VALID"
+      },
+      "source": "PHASE9_SYNTHETIC_EXAMPLE",
+      "state": "VALID",
+      "topology_profile": "S_RTL_SYNTHETIC",
+      "yaw_profile": {
+        "index": 0,
+        "model": "SYNTHETIC_STRAIGHT"
+      }
+    },
+    {
+      "analysis": {
+        "max_metrics": {
+          "max_wheel_rpm": 0.0
+        },
+        "planned_time_ms": 200,
+        "total_length_mm": 200
+      },
+      "control_points": [],
+      "hashes": {
+        "dependency_hashes": {},
+        "planner_algorithm_version": "PHASE6_LEG_OPTIMIZER_V1",
+        "self_hash32": "0x54C8D5EC",
+        "validity_hash": "a46b404e1096470f01dc386b3c2cfd0ba32294b4302973d95c8f8b632bfb61c4"
+      },
+      "key": {
+        "from_state_id": "DROP_STEP_1",
+        "route_family": "PICK_3_TO_1",
+        "to_state_id": "DROP_STEP_2",
+        "topology_profile": "S_RTL_SYNTHETIC"
+      },
+      "leg_id": "LEG_0A8E923BA3E8",
+      "nodes": [
+        {
+          "arrival_state_id": "DROP_STEP_1",
+          "flags": 6,
+          "local_s_mm": 0,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 200,
+          "y_mm": 500,
+          "yaw_ddeg": -450
+        },
+        {
+          "arrival_state_id": "DROP_STEP_2",
+          "flags": 6,
+          "local_s_mm": 200,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 400,
+          "y_mm": 500,
+          "yaw_ddeg": 900
+        }
+      ],
+      "review": {
+        "approved": true,
+        "locked": false,
+        "notes": "synthetic example leg",
+        "state": "VALID"
+      },
+      "source": "PHASE9_SYNTHETIC_EXAMPLE",
+      "state": "VALID",
+      "topology_profile": "S_RTL_SYNTHETIC",
+      "yaw_profile": {
+        "index": 1,
+        "model": "SYNTHETIC_STRAIGHT"
+      }
+    },
+    {
+      "analysis": {
+        "max_metrics": {
+          "max_wheel_rpm": 0.0
+        },
+        "planned_time_ms": 300,
+        "total_length_mm": 300
+      },
+      "control_points": [],
+      "hashes": {
+        "dependency_hashes": {},
+        "planner_algorithm_version": "PHASE6_LEG_OPTIMIZER_V1",
+        "self_hash32": "0x777BE2F9",
+        "validity_hash": "103a8af55385b5c0022be639eb1f281a31689c859a8169268834ea2e8f2d56fd"
+      },
+      "key": {
+        "from_state_id": "DROP_STEP_1",
+        "route_family": "PICK_3_TO_1",
+        "to_state_id": "DROP_STEP_2",
+        "topology_profile": "S_RTL_SYNTHETIC"
+      },
+      "leg_id": "LEG_0DE103333094",
+      "nodes": [
+        {
+          "arrival_state_id": "DROP_STEP_1",
+          "flags": 6,
+          "local_s_mm": 0,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 100,
+          "y_mm": 500,
+          "yaw_ddeg": -900
+        },
+        {
+          "arrival_state_id": "DROP_STEP_2",
+          "flags": 6,
+          "local_s_mm": 300,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 400,
+          "y_mm": 500,
+          "yaw_ddeg": 450
+        }
+      ],
+      "review": {
+        "approved": true,
+        "locked": false,
+        "notes": "synthetic example leg",
+        "state": "VALID"
+      },
+      "source": "PHASE9_SYNTHETIC_EXAMPLE",
+      "state": "VALID",
+      "topology_profile": "S_RTL_SYNTHETIC",
+      "yaw_profile": {
+        "index": 2,
+        "model": "SYNTHETIC_STRAIGHT"
+      }
+    },
+    {
+      "analysis": {
+        "max_metrics": {
+          "max_wheel_rpm": 0.0
+        },
+        "planned_time_ms": 510,
+        "total_length_mm": 510
+      },
+      "control_points": [],
+      "hashes": {
+        "dependency_hashes": {},
+        "planner_algorithm_version": "PHASE6_LEG_OPTIMIZER_V1",
+        "self_hash32": "0xC0A8B438",
+        "validity_hash": "c1381c83d3df38aa4105b21d026de3c5daa4512b1b3cb5d3ef242e91344c2dc7"
+      },
+      "key": {
+        "from_state_id": "P_PICK_3",
+        "route_family": "PICK_1_TO_3",
+        "to_state_id": "DROP_STEP_1",
+        "topology_profile": "S_LTR_SYNTHETIC"
+      },
+      "leg_id": "LEG_0E6518B7B39B",
+      "nodes": [
+        {
+          "arrival_state_id": "P_PICK_3",
+          "flags": 6,
+          "local_s_mm": 0,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 400,
+          "y_mm": 0,
+          "yaw_ddeg": 0
+        },
+        {
+          "arrival_state_id": "DROP_STEP_1",
+          "flags": 6,
+          "local_s_mm": 510,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 300,
+          "y_mm": 500,
+          "yaw_ddeg": 450
+        }
+      ],
+      "review": {
+        "approved": true,
+        "locked": false,
+        "notes": "synthetic example leg",
+        "state": "VALID"
+      },
+      "source": "PHASE9_SYNTHETIC_EXAMPLE",
+      "state": "VALID",
+      "topology_profile": "S_LTR_SYNTHETIC",
+      "yaw_profile": {
+        "index": 3,
+        "model": "SYNTHETIC_STRAIGHT"
+      }
+    },
+    {
+      "analysis": {
+        "max_metrics": {
+          "max_wheel_rpm": 0.0
+        },
+        "planned_time_ms": 100,
+        "total_length_mm": 100
+      },
+      "control_points": [],
+      "hashes": {
+        "dependency_hashes": {},
+        "planner_algorithm_version": "PHASE6_LEG_OPTIMIZER_V1",
+        "self_hash32": "0xF8C1AA74",
+        "validity_hash": "b165a681497371136a311953cf11927b7d6d9172425d2bdfc68e0a7c2208f507"
+      },
+      "key": {
+        "from_state_id": "DROP_STEP_1",
+        "route_family": "PICK_3_TO_1",
+        "to_state_id": "DROP_STEP_2",
+        "topology_profile": "S_RTL_SYNTHETIC"
+      },
+      "leg_id": "LEG_0EA13F6F4992",
+      "nodes": [
+        {
+          "arrival_state_id": "DROP_STEP_1",
+          "flags": 6,
+          "local_s_mm": 0,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 0,
+          "y_mm": 500,
+          "yaw_ddeg": -900
+        },
+        {
+          "arrival_state_id": "DROP_STEP_2",
+          "flags": 6,
+          "local_s_mm": 100,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 100,
+          "y_mm": 500,
+          "yaw_ddeg": 0
+        }
+      ],
+      "review": {
+        "approved": true,
+        "locked": false,
+        "notes": "synthetic example leg",
+        "state": "VALID"
+      },
+      "source": "PHASE9_SYNTHETIC_EXAMPLE",
+      "state": "VALID",
+      "topology_profile": "S_RTL_SYNTHETIC",
+      "yaw_profile": {
+        "index": 4,
+        "model": "SYNTHETIC_STRAIGHT"
+      }
+    },
+    {
+      "analysis": {
+        "max_metrics": {
+          "max_wheel_rpm": 0.0
+        },
+        "planned_time_ms": 539,
+        "total_length_mm": 539
+      },
+      "control_points": [],
+      "hashes": {
+        "dependency_hashes": {},
+        "planner_algorithm_version": "PHASE6_LEG_OPTIMIZER_V1",
+        "self_hash32": "0x75BBD396",
+        "validity_hash": "f92dd24c20d25bf81949f33a416195459d7e26de75bcdffaf1e4e996ab7a3525"
+      },
+      "key": {
+        "from_state_id": "P_PICK_3",
+        "route_family": "PICK_1_TO_3",
+        "to_state_id": "DROP_STEP_1",
+        "topology_profile": "S_LTR_SYNTHETIC"
+      },
+      "leg_id": "LEG_12E671EE008A",
+      "nodes": [
+        {
+          "arrival_state_id": "P_PICK_3",
+          "flags": 6,
+          "local_s_mm": 0,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 400,
+          "y_mm": 0,
+          "yaw_ddeg": 0
+        },
+        {
+          "arrival_state_id": "DROP_STEP_1",
+          "flags": 6,
+          "local_s_mm": 539,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 200,
+          "y_mm": 500,
+          "yaw_ddeg": 450
+        }
+      ],
+      "review": {
+        "approved": true,
+        "locked": false,
+        "notes": "synthetic example leg",
+        "state": "VALID"
+      },
+      "source": "PHASE9_SYNTHETIC_EXAMPLE",
+      "state": "VALID",
+      "topology_profile": "S_LTR_SYNTHETIC",
+      "yaw_profile": {
+        "index": 5,
+        "model": "SYNTHETIC_STRAIGHT"
+      }
+    },
+    {
+      "analysis": {
+        "max_metrics": {
+          "max_wheel_rpm": 0.0
+        },
+        "planned_time_ms": 100,
+        "total_length_mm": 100
+      },
+      "control_points": [],
+      "hashes": {
+        "dependency_hashes": {},
+        "planner_algorithm_version": "PHASE6_LEG_OPTIMIZER_V1",
+        "self_hash32": "0xE6DCEA65",
+        "validity_hash": "f08593eff1a20f730aa08b9cb04936ca80534c5eb9f67a10a501ab61ab22d54e"
+      },
+      "key": {
+        "from_state_id": "DROP_STEP_1",
+        "route_family": "PICK_1_TO_3",
+        "to_state_id": "DROP_STEP_2",
+        "topology_profile": "S_LTR_SYNTHETIC"
+      },
+      "leg_id": "LEG_134A53597704",
+      "nodes": [
+        {
+          "arrival_state_id": "DROP_STEP_1",
+          "flags": 6,
+          "local_s_mm": 0,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 200,
+          "y_mm": 500,
+          "yaw_ddeg": 900
+        },
+        {
+          "arrival_state_id": "DROP_STEP_2",
+          "flags": 6,
+          "local_s_mm": 100,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 100,
+          "y_mm": 500,
+          "yaw_ddeg": -450
+        }
+      ],
+      "review": {
+        "approved": true,
+        "locked": false,
+        "notes": "synthetic example leg",
+        "state": "VALID"
+      },
+      "source": "PHASE9_SYNTHETIC_EXAMPLE",
+      "state": "VALID",
+      "topology_profile": "S_LTR_SYNTHETIC",
+      "yaw_profile": {
+        "index": 6,
+        "model": "SYNTHETIC_STRAIGHT"
+      }
+    },
+    {
+      "analysis": {
+        "max_metrics": {
+          "max_wheel_rpm": 0.0
+        },
+        "planned_time_ms": 200,
+        "total_length_mm": 200
+      },
+      "control_points": [],
+      "hashes": {
+        "dependency_hashes": {},
+        "planner_algorithm_version": "PHASE6_LEG_OPTIMIZER_V1",
+        "self_hash32": "0xA38C5AAA",
+        "validity_hash": "13d8472570c04408c6b50c2d53f4a673b6776fc79f2f9d6859000bd70d59649b"
+      },
+      "key": {
+        "from_state_id": "DROP_STEP_1",
+        "route_family": "PICK_3_TO_1",
+        "to_state_id": "DROP_STEP_2",
+        "topology_profile": "S_RTL_SYNTHETIC"
+      },
+      "leg_id": "LEG_166525D42467",
+      "nodes": [
+        {
+          "arrival_state_id": "DROP_STEP_1",
+          "flags": 6,
+          "local_s_mm": 0,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 0,
+          "y_mm": 500,
+          "yaw_ddeg": -900
+        },
+        {
+          "arrival_state_id": "DROP_STEP_2",
+          "flags": 6,
+          "local_s_mm": 200,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 200,
+          "y_mm": 500,
+          "yaw_ddeg": 450
+        }
+      ],
+      "review": {
+        "approved": true,
+        "locked": false,
+        "notes": "synthetic example leg",
+        "state": "VALID"
+      },
+      "source": "PHASE9_SYNTHETIC_EXAMPLE",
+      "state": "VALID",
+      "topology_profile": "S_RTL_SYNTHETIC",
+      "yaw_profile": {
+        "index": 7,
+        "model": "SYNTHETIC_STRAIGHT"
+      }
+    },
+    {
+      "analysis": {
+        "max_metrics": {
+          "max_wheel_rpm": 0.0
+        },
+        "planned_time_ms": 510,
+        "total_length_mm": 510
+      },
+      "control_points": [],
+      "hashes": {
+        "dependency_hashes": {},
+        "planner_algorithm_version": "PHASE6_LEG_OPTIMIZER_V1",
+        "self_hash32": "0x7CE6A0DC",
+        "validity_hash": "96a62efb016afe191c3f001eb37bef59b863d5857ce567449a04442f62abe4bd"
+      },
+      "key": {
+        "from_state_id": "P_PICK_1",
+        "route_family": "PICK_3_TO_1",
+        "to_state_id": "DROP_STEP_1",
+        "topology_profile": "S_RTL_SYNTHETIC"
+      },
+      "leg_id": "LEG_195905992845",
+      "nodes": [
+        {
+          "arrival_state_id": "P_PICK_1",
+          "flags": 6,
+          "local_s_mm": 0,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 100,
+          "y_mm": 0,
+          "yaw_ddeg": 0
+        },
+        {
+          "arrival_state_id": "DROP_STEP_1",
+          "flags": 6,
+          "local_s_mm": 510,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 200,
+          "y_mm": 500,
+          "yaw_ddeg": -900
+        }
+      ],
+      "review": {
+        "approved": true,
+        "locked": false,
+        "notes": "synthetic example leg",
+        "state": "VALID"
+      },
+      "source": "PHASE9_SYNTHETIC_EXAMPLE",
+      "state": "VALID",
+      "topology_profile": "S_RTL_SYNTHETIC",
+      "yaw_profile": {
+        "index": 8,
+        "model": "SYNTHETIC_STRAIGHT"
+      }
+    },
+    {
+      "analysis": {
+        "max_metrics": {
+          "max_wheel_rpm": 0.0
+        },
+        "planned_time_ms": 300,
+        "total_length_mm": 300
+      },
+      "control_points": [],
+      "hashes": {
+        "dependency_hashes": {},
+        "planner_algorithm_version": "PHASE6_LEG_OPTIMIZER_V1",
+        "self_hash32": "0x5ADC7A68",
+        "validity_hash": "5c2847d24962903b0a216ec2e4c6ae3b9ffedfb4368cf06fb72a7c345abe83f5"
+      },
+      "key": {
+        "from_state_id": "DROP_STEP_1",
+        "route_family": "PICK_3_TO_1",
+        "to_state_id": "DROP_STEP_2",
+        "topology_profile": "S_RTL_SYNTHETIC"
+      },
+      "leg_id": "LEG_1AE92927DAC0",
+      "nodes": [
+        {
+          "arrival_state_id": "DROP_STEP_1",
+          "flags": 6,
+          "local_s_mm": 0,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 100,
+          "y_mm": 500,
+          "yaw_ddeg": -450
+        },
+        {
+          "arrival_state_id": "DROP_STEP_2",
+          "flags": 6,
+          "local_s_mm": 300,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 400,
+          "y_mm": 500,
+          "yaw_ddeg": 900
+        }
+      ],
+      "review": {
+        "approved": true,
+        "locked": false,
+        "notes": "synthetic example leg",
+        "state": "VALID"
+      },
+      "source": "PHASE9_SYNTHETIC_EXAMPLE",
+      "state": "VALID",
+      "topology_profile": "S_RTL_SYNTHETIC",
+      "yaw_profile": {
+        "index": 9,
+        "model": "SYNTHETIC_STRAIGHT"
+      }
+    },
+    {
+      "analysis": {
+        "max_metrics": {
+          "max_wheel_rpm": 0.0
+        },
+        "planned_time_ms": 100,
+        "total_length_mm": 100
+      },
+      "control_points": [],
+      "hashes": {
+        "dependency_hashes": {},
+        "planner_algorithm_version": "PHASE6_LEG_OPTIMIZER_V1",
+        "self_hash32": "0x2CED8D41",
+        "validity_hash": "aa37e5ac3f0f298f43a3319d771c3486d7d725c058e0e85ec107a72490221fc4"
+      },
+      "key": {
+        "from_state_id": "DROP_STEP_1",
+        "route_family": "PICK_1_TO_3",
+        "to_state_id": "DROP_STEP_2",
+        "topology_profile": "S_LTR_SYNTHETIC"
+      },
+      "leg_id": "LEG_1EAF09CC5A8D",
+      "nodes": [
+        {
+          "arrival_state_id": "DROP_STEP_1",
+          "flags": 6,
+          "local_s_mm": 0,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 400,
+          "y_mm": 500,
+          "yaw_ddeg": 900
+        },
+        {
+          "arrival_state_id": "DROP_STEP_2",
+          "flags": 6,
+          "local_s_mm": 100,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 300,
+          "y_mm": 500,
+          "yaw_ddeg": 0
+        }
+      ],
+      "review": {
+        "approved": true,
+        "locked": false,
+        "notes": "synthetic example leg",
+        "state": "VALID"
+      },
+      "source": "PHASE9_SYNTHETIC_EXAMPLE",
+      "state": "VALID",
+      "topology_profile": "S_LTR_SYNTHETIC",
+      "yaw_profile": {
+        "index": 10,
+        "model": "SYNTHETIC_STRAIGHT"
+      }
+    },
+    {
+      "analysis": {
+        "max_metrics": {
+          "max_wheel_rpm": 0.0
+        },
+        "planned_time_ms": 100,
+        "total_length_mm": 100
+      },
+      "control_points": [],
+      "hashes": {
+        "dependency_hashes": {},
+        "planner_algorithm_version": "PHASE6_LEG_OPTIMIZER_V1",
+        "self_hash32": "0xA4506CCC",
+        "validity_hash": "0b2186c7964d79857fa5f1dbff0070626bf29c01fe2fe43ebfd5bc9530c49e67"
+      },
+      "key": {
+        "from_state_id": "DROP_STEP_2",
+        "route_family": "PICK_1_TO_3",
+        "to_state_id": "DROP_STEP_3",
+        "topology_profile": "S_LTR_SYNTHETIC"
+      },
+      "leg_id": "LEG_1EB25D23D21D",
+      "nodes": [
+        {
+          "arrival_state_id": "DROP_STEP_2",
+          "flags": 6,
+          "local_s_mm": 0,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 100,
+          "y_mm": 500,
+          "yaw_ddeg": 0
+        },
+        {
+          "arrival_state_id": "DROP_STEP_3",
+          "flags": 6,
+          "local_s_mm": 100,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 0,
+          "y_mm": 500,
+          "yaw_ddeg": -900
+        }
+      ],
+      "review": {
+        "approved": true,
+        "locked": false,
+        "notes": "synthetic example leg",
+        "state": "VALID"
+      },
+      "source": "PHASE9_SYNTHETIC_EXAMPLE",
+      "state": "VALID",
+      "topology_profile": "S_LTR_SYNTHETIC",
+      "yaw_profile": {
+        "index": 11,
+        "model": "SYNTHETIC_STRAIGHT"
+      }
+    },
+    {
+      "analysis": {
+        "max_metrics": {
+          "max_wheel_rpm": 0.0
+        },
+        "planned_time_ms": 300,
+        "total_length_mm": 300
+      },
+      "control_points": [],
+      "hashes": {
+        "dependency_hashes": {},
+        "planner_algorithm_version": "PHASE6_LEG_OPTIMIZER_V1",
+        "self_hash32": "0x7DD93CB8",
+        "validity_hash": "03ddad15251a45e53e3bc23840f294ceb0b16ba7b4231c54026718661ddd5f3c"
+      },
+      "key": {
+        "from_state_id": "DROP_STEP_1",
+        "route_family": "PICK_1_TO_3",
+        "to_state_id": "DROP_STEP_2",
+        "topology_profile": "S_LTR_SYNTHETIC"
+      },
+      "leg_id": "LEG_20DD9676423C",
+      "nodes": [
+        {
+          "arrival_state_id": "DROP_STEP_1",
+          "flags": 6,
+          "local_s_mm": 0,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 400,
+          "y_mm": 500,
+          "yaw_ddeg": 900
+        },
+        {
+          "arrival_state_id": "DROP_STEP_2",
+          "flags": 6,
+          "local_s_mm": 300,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 100,
+          "y_mm": 500,
+          "yaw_ddeg": 0
+        }
+      ],
+      "review": {
+        "approved": true,
+        "locked": false,
+        "notes": "synthetic example leg",
+        "state": "VALID"
+      },
+      "source": "PHASE9_SYNTHETIC_EXAMPLE",
+      "state": "VALID",
+      "topology_profile": "S_LTR_SYNTHETIC",
+      "yaw_profile": {
+        "index": 12,
+        "model": "SYNTHETIC_STRAIGHT"
+      }
+    },
+    {
+      "analysis": {
+        "max_metrics": {
+          "max_wheel_rpm": 0.0
+        },
+        "planned_time_ms": 200,
+        "total_length_mm": 200
+      },
+      "control_points": [],
+      "hashes": {
+        "dependency_hashes": {},
+        "planner_algorithm_version": "PHASE6_LEG_OPTIMIZER_V1",
+        "self_hash32": "0x25D48A7D",
+        "validity_hash": "b5387f0fbb1fb5eac39d8b0c96d966883d1786913a212f7d698a749d0538a630"
+      },
+      "key": {
+        "from_state_id": "P_PICK_2R",
+        "route_family": "PICK_3_TO_1",
+        "to_state_id": "P_PICK_1",
+        "topology_profile": "S_RTL_SYNTHETIC"
+      },
+      "leg_id": "LEG_23C35232D349",
+      "nodes": [
+        {
+          "arrival_state_id": "P_PICK_2R",
+          "flags": 6,
+          "local_s_mm": 0,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 300,
+          "y_mm": 0,
+          "yaw_ddeg": 0
+        },
+        {
+          "arrival_state_id": "P_PICK_1",
+          "flags": 6,
+          "local_s_mm": 200,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 100,
+          "y_mm": 0,
+          "yaw_ddeg": 0
+        }
+      ],
+      "review": {
+        "approved": true,
+        "locked": false,
+        "notes": "synthetic example leg",
+        "state": "VALID"
+      },
+      "source": "PHASE9_SYNTHETIC_EXAMPLE",
+      "state": "VALID",
+      "topology_profile": "S_RTL_SYNTHETIC",
+      "yaw_profile": {
+        "index": 13,
+        "model": "SYNTHETIC_STRAIGHT"
+      }
+    },
+    {
+      "analysis": {
+        "max_metrics": {
+          "max_wheel_rpm": 0.0
+        },
+        "planned_time_ms": 300,
+        "total_length_mm": 300
+      },
+      "control_points": [],
+      "hashes": {
+        "dependency_hashes": {},
+        "planner_algorithm_version": "PHASE6_LEG_OPTIMIZER_V1",
+        "self_hash32": "0x299CF513",
+        "validity_hash": "57a267ea1f62367a10a419320a4312220a29c7f1061f3dc10831f6c4fafc2479"
+      },
+      "key": {
+        "from_state_id": "DROP_STEP_1",
+        "route_family": "PICK_3_TO_1",
+        "to_state_id": "DROP_STEP_2",
+        "topology_profile": "S_RTL_SYNTHETIC"
+      },
+      "leg_id": "LEG_23DFBA4E951E",
+      "nodes": [
+        {
+          "arrival_state_id": "DROP_STEP_1",
+          "flags": 6,
+          "local_s_mm": 0,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 0,
+          "y_mm": 500,
+          "yaw_ddeg": -900
+        },
+        {
+          "arrival_state_id": "DROP_STEP_2",
+          "flags": 6,
+          "local_s_mm": 300,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 300,
+          "y_mm": 500,
+          "yaw_ddeg": 450
+        }
+      ],
+      "review": {
+        "approved": true,
+        "locked": false,
+        "notes": "synthetic example leg",
+        "state": "VALID"
+      },
+      "source": "PHASE9_SYNTHETIC_EXAMPLE",
+      "state": "VALID",
+      "topology_profile": "S_RTL_SYNTHETIC",
+      "yaw_profile": {
+        "index": 14,
+        "model": "SYNTHETIC_STRAIGHT"
+      }
+    },
+    {
+      "analysis": {
+        "max_metrics": {
+          "max_wheel_rpm": 0.0
+        },
+        "planned_time_ms": 500,
+        "total_length_mm": 500
+      },
+      "control_points": [],
+      "hashes": {
+        "dependency_hashes": {},
+        "planner_algorithm_version": "PHASE6_LEG_OPTIMIZER_V1",
+        "self_hash32": "0x7FF657F1",
+        "validity_hash": "8df549e360bdf30d50e5ec6856854e0f5095a6b4a15b3b7cbfb24b8b0b1a013d"
+      },
+      "key": {
+        "from_state_id": "P_PICK_1",
+        "route_family": "PICK_3_TO_1",
+        "to_state_id": "DROP_STEP_1",
+        "topology_profile": "S_RTL_SYNTHETIC"
+      },
+      "leg_id": "LEG_289CB14FC07F",
+      "nodes": [
+        {
+          "arrival_state_id": "P_PICK_1",
+          "flags": 6,
+          "local_s_mm": 0,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 100,
+          "y_mm": 0,
+          "yaw_ddeg": 0
+        },
+        {
+          "arrival_state_id": "DROP_STEP_1",
+          "flags": 6,
+          "local_s_mm": 500,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 100,
+          "y_mm": 500,
+          "yaw_ddeg": -450
+        }
+      ],
+      "review": {
+        "approved": true,
+        "locked": false,
+        "notes": "synthetic example leg",
+        "state": "VALID"
+      },
+      "source": "PHASE9_SYNTHETIC_EXAMPLE",
+      "state": "VALID",
+      "topology_profile": "S_RTL_SYNTHETIC",
+      "yaw_profile": {
+        "index": 15,
+        "model": "SYNTHETIC_STRAIGHT"
+      }
+    },
+    {
+      "analysis": {
+        "max_metrics": {
+          "max_wheel_rpm": 0.0
+        },
+        "planned_time_ms": 100,
+        "total_length_mm": 100
+      },
+      "control_points": [],
+      "hashes": {
+        "dependency_hashes": {},
+        "planner_algorithm_version": "PHASE6_LEG_OPTIMIZER_V1",
+        "self_hash32": "0x66CB6B43",
+        "validity_hash": "273fce22a6d62bb194ac11c7ccc605c4cb0e631fd6e341f0588446047eaecd3d"
+      },
+      "key": {
+        "from_state_id": "P_PICK_3",
+        "route_family": "PICK_3_TO_1",
+        "to_state_id": "P_PICK_2R",
+        "topology_profile": "S_RTL_SYNTHETIC"
+      },
+      "leg_id": "LEG_2D3BE407ED67",
+      "nodes": [
+        {
+          "arrival_state_id": "P_PICK_3",
+          "flags": 6,
+          "local_s_mm": 0,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 400,
+          "y_mm": 0,
+          "yaw_ddeg": 0
+        },
+        {
+          "arrival_state_id": "P_PICK_2R",
+          "flags": 6,
+          "local_s_mm": 100,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 300,
+          "y_mm": 0,
+          "yaw_ddeg": 0
+        }
+      ],
+      "review": {
+        "approved": true,
+        "locked": false,
+        "notes": "synthetic example leg",
+        "state": "VALID"
+      },
+      "source": "PHASE9_SYNTHETIC_EXAMPLE",
+      "state": "VALID",
+      "topology_profile": "S_RTL_SYNTHETIC",
+      "yaw_profile": {
+        "index": 16,
+        "model": "SYNTHETIC_STRAIGHT"
+      }
+    },
+    {
+      "analysis": {
+        "max_metrics": {
+          "max_wheel_rpm": 0.0
+        },
+        "planned_time_ms": 300,
+        "total_length_mm": 300
+      },
+      "control_points": [],
+      "hashes": {
+        "dependency_hashes": {},
+        "planner_algorithm_version": "PHASE6_LEG_OPTIMIZER_V1",
+        "self_hash32": "0x4B7BFEFE",
+        "validity_hash": "ae8fd5f50640b70b43f7ef944134cd0d9970438355822d48dfe4b2ded547303a"
+      },
+      "key": {
+        "from_state_id": "DROP_STEP_1",
+        "route_family": "PICK_1_TO_3",
+        "to_state_id": "DROP_STEP_2",
+        "topology_profile": "S_LTR_SYNTHETIC"
+      },
+      "leg_id": "LEG_36F10889983E",
+      "nodes": [
+        {
+          "arrival_state_id": "DROP_STEP_1",
+          "flags": 6,
+          "local_s_mm": 0,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 300,
+          "y_mm": 500,
+          "yaw_ddeg": 450
+        },
+        {
+          "arrival_state_id": "DROP_STEP_2",
+          "flags": 6,
+          "local_s_mm": 300,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 0,
+          "y_mm": 500,
+          "yaw_ddeg": -900
+        }
+      ],
+      "review": {
+        "approved": true,
+        "locked": false,
+        "notes": "synthetic example leg",
+        "state": "VALID"
+      },
+      "source": "PHASE9_SYNTHETIC_EXAMPLE",
+      "state": "VALID",
+      "topology_profile": "S_LTR_SYNTHETIC",
+      "yaw_profile": {
+        "index": 17,
+        "model": "SYNTHETIC_STRAIGHT"
+      }
+    },
+    {
+      "analysis": {
+        "max_metrics": {
+          "max_wheel_rpm": 0.0
+        },
+        "planned_time_ms": 100,
+        "total_length_mm": 100
+      },
+      "control_points": [],
+      "hashes": {
+        "dependency_hashes": {},
+        "planner_algorithm_version": "PHASE6_LEG_OPTIMIZER_V1",
+        "self_hash32": "0x24FA8785",
+        "validity_hash": "f997a6779059909efb2d79619b91f0b3b04c9322fbd6d6e8cbfbce2d448f94bf"
+      },
+      "key": {
+        "from_state_id": "DROP_STEP_2",
+        "route_family": "PICK_3_TO_1",
+        "to_state_id": "DROP_STEP_3",
+        "topology_profile": "S_RTL_SYNTHETIC"
+      },
+      "leg_id": "LEG_38D14348C951",
+      "nodes": [
+        {
+          "arrival_state_id": "DROP_STEP_2",
+          "flags": 6,
+          "local_s_mm": 0,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 300,
+          "y_mm": 500,
+          "yaw_ddeg": 0
+        },
+        {
+          "arrival_state_id": "DROP_STEP_3",
+          "flags": 6,
+          "local_s_mm": 100,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 400,
+          "y_mm": 500,
+          "yaw_ddeg": 900
+        }
+      ],
+      "review": {
+        "approved": true,
+        "locked": false,
+        "notes": "synthetic example leg",
+        "state": "VALID"
+      },
+      "source": "PHASE9_SYNTHETIC_EXAMPLE",
+      "state": "VALID",
+      "topology_profile": "S_RTL_SYNTHETIC",
+      "yaw_profile": {
+        "index": 18,
+        "model": "SYNTHETIC_STRAIGHT"
+      }
+    },
+    {
+      "analysis": {
+        "max_metrics": {
+          "max_wheel_rpm": 0.0
+        },
+        "planned_time_ms": 510,
+        "total_length_mm": 510
+      },
+      "control_points": [],
+      "hashes": {
+        "dependency_hashes": {},
+        "planner_algorithm_version": "PHASE6_LEG_OPTIMIZER_V1",
+        "self_hash32": "0x0E1DB065",
+        "validity_hash": "80e7a71ad3576ebb762f6717622c3e967ac269489c4c10fcac2911e299b9a90f"
+      },
+      "key": {
+        "from_state_id": "P_PICK_3",
+        "route_family": "PICK_1_TO_3",
+        "to_state_id": "DROP_STEP_1",
+        "topology_profile": "S_LTR_SYNTHETIC"
+      },
+      "leg_id": "LEG_43BBDE51D34C",
+      "nodes": [
+        {
+          "arrival_state_id": "P_PICK_3",
+          "flags": 6,
+          "local_s_mm": 0,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 400,
+          "y_mm": 0,
+          "yaw_ddeg": 0
+        },
+        {
+          "arrival_state_id": "DROP_STEP_1",
+          "flags": 6,
+          "local_s_mm": 510,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 300,
+          "y_mm": 500,
+          "yaw_ddeg": 900
+        }
+      ],
+      "review": {
+        "approved": true,
+        "locked": false,
+        "notes": "synthetic example leg",
+        "state": "VALID"
+      },
+      "source": "PHASE9_SYNTHETIC_EXAMPLE",
+      "state": "VALID",
+      "topology_profile": "S_LTR_SYNTHETIC",
+      "yaw_profile": {
+        "index": 19,
+        "model": "SYNTHETIC_STRAIGHT"
+      }
+    },
+    {
+      "analysis": {
+        "max_metrics": {
+          "max_wheel_rpm": 0.0
+        },
+        "planned_time_ms": 510,
+        "total_length_mm": 510
+      },
+      "control_points": [],
+      "hashes": {
+        "dependency_hashes": {},
+        "planner_algorithm_version": "PHASE6_LEG_OPTIMIZER_V1",
+        "self_hash32": "0x2C595E9E",
+        "validity_hash": "35b56c5b234a2a6d79f920bb419d7bb26b4fb77bb40a94839a5b3d6628ea6b6e"
+      },
+      "key": {
+        "from_state_id": "P_PICK_1",
+        "route_family": "PICK_3_TO_1",
+        "to_state_id": "DROP_STEP_1",
+        "topology_profile": "S_RTL_SYNTHETIC"
+      },
+      "leg_id": "LEG_45026051B632",
+      "nodes": [
+        {
+          "arrival_state_id": "P_PICK_1",
+          "flags": 6,
+          "local_s_mm": 0,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 100,
+          "y_mm": 0,
+          "yaw_ddeg": 0
+        },
+        {
+          "arrival_state_id": "DROP_STEP_1",
+          "flags": 6,
+          "local_s_mm": 510,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 0,
+          "y_mm": 500,
+          "yaw_ddeg": -900
+        }
+      ],
+      "review": {
+        "approved": true,
+        "locked": false,
+        "notes": "synthetic example leg",
+        "state": "VALID"
+      },
+      "source": "PHASE9_SYNTHETIC_EXAMPLE",
+      "state": "VALID",
+      "topology_profile": "S_RTL_SYNTHETIC",
+      "yaw_profile": {
+        "index": 20,
+        "model": "SYNTHETIC_STRAIGHT"
+      }
+    },
+    {
+      "analysis": {
+        "max_metrics": {
+          "max_wheel_rpm": 0.0
+        },
+        "planned_time_ms": 200,
+        "total_length_mm": 200
+      },
+      "control_points": [],
+      "hashes": {
+        "dependency_hashes": {},
+        "planner_algorithm_version": "PHASE6_LEG_OPTIMIZER_V1",
+        "self_hash32": "0x713D3627",
+        "validity_hash": "962354ccb8b69fb9f4c00679feb6e8cbd47fe73cb7729a9690aea53150e1654b"
+      },
+      "key": {
+        "from_state_id": "DROP_STEP_2",
+        "route_family": "PICK_1_TO_3",
+        "to_state_id": "DROP_STEP_3",
+        "topology_profile": "S_LTR_SYNTHETIC"
+      },
+      "leg_id": "LEG_45FC293243AB",
+      "nodes": [
+        {
+          "arrival_state_id": "DROP_STEP_2",
+          "flags": 6,
+          "local_s_mm": 0,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 200,
+          "y_mm": 500,
+          "yaw_ddeg": 0
+        },
+        {
+          "arrival_state_id": "DROP_STEP_3",
+          "flags": 6,
+          "local_s_mm": 200,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 0,
+          "y_mm": 500,
+          "yaw_ddeg": -900
+        }
+      ],
+      "review": {
+        "approved": true,
+        "locked": false,
+        "notes": "synthetic example leg",
+        "state": "VALID"
+      },
+      "source": "PHASE9_SYNTHETIC_EXAMPLE",
+      "state": "VALID",
+      "topology_profile": "S_LTR_SYNTHETIC",
+      "yaw_profile": {
+        "index": 21,
+        "model": "SYNTHETIC_STRAIGHT"
+      }
+    },
+    {
+      "analysis": {
+        "max_metrics": {
+          "max_wheel_rpm": 0.0
+        },
+        "planned_time_ms": 200,
+        "total_length_mm": 200
+      },
+      "control_points": [],
+      "hashes": {
+        "dependency_hashes": {},
+        "planner_algorithm_version": "PHASE6_LEG_OPTIMIZER_V1",
+        "self_hash32": "0xE3240F92",
+        "validity_hash": "d39a65178519be767d91127f911bb790d8a1d889d2d39867170f158d64014641"
+      },
+      "key": {
+        "from_state_id": "DROP_STEP_1",
+        "route_family": "PICK_3_TO_1",
+        "to_state_id": "DROP_STEP_2",
+        "topology_profile": "S_RTL_SYNTHETIC"
+      },
+      "leg_id": "LEG_47C6CD1A2395",
+      "nodes": [
+        {
+          "arrival_state_id": "DROP_STEP_1",
+          "flags": 6,
+          "local_s_mm": 0,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 100,
+          "y_mm": 500,
+          "yaw_ddeg": -450
+        },
+        {
+          "arrival_state_id": "DROP_STEP_2",
+          "flags": 6,
+          "local_s_mm": 200,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 300,
+          "y_mm": 500,
+          "yaw_ddeg": 900
+        }
+      ],
+      "review": {
+        "approved": true,
+        "locked": false,
+        "notes": "synthetic example leg",
+        "state": "VALID"
+      },
+      "source": "PHASE9_SYNTHETIC_EXAMPLE",
+      "state": "VALID",
+      "topology_profile": "S_RTL_SYNTHETIC",
+      "yaw_profile": {
+        "index": 22,
+        "model": "SYNTHETIC_STRAIGHT"
+      }
+    },
+    {
+      "analysis": {
+        "max_metrics": {
+          "max_wheel_rpm": 0.0
+        },
+        "planned_time_ms": 300,
+        "total_length_mm": 300
+      },
+      "control_points": [],
+      "hashes": {
+        "dependency_hashes": {},
+        "planner_algorithm_version": "PHASE6_LEG_OPTIMIZER_V1",
+        "self_hash32": "0xABA1D2ED",
+        "validity_hash": "e908c29d3580690fb380a6559a9f591bb6ec474e0ac8650eaaed18079d179227"
+      },
+      "key": {
+        "from_state_id": "DROP_STEP_1",
+        "route_family": "PICK_3_TO_1",
+        "to_state_id": "DROP_STEP_2",
+        "topology_profile": "S_RTL_SYNTHETIC"
+      },
+      "leg_id": "LEG_49E4FBAD9ECF",
+      "nodes": [
+        {
+          "arrival_state_id": "DROP_STEP_1",
+          "flags": 6,
+          "local_s_mm": 0,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 0,
+          "y_mm": 500,
+          "yaw_ddeg": -900
+        },
+        {
+          "arrival_state_id": "DROP_STEP_2",
+          "flags": 6,
+          "local_s_mm": 300,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 300,
+          "y_mm": 500,
+          "yaw_ddeg": 0
+        }
+      ],
+      "review": {
+        "approved": true,
+        "locked": false,
+        "notes": "synthetic example leg",
+        "state": "VALID"
+      },
+      "source": "PHASE9_SYNTHETIC_EXAMPLE",
+      "state": "VALID",
+      "topology_profile": "S_RTL_SYNTHETIC",
+      "yaw_profile": {
+        "index": 23,
+        "model": "SYNTHETIC_STRAIGHT"
+      }
+    },
+    {
+      "analysis": {
+        "max_metrics": {
+          "max_wheel_rpm": 0.0
+        },
+        "planned_time_ms": 200,
+        "total_length_mm": 200
+      },
+      "control_points": [],
+      "hashes": {
+        "dependency_hashes": {},
+        "planner_algorithm_version": "PHASE6_LEG_OPTIMIZER_V1",
+        "self_hash32": "0x80C94D56",
+        "validity_hash": "8ca11efd414ec841e6eafcedba54102765c8d40b46be2d5d315079fba98a2d41"
+      },
+      "key": {
+        "from_state_id": "DROP_STEP_1",
+        "route_family": "PICK_1_TO_3",
+        "to_state_id": "DROP_STEP_2",
+        "topology_profile": "S_LTR_SYNTHETIC"
+      },
+      "leg_id": "LEG_4C084F2E652E",
+      "nodes": [
+        {
+          "arrival_state_id": "DROP_STEP_1",
+          "flags": 6,
+          "local_s_mm": 0,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 400,
+          "y_mm": 500,
+          "yaw_ddeg": 900
+        },
+        {
+          "arrival_state_id": "DROP_STEP_2",
+          "flags": 6,
+          "local_s_mm": 200,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 200,
+          "y_mm": 500,
+          "yaw_ddeg": 0
+        }
+      ],
+      "review": {
+        "approved": true,
+        "locked": false,
+        "notes": "synthetic example leg",
+        "state": "VALID"
+      },
+      "source": "PHASE9_SYNTHETIC_EXAMPLE",
+      "state": "VALID",
+      "topology_profile": "S_LTR_SYNTHETIC",
+      "yaw_profile": {
+        "index": 24,
+        "model": "SYNTHETIC_STRAIGHT"
+      }
+    },
+    {
+      "analysis": {
+        "max_metrics": {
+          "max_wheel_rpm": 0.0
+        },
+        "planned_time_ms": 510,
+        "total_length_mm": 510
+      },
+      "control_points": [],
+      "hashes": {
+        "dependency_hashes": {},
+        "planner_algorithm_version": "PHASE6_LEG_OPTIMIZER_V1",
+        "self_hash32": "0x57BD77B7",
+        "validity_hash": "118428674768073d8e47fd192de4a2e1b0cea4bc5fb8fe6818ed96b66cba48a4"
+      },
+      "key": {
+        "from_state_id": "P_PICK_1",
+        "route_family": "PICK_3_TO_1",
+        "to_state_id": "DROP_STEP_1",
+        "topology_profile": "S_RTL_SYNTHETIC"
+      },
+      "leg_id": "LEG_4E149A585CD3",
+      "nodes": [
+        {
+          "arrival_state_id": "P_PICK_1",
+          "flags": 6,
+          "local_s_mm": 0,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 100,
+          "y_mm": 0,
+          "yaw_ddeg": 0
+        },
+        {
+          "arrival_state_id": "DROP_STEP_1",
+          "flags": 6,
+          "local_s_mm": 510,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 200,
+          "y_mm": 500,
+          "yaw_ddeg": -450
+        }
+      ],
+      "review": {
+        "approved": true,
+        "locked": false,
+        "notes": "synthetic example leg",
+        "state": "VALID"
+      },
+      "source": "PHASE9_SYNTHETIC_EXAMPLE",
+      "state": "VALID",
+      "topology_profile": "S_RTL_SYNTHETIC",
+      "yaw_profile": {
+        "index": 25,
+        "model": "SYNTHETIC_STRAIGHT"
+      }
+    },
+    {
+      "analysis": {
+        "max_metrics": {
+          "max_wheel_rpm": 0.0
+        },
+        "planned_time_ms": 400,
+        "total_length_mm": 400
+      },
+      "control_points": [],
+      "hashes": {
+        "dependency_hashes": {},
+        "planner_algorithm_version": "PHASE6_LEG_OPTIMIZER_V1",
+        "self_hash32": "0xEADC13EE",
+        "validity_hash": "bbefe108a69095b8be8d5ca19bebcbfaa3c147b4a6cf29e67263729f5ff8aef4"
+      },
+      "key": {
+        "from_state_id": "P_START",
+        "route_family": "PICK_3_TO_1",
+        "to_state_id": "P_PICK_3",
+        "topology_profile": "S_RTL_SYNTHETIC"
+      },
+      "leg_id": "LEG_4EF8C82EBF21",
+      "nodes": [
+        {
+          "flags": 1,
+          "local_s_mm": 0,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 0,
+          "y_mm": 0,
+          "yaw_ddeg": 0
+        },
+        {
+          "arrival_state_id": "P_PICK_3",
+          "flags": 6,
+          "local_s_mm": 400,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 400,
+          "y_mm": 0,
+          "yaw_ddeg": 0
+        }
+      ],
+      "review": {
+        "approved": true,
+        "locked": false,
+        "notes": "synthetic example leg",
+        "state": "VALID"
+      },
+      "source": "PHASE9_SYNTHETIC_EXAMPLE",
+      "state": "VALID",
+      "topology_profile": "S_RTL_SYNTHETIC",
+      "yaw_profile": {
+        "index": 26,
+        "model": "SYNTHETIC_STRAIGHT"
+      }
+    },
+    {
+      "analysis": {
+        "max_metrics": {
+          "max_wheel_rpm": 0.0
+        },
+        "planned_time_ms": 100,
+        "total_length_mm": 100
+      },
+      "control_points": [],
+      "hashes": {
+        "dependency_hashes": {},
+        "planner_algorithm_version": "PHASE6_LEG_OPTIMIZER_V1",
+        "self_hash32": "0xA8102056",
+        "validity_hash": "9baa8794324741f16b612579a1bdf35ec3d59c1d42a984258adc36f435d57e09"
+      },
+      "key": {
+        "from_state_id": "DROP_STEP_1",
+        "route_family": "PICK_3_TO_1",
+        "to_state_id": "DROP_STEP_2",
+        "topology_profile": "S_RTL_SYNTHETIC"
+      },
+      "leg_id": "LEG_52F45FC2752B",
+      "nodes": [
+        {
+          "arrival_state_id": "DROP_STEP_1",
+          "flags": 6,
+          "local_s_mm": 0,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 200,
+          "y_mm": 500,
+          "yaw_ddeg": -900
+        },
+        {
+          "arrival_state_id": "DROP_STEP_2",
+          "flags": 6,
+          "local_s_mm": 100,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 300,
+          "y_mm": 500,
+          "yaw_ddeg": 0
+        }
+      ],
+      "review": {
+        "approved": true,
+        "locked": false,
+        "notes": "synthetic example leg",
+        "state": "VALID"
+      },
+      "source": "PHASE9_SYNTHETIC_EXAMPLE",
+      "state": "VALID",
+      "topology_profile": "S_RTL_SYNTHETIC",
+      "yaw_profile": {
+        "index": 27,
+        "model": "SYNTHETIC_STRAIGHT"
+      }
+    },
+    {
+      "analysis": {
+        "max_metrics": {
+          "max_wheel_rpm": 0.0
+        },
+        "planned_time_ms": 200,
+        "total_length_mm": 200
+      },
+      "control_points": [],
+      "hashes": {
+        "dependency_hashes": {},
+        "planner_algorithm_version": "PHASE6_LEG_OPTIMIZER_V1",
+        "self_hash32": "0x704B070E",
+        "validity_hash": "f695791925029fba05b4c7903c8a0c9ba4987965ed737b0a4f42449ceb392e4c"
+      },
+      "key": {
+        "from_state_id": "DROP_STEP_1",
+        "route_family": "PICK_1_TO_3",
+        "to_state_id": "DROP_STEP_2",
+        "topology_profile": "S_LTR_SYNTHETIC"
+      },
+      "leg_id": "LEG_5820E8538BF0",
+      "nodes": [
+        {
+          "arrival_state_id": "DROP_STEP_1",
+          "flags": 6,
+          "local_s_mm": 0,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 400,
+          "y_mm": 500,
+          "yaw_ddeg": 450
+        },
+        {
+          "arrival_state_id": "DROP_STEP_2",
+          "flags": 6,
+          "local_s_mm": 200,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 200,
+          "y_mm": 500,
+          "yaw_ddeg": -900
+        }
+      ],
+      "review": {
+        "approved": true,
+        "locked": false,
+        "notes": "synthetic example leg",
+        "state": "VALID"
+      },
+      "source": "PHASE9_SYNTHETIC_EXAMPLE",
+      "state": "VALID",
+      "topology_profile": "S_LTR_SYNTHETIC",
+      "yaw_profile": {
+        "index": 28,
+        "model": "SYNTHETIC_STRAIGHT"
+      }
+    },
+    {
+      "analysis": {
+        "max_metrics": {
+          "max_wheel_rpm": 0.0
+        },
+        "planned_time_ms": 300,
+        "total_length_mm": 300
+      },
+      "control_points": [],
+      "hashes": {
+        "dependency_hashes": {},
+        "planner_algorithm_version": "PHASE6_LEG_OPTIMIZER_V1",
+        "self_hash32": "0xE800A4D9",
+        "validity_hash": "aeb171d29dcc7ce5c9dc8a01fcef951ff22fb579f85d6a37cf03ccd1cf002af7"
+      },
+      "key": {
+        "from_state_id": "DROP_STEP_2",
+        "route_family": "PICK_1_TO_3",
+        "to_state_id": "DROP_STEP_3",
+        "topology_profile": "S_LTR_SYNTHETIC"
+      },
+      "leg_id": "LEG_699006C267E0",
+      "nodes": [
+        {
+          "arrival_state_id": "DROP_STEP_2",
+          "flags": 6,
+          "local_s_mm": 0,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 300,
+          "y_mm": 500,
+          "yaw_ddeg": 0
+        },
+        {
+          "arrival_state_id": "DROP_STEP_3",
+          "flags": 6,
+          "local_s_mm": 300,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 0,
+          "y_mm": 500,
+          "yaw_ddeg": -900
+        }
+      ],
+      "review": {
+        "approved": true,
+        "locked": false,
+        "notes": "synthetic example leg",
+        "state": "VALID"
+      },
+      "source": "PHASE9_SYNTHETIC_EXAMPLE",
+      "state": "VALID",
+      "topology_profile": "S_LTR_SYNTHETIC",
+      "yaw_profile": {
+        "index": 29,
+        "model": "SYNTHETIC_STRAIGHT"
+      }
+    },
+    {
+      "analysis": {
+        "max_metrics": {
+          "max_wheel_rpm": 0.0
+        },
+        "planned_time_ms": 300,
+        "total_length_mm": 300
+      },
+      "control_points": [],
+      "hashes": {
+        "dependency_hashes": {},
+        "planner_algorithm_version": "PHASE6_LEG_OPTIMIZER_V1",
+        "self_hash32": "0x1734223D",
+        "validity_hash": "9808fb5fd9fc182e61cfb1d7d3e450094aab7edb6dc8f2d0d7872d513cbe17bf"
+      },
+      "key": {
+        "from_state_id": "DROP_STEP_1",
+        "route_family": "PICK_1_TO_3",
+        "to_state_id": "DROP_STEP_2",
+        "topology_profile": "S_LTR_SYNTHETIC"
+      },
+      "leg_id": "LEG_69EEFA8F2499",
+      "nodes": [
+        {
+          "arrival_state_id": "DROP_STEP_1",
+          "flags": 6,
+          "local_s_mm": 0,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 400,
+          "y_mm": 500,
+          "yaw_ddeg": 900
+        },
+        {
+          "arrival_state_id": "DROP_STEP_2",
+          "flags": 6,
+          "local_s_mm": 300,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 100,
+          "y_mm": 500,
+          "yaw_ddeg": -450
+        }
+      ],
+      "review": {
+        "approved": true,
+        "locked": false,
+        "notes": "synthetic example leg",
+        "state": "VALID"
+      },
+      "source": "PHASE9_SYNTHETIC_EXAMPLE",
+      "state": "VALID",
+      "topology_profile": "S_LTR_SYNTHETIC",
+      "yaw_profile": {
+        "index": 30,
+        "model": "SYNTHETIC_STRAIGHT"
+      }
+    },
+    {
+      "analysis": {
+        "max_metrics": {
+          "max_wheel_rpm": 0.0
+        },
+        "planned_time_ms": 200,
+        "total_length_mm": 200
+      },
+      "control_points": [],
+      "hashes": {
+        "dependency_hashes": {},
+        "planner_algorithm_version": "PHASE6_LEG_OPTIMIZER_V1",
+        "self_hash32": "0xAC1EA358",
+        "validity_hash": "735fa72e0183d43a0ee8ffe29e69e15352aeea0a9a3e4a13944dd31c976af773"
+      },
+      "key": {
+        "from_state_id": "DROP_STEP_1",
+        "route_family": "PICK_3_TO_1",
+        "to_state_id": "DROP_STEP_2",
+        "topology_profile": "S_RTL_SYNTHETIC"
+      },
+      "leg_id": "LEG_6F85182C3B07",
+      "nodes": [
+        {
+          "arrival_state_id": "DROP_STEP_1",
+          "flags": 6,
+          "local_s_mm": 0,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 100,
+          "y_mm": 500,
+          "yaw_ddeg": -900
+        },
+        {
+          "arrival_state_id": "DROP_STEP_2",
+          "flags": 6,
+          "local_s_mm": 200,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 300,
+          "y_mm": 500,
+          "yaw_ddeg": 450
+        }
+      ],
+      "review": {
+        "approved": true,
+        "locked": false,
+        "notes": "synthetic example leg",
+        "state": "VALID"
+      },
+      "source": "PHASE9_SYNTHETIC_EXAMPLE",
+      "state": "VALID",
+      "topology_profile": "S_RTL_SYNTHETIC",
+      "yaw_profile": {
+        "index": 31,
+        "model": "SYNTHETIC_STRAIGHT"
+      }
+    },
+    {
+      "analysis": {
+        "max_metrics": {
+          "max_wheel_rpm": 0.0
+        },
+        "planned_time_ms": 500,
+        "total_length_mm": 500
+      },
+      "control_points": [],
+      "hashes": {
+        "dependency_hashes": {},
+        "planner_algorithm_version": "PHASE6_LEG_OPTIMIZER_V1",
+        "self_hash32": "0x3585FF8E",
+        "validity_hash": "2191e65ebe26dcbf65df9c81c7f4bd314b87993396e941c25fa69d50b67b1a90"
+      },
+      "key": {
+        "from_state_id": "P_PICK_1",
+        "route_family": "PICK_3_TO_1",
+        "to_state_id": "DROP_STEP_1",
+        "topology_profile": "S_RTL_SYNTHETIC"
+      },
+      "leg_id": "LEG_711AEF9245F6",
+      "nodes": [
+        {
+          "arrival_state_id": "P_PICK_1",
+          "flags": 6,
+          "local_s_mm": 0,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 100,
+          "y_mm": 0,
+          "yaw_ddeg": 0
+        },
+        {
+          "arrival_state_id": "DROP_STEP_1",
+          "flags": 6,
+          "local_s_mm": 500,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 100,
+          "y_mm": 500,
+          "yaw_ddeg": -900
+        }
+      ],
+      "review": {
+        "approved": true,
+        "locked": false,
+        "notes": "synthetic example leg",
+        "state": "VALID"
+      },
+      "source": "PHASE9_SYNTHETIC_EXAMPLE",
+      "state": "VALID",
+      "topology_profile": "S_RTL_SYNTHETIC",
+      "yaw_profile": {
+        "index": 32,
+        "model": "SYNTHETIC_STRAIGHT"
+      }
+    },
+    {
+      "analysis": {
+        "max_metrics": {
+          "max_wheel_rpm": 0.0
+        },
+        "planned_time_ms": 300,
+        "total_length_mm": 300
+      },
+      "control_points": [],
+      "hashes": {
+        "dependency_hashes": {},
+        "planner_algorithm_version": "PHASE6_LEG_OPTIMIZER_V1",
+        "self_hash32": "0x4C6A0F1F",
+        "validity_hash": "abfe66d1cab9e08e670feaaa283126772ca7d67bfd27c40ac3c0979e46a90f3f"
+      },
+      "key": {
+        "from_state_id": "DROP_STEP_1",
+        "route_family": "PICK_1_TO_3",
+        "to_state_id": "DROP_STEP_2",
+        "topology_profile": "S_LTR_SYNTHETIC"
+      },
+      "leg_id": "LEG_71BCC7FA3516",
+      "nodes": [
+        {
+          "arrival_state_id": "DROP_STEP_1",
+          "flags": 6,
+          "local_s_mm": 0,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 400,
+          "y_mm": 500,
+          "yaw_ddeg": 450
+        },
+        {
+          "arrival_state_id": "DROP_STEP_2",
+          "flags": 6,
+          "local_s_mm": 300,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 100,
+          "y_mm": 500,
+          "yaw_ddeg": -900
+        }
+      ],
+      "review": {
+        "approved": true,
+        "locked": false,
+        "notes": "synthetic example leg",
+        "state": "VALID"
+      },
+      "source": "PHASE9_SYNTHETIC_EXAMPLE",
+      "state": "VALID",
+      "topology_profile": "S_LTR_SYNTHETIC",
+      "yaw_profile": {
+        "index": 33,
+        "model": "SYNTHETIC_STRAIGHT"
+      }
+    },
+    {
+      "analysis": {
+        "max_metrics": {
+          "max_wheel_rpm": 0.0
+        },
+        "planned_time_ms": 100,
+        "total_length_mm": 100
+      },
+      "control_points": [],
+      "hashes": {
+        "dependency_hashes": {},
+        "planner_algorithm_version": "PHASE6_LEG_OPTIMIZER_V1",
+        "self_hash32": "0xAA518AE9",
+        "validity_hash": "8ff667bfc2c25976111893cbab02ee4034d71b7c9083fa70c922ec3d94e1b7d9"
+      },
+      "key": {
+        "from_state_id": "DROP_STEP_1",
+        "route_family": "PICK_1_TO_3",
+        "to_state_id": "DROP_STEP_2",
+        "topology_profile": "S_LTR_SYNTHETIC"
+      },
+      "leg_id": "LEG_7A93ACCF75C7",
+      "nodes": [
+        {
+          "arrival_state_id": "DROP_STEP_1",
+          "flags": 6,
+          "local_s_mm": 0,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 200,
+          "y_mm": 500,
+          "yaw_ddeg": 900
+        },
+        {
+          "arrival_state_id": "DROP_STEP_2",
+          "flags": 6,
+          "local_s_mm": 100,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 100,
+          "y_mm": 500,
+          "yaw_ddeg": 0
+        }
+      ],
+      "review": {
+        "approved": true,
+        "locked": false,
+        "notes": "synthetic example leg",
+        "state": "VALID"
+      },
+      "source": "PHASE9_SYNTHETIC_EXAMPLE",
+      "state": "VALID",
+      "topology_profile": "S_LTR_SYNTHETIC",
+      "yaw_profile": {
+        "index": 34,
+        "model": "SYNTHETIC_STRAIGHT"
+      }
+    },
+    {
+      "analysis": {
+        "max_metrics": {
+          "max_wheel_rpm": 0.0
+        },
+        "planned_time_ms": 200,
+        "total_length_mm": 200
+      },
+      "control_points": [],
+      "hashes": {
+        "dependency_hashes": {},
+        "planner_algorithm_version": "PHASE6_LEG_OPTIMIZER_V1",
+        "self_hash32": "0x8BA2DB2A",
+        "validity_hash": "0bfbaef50cf591c782893a852eaa71316c4387df4046449e5e04918f9a5ca6ad"
+      },
+      "key": {
+        "from_state_id": "DROP_STEP_1",
+        "route_family": "PICK_1_TO_3",
+        "to_state_id": "DROP_STEP_2",
+        "topology_profile": "S_LTR_SYNTHETIC"
+      },
+      "leg_id": "LEG_7C88908833C9",
+      "nodes": [
+        {
+          "arrival_state_id": "DROP_STEP_1",
+          "flags": 6,
+          "local_s_mm": 0,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 300,
+          "y_mm": 500,
+          "yaw_ddeg": 900
+        },
+        {
+          "arrival_state_id": "DROP_STEP_2",
+          "flags": 6,
+          "local_s_mm": 200,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 100,
+          "y_mm": 500,
+          "yaw_ddeg": -450
+        }
+      ],
+      "review": {
+        "approved": true,
+        "locked": false,
+        "notes": "synthetic example leg",
+        "state": "VALID"
+      },
+      "source": "PHASE9_SYNTHETIC_EXAMPLE",
+      "state": "VALID",
+      "topology_profile": "S_LTR_SYNTHETIC",
+      "yaw_profile": {
+        "index": 35,
+        "model": "SYNTHETIC_STRAIGHT"
+      }
+    },
+    {
+      "analysis": {
+        "max_metrics": {
+          "max_wheel_rpm": 0.0
+        },
+        "planned_time_ms": 500,
+        "total_length_mm": 500
+      },
+      "control_points": [],
+      "hashes": {
+        "dependency_hashes": {},
+        "planner_algorithm_version": "PHASE6_LEG_OPTIMIZER_V1",
+        "self_hash32": "0x3DD03FD8",
+        "validity_hash": "c6e44ed276a8b2fae00765bd36643d7441509332996a7853217cf68f31930c78"
+      },
+      "key": {
+        "from_state_id": "P_PICK_3",
+        "route_family": "PICK_1_TO_3",
+        "to_state_id": "DROP_STEP_1",
+        "topology_profile": "S_LTR_SYNTHETIC"
+      },
+      "leg_id": "LEG_84B0C15553D9",
+      "nodes": [
+        {
+          "arrival_state_id": "P_PICK_3",
+          "flags": 6,
+          "local_s_mm": 0,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 400,
+          "y_mm": 0,
+          "yaw_ddeg": 0
+        },
+        {
+          "arrival_state_id": "DROP_STEP_1",
+          "flags": 6,
+          "local_s_mm": 500,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 400,
+          "y_mm": 500,
+          "yaw_ddeg": 900
+        }
+      ],
+      "review": {
+        "approved": true,
+        "locked": false,
+        "notes": "synthetic example leg",
+        "state": "VALID"
+      },
+      "source": "PHASE9_SYNTHETIC_EXAMPLE",
+      "state": "VALID",
+      "topology_profile": "S_LTR_SYNTHETIC",
+      "yaw_profile": {
+        "index": 36,
+        "model": "SYNTHETIC_STRAIGHT"
+      }
+    },
+    {
+      "analysis": {
+        "max_metrics": {
+          "max_wheel_rpm": 0.0
+        },
+        "planned_time_ms": 539,
+        "total_length_mm": 539
+      },
+      "control_points": [],
+      "hashes": {
+        "dependency_hashes": {},
+        "planner_algorithm_version": "PHASE6_LEG_OPTIMIZER_V1",
+        "self_hash32": "0x61D5DC6A",
+        "validity_hash": "24c8fd1e71b00d2b5a78eb4ca9e9f92b72a910629ef24e94c2fd42b79ec3568c"
+      },
+      "key": {
+        "from_state_id": "P_PICK_1",
+        "route_family": "PICK_3_TO_1",
+        "to_state_id": "DROP_STEP_1",
+        "topology_profile": "S_RTL_SYNTHETIC"
+      },
+      "leg_id": "LEG_8CF42C4B57AD",
+      "nodes": [
+        {
+          "arrival_state_id": "P_PICK_1",
+          "flags": 6,
+          "local_s_mm": 0,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 100,
+          "y_mm": 0,
+          "yaw_ddeg": 0
+        },
+        {
+          "arrival_state_id": "DROP_STEP_1",
+          "flags": 6,
+          "local_s_mm": 539,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 300,
+          "y_mm": 500,
+          "yaw_ddeg": -450
+        }
+      ],
+      "review": {
+        "approved": true,
+        "locked": false,
+        "notes": "synthetic example leg",
+        "state": "VALID"
+      },
+      "source": "PHASE9_SYNTHETIC_EXAMPLE",
+      "state": "VALID",
+      "topology_profile": "S_RTL_SYNTHETIC",
+      "yaw_profile": {
+        "index": 37,
+        "model": "SYNTHETIC_STRAIGHT"
+      }
+    },
+    {
+      "analysis": {
+        "max_metrics": {
+          "max_wheel_rpm": 0.0
+        },
+        "planned_time_ms": 200,
+        "total_length_mm": 200
+      },
+      "control_points": [],
+      "hashes": {
+        "dependency_hashes": {},
+        "planner_algorithm_version": "PHASE6_LEG_OPTIMIZER_V1",
+        "self_hash32": "0x95A30D23",
+        "validity_hash": "7cdb8aa086ba7ddb88b250b45fc601d933090387c712200473ea2d853b3a80e0"
+      },
+      "key": {
+        "from_state_id": "DROP_STEP_1",
+        "route_family": "PICK_3_TO_1",
+        "to_state_id": "DROP_STEP_2",
+        "topology_profile": "S_RTL_SYNTHETIC"
+      },
+      "leg_id": "LEG_927025A0A15B",
+      "nodes": [
+        {
+          "arrival_state_id": "DROP_STEP_1",
+          "flags": 6,
+          "local_s_mm": 0,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 0,
+          "y_mm": 500,
+          "yaw_ddeg": -900
+        },
+        {
+          "arrival_state_id": "DROP_STEP_2",
+          "flags": 6,
+          "local_s_mm": 200,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 200,
+          "y_mm": 500,
+          "yaw_ddeg": 0
+        }
+      ],
+      "review": {
+        "approved": true,
+        "locked": false,
+        "notes": "synthetic example leg",
+        "state": "VALID"
+      },
+      "source": "PHASE9_SYNTHETIC_EXAMPLE",
+      "state": "VALID",
+      "topology_profile": "S_RTL_SYNTHETIC",
+      "yaw_profile": {
+        "index": 38,
+        "model": "SYNTHETIC_STRAIGHT"
+      }
+    },
+    {
+      "analysis": {
+        "max_metrics": {
+          "max_wheel_rpm": 0.0
+        },
+        "planned_time_ms": 200,
+        "total_length_mm": 200
+      },
+      "control_points": [],
+      "hashes": {
+        "dependency_hashes": {},
+        "planner_algorithm_version": "PHASE6_LEG_OPTIMIZER_V1",
+        "self_hash32": "0x8B34BAAA",
+        "validity_hash": "28a37c08cd762c1dec0af28748fb0f6148b4fc4943800fdff11d26fc93d2eb12"
+      },
+      "key": {
+        "from_state_id": "DROP_STEP_1",
+        "route_family": "PICK_1_TO_3",
+        "to_state_id": "DROP_STEP_2",
+        "topology_profile": "S_LTR_SYNTHETIC"
+      },
+      "leg_id": "LEG_932701AE6384",
+      "nodes": [
+        {
+          "arrival_state_id": "DROP_STEP_1",
+          "flags": 6,
+          "local_s_mm": 0,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 300,
+          "y_mm": 500,
+          "yaw_ddeg": 900
+        },
+        {
+          "arrival_state_id": "DROP_STEP_2",
+          "flags": 6,
+          "local_s_mm": 200,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 100,
+          "y_mm": 500,
+          "yaw_ddeg": 0
+        }
+      ],
+      "review": {
+        "approved": true,
+        "locked": false,
+        "notes": "synthetic example leg",
+        "state": "VALID"
+      },
+      "source": "PHASE9_SYNTHETIC_EXAMPLE",
+      "state": "VALID",
+      "topology_profile": "S_LTR_SYNTHETIC",
+      "yaw_profile": {
+        "index": 39,
+        "model": "SYNTHETIC_STRAIGHT"
+      }
+    },
+    {
+      "analysis": {
+        "max_metrics": {
+          "max_wheel_rpm": 0.0
+        },
+        "planned_time_ms": 300,
+        "total_length_mm": 300
+      },
+      "control_points": [],
+      "hashes": {
+        "dependency_hashes": {},
+        "planner_algorithm_version": "PHASE6_LEG_OPTIMIZER_V1",
+        "self_hash32": "0x4624A64E",
+        "validity_hash": "f808d52c25bdc8ed8c5bdd25e3e03b2b0e40071519ddb728ccc90318a5de65c8"
+      },
+      "key": {
+        "from_state_id": "DROP_STEP_2",
+        "route_family": "PICK_3_TO_1",
+        "to_state_id": "DROP_STEP_3",
+        "topology_profile": "S_RTL_SYNTHETIC"
+      },
+      "leg_id": "LEG_93EBE56F0A67",
+      "nodes": [
+        {
+          "arrival_state_id": "DROP_STEP_2",
+          "flags": 6,
+          "local_s_mm": 0,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 100,
+          "y_mm": 500,
+          "yaw_ddeg": 0
+        },
+        {
+          "arrival_state_id": "DROP_STEP_3",
+          "flags": 6,
+          "local_s_mm": 300,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 400,
+          "y_mm": 500,
+          "yaw_ddeg": 900
+        }
+      ],
+      "review": {
+        "approved": true,
+        "locked": false,
+        "notes": "synthetic example leg",
+        "state": "VALID"
+      },
+      "source": "PHASE9_SYNTHETIC_EXAMPLE",
+      "state": "VALID",
+      "topology_profile": "S_RTL_SYNTHETIC",
+      "yaw_profile": {
+        "index": 40,
+        "model": "SYNTHETIC_STRAIGHT"
+      }
+    },
+    {
+      "analysis": {
+        "max_metrics": {
+          "max_wheel_rpm": 0.0
+        },
+        "planned_time_ms": 100,
+        "total_length_mm": 100
+      },
+      "control_points": [],
+      "hashes": {
+        "dependency_hashes": {},
+        "planner_algorithm_version": "PHASE6_LEG_OPTIMIZER_V1",
+        "self_hash32": "0xA466BF23",
+        "validity_hash": "ef4d851154b601e1d0182c3bd4e8fbe00506bdd44e13f00cf9ccb2711cab297c"
+      },
+      "key": {
+        "from_state_id": "DROP_STEP_1",
+        "route_family": "PICK_1_TO_3",
+        "to_state_id": "DROP_STEP_2",
+        "topology_profile": "S_LTR_SYNTHETIC"
+      },
+      "leg_id": "LEG_95D6908FEBC9",
+      "nodes": [
+        {
+          "arrival_state_id": "DROP_STEP_1",
+          "flags": 6,
+          "local_s_mm": 0,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 300,
+          "y_mm": 500,
+          "yaw_ddeg": 900
+        },
+        {
+          "arrival_state_id": "DROP_STEP_2",
+          "flags": 6,
+          "local_s_mm": 100,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 200,
+          "y_mm": 500,
+          "yaw_ddeg": -450
+        }
+      ],
+      "review": {
+        "approved": true,
+        "locked": false,
+        "notes": "synthetic example leg",
+        "state": "VALID"
+      },
+      "source": "PHASE9_SYNTHETIC_EXAMPLE",
+      "state": "VALID",
+      "topology_profile": "S_LTR_SYNTHETIC",
+      "yaw_profile": {
+        "index": 41,
+        "model": "SYNTHETIC_STRAIGHT"
+      }
+    },
+    {
+      "analysis": {
+        "max_metrics": {
+          "max_wheel_rpm": 0.0
+        },
+        "planned_time_ms": 100,
+        "total_length_mm": 100
+      },
+      "control_points": [],
+      "hashes": {
+        "dependency_hashes": {},
+        "planner_algorithm_version": "PHASE6_LEG_OPTIMIZER_V1",
+        "self_hash32": "0xFBB7A6BF",
+        "validity_hash": "36df1391a769165c0da1f3526d608f648fe4f37d877fb5bc556d4615d43cd671"
+      },
+      "key": {
+        "from_state_id": "DROP_STEP_1",
+        "route_family": "PICK_3_TO_1",
+        "to_state_id": "DROP_STEP_2",
+        "topology_profile": "S_RTL_SYNTHETIC"
+      },
+      "leg_id": "LEG_9952E47D0B89",
+      "nodes": [
+        {
+          "arrival_state_id": "DROP_STEP_1",
+          "flags": 6,
+          "local_s_mm": 0,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 200,
+          "y_mm": 500,
+          "yaw_ddeg": -450
+        },
+        {
+          "arrival_state_id": "DROP_STEP_2",
+          "flags": 6,
+          "local_s_mm": 100,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 300,
+          "y_mm": 500,
+          "yaw_ddeg": 900
+        }
+      ],
+      "review": {
+        "approved": true,
+        "locked": false,
+        "notes": "synthetic example leg",
+        "state": "VALID"
+      },
+      "source": "PHASE9_SYNTHETIC_EXAMPLE",
+      "state": "VALID",
+      "topology_profile": "S_RTL_SYNTHETIC",
+      "yaw_profile": {
+        "index": 42,
+        "model": "SYNTHETIC_STRAIGHT"
+      }
+    },
+    {
+      "analysis": {
+        "max_metrics": {
+          "max_wheel_rpm": 0.0
+        },
+        "planned_time_ms": 200,
+        "total_length_mm": 200
+      },
+      "control_points": [],
+      "hashes": {
+        "dependency_hashes": {},
+        "planner_algorithm_version": "PHASE6_LEG_OPTIMIZER_V1",
+        "self_hash32": "0x730F5E2E",
+        "validity_hash": "40e02101545415e0a07b346a145cc6f4a6dde45f43c2c40526072cda1518e9e4"
+      },
+      "key": {
+        "from_state_id": "DROP_STEP_2",
+        "route_family": "PICK_1_TO_3",
+        "to_state_id": "DROP_STEP_3",
+        "topology_profile": "S_LTR_SYNTHETIC"
+      },
+      "leg_id": "LEG_A2C2F162F691",
+      "nodes": [
+        {
+          "arrival_state_id": "DROP_STEP_2",
+          "flags": 6,
+          "local_s_mm": 0,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 300,
+          "y_mm": 500,
+          "yaw_ddeg": 0
+        },
+        {
+          "arrival_state_id": "DROP_STEP_3",
+          "flags": 6,
+          "local_s_mm": 200,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 100,
+          "y_mm": 500,
+          "yaw_ddeg": -900
+        }
+      ],
+      "review": {
+        "approved": true,
+        "locked": false,
+        "notes": "synthetic example leg",
+        "state": "VALID"
+      },
+      "source": "PHASE9_SYNTHETIC_EXAMPLE",
+      "state": "VALID",
+      "topology_profile": "S_LTR_SYNTHETIC",
+      "yaw_profile": {
+        "index": 43,
+        "model": "SYNTHETIC_STRAIGHT"
+      }
+    },
+    {
+      "analysis": {
+        "max_metrics": {
+          "max_wheel_rpm": 0.0
+        },
+        "planned_time_ms": 400,
+        "total_length_mm": 400
+      },
+      "control_points": [],
+      "hashes": {
+        "dependency_hashes": {},
+        "planner_algorithm_version": "PHASE6_LEG_OPTIMIZER_V1",
+        "self_hash32": "0xAD376A9B",
+        "validity_hash": "05a9fd2655354846f7b669c1620ff290c8b5beff2473ba83fdf54c184f462184"
+      },
+      "key": {
+        "from_state_id": "DROP_STEP_1",
+        "route_family": "PICK_1_TO_3",
+        "to_state_id": "DROP_STEP_2",
+        "topology_profile": "S_LTR_SYNTHETIC"
+      },
+      "leg_id": "LEG_A9BBBE2177C4",
+      "nodes": [
+        {
+          "arrival_state_id": "DROP_STEP_1",
+          "flags": 6,
+          "local_s_mm": 0,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 400,
+          "y_mm": 500,
+          "yaw_ddeg": 450
+        },
+        {
+          "arrival_state_id": "DROP_STEP_2",
+          "flags": 6,
+          "local_s_mm": 400,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 0,
+          "y_mm": 500,
+          "yaw_ddeg": -900
+        }
+      ],
+      "review": {
+        "approved": true,
+        "locked": false,
+        "notes": "synthetic example leg",
+        "state": "VALID"
+      },
+      "source": "PHASE9_SYNTHETIC_EXAMPLE",
+      "state": "VALID",
+      "topology_profile": "S_LTR_SYNTHETIC",
+      "yaw_profile": {
+        "index": 44,
+        "model": "SYNTHETIC_STRAIGHT"
+      }
+    },
+    {
+      "analysis": {
+        "max_metrics": {
+          "max_wheel_rpm": 0.0
+        },
+        "planned_time_ms": 100,
+        "total_length_mm": 100
+      },
+      "control_points": [],
+      "hashes": {
+        "dependency_hashes": {},
+        "planner_algorithm_version": "PHASE6_LEG_OPTIMIZER_V1",
+        "self_hash32": "0x358BC5F7",
+        "validity_hash": "d1ba4f9366c5941aaa24973bc6d5c97d2a511aef811e49de24a57f02c0829c0b"
+      },
+      "key": {
+        "from_state_id": "DROP_STEP_1",
+        "route_family": "PICK_1_TO_3",
+        "to_state_id": "DROP_STEP_2",
+        "topology_profile": "S_LTR_SYNTHETIC"
+      },
+      "leg_id": "LEG_AB09A23C28CD",
+      "nodes": [
+        {
+          "arrival_state_id": "DROP_STEP_1",
+          "flags": 6,
+          "local_s_mm": 0,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 400,
+          "y_mm": 500,
+          "yaw_ddeg": 900
+        },
+        {
+          "arrival_state_id": "DROP_STEP_2",
+          "flags": 6,
+          "local_s_mm": 100,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 300,
+          "y_mm": 500,
+          "yaw_ddeg": -450
+        }
+      ],
+      "review": {
+        "approved": true,
+        "locked": false,
+        "notes": "synthetic example leg",
+        "state": "VALID"
+      },
+      "source": "PHASE9_SYNTHETIC_EXAMPLE",
+      "state": "VALID",
+      "topology_profile": "S_LTR_SYNTHETIC",
+      "yaw_profile": {
+        "index": 45,
+        "model": "SYNTHETIC_STRAIGHT"
+      }
+    },
+    {
+      "analysis": {
+        "max_metrics": {
+          "max_wheel_rpm": 0.0
+        },
+        "planned_time_ms": 200,
+        "total_length_mm": 200
+      },
+      "control_points": [],
+      "hashes": {
+        "dependency_hashes": {},
+        "planner_algorithm_version": "PHASE6_LEG_OPTIMIZER_V1",
+        "self_hash32": "0xEDC486E3",
+        "validity_hash": "d7718c2b4eec5439fd5cf2e0857d5c17609dd3ae4ff1c9d6726be79fc79ebbd7"
+      },
+      "key": {
+        "from_state_id": "DROP_STEP_2",
+        "route_family": "PICK_3_TO_1",
+        "to_state_id": "DROP_STEP_3",
+        "topology_profile": "S_RTL_SYNTHETIC"
+      },
+      "leg_id": "LEG_ACA846C7B560",
+      "nodes": [
+        {
+          "arrival_state_id": "DROP_STEP_2",
+          "flags": 6,
+          "local_s_mm": 0,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 100,
+          "y_mm": 500,
+          "yaw_ddeg": 0
+        },
+        {
+          "arrival_state_id": "DROP_STEP_3",
+          "flags": 6,
+          "local_s_mm": 200,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 300,
+          "y_mm": 500,
+          "yaw_ddeg": 900
+        }
+      ],
+      "review": {
+        "approved": true,
+        "locked": false,
+        "notes": "synthetic example leg",
+        "state": "VALID"
+      },
+      "source": "PHASE9_SYNTHETIC_EXAMPLE",
+      "state": "VALID",
+      "topology_profile": "S_RTL_SYNTHETIC",
+      "yaw_profile": {
+        "index": 46,
+        "model": "SYNTHETIC_STRAIGHT"
+      }
+    },
+    {
+      "analysis": {
+        "max_metrics": {
+          "max_wheel_rpm": 0.0
+        },
+        "planned_time_ms": 100,
+        "total_length_mm": 100
+      },
+      "control_points": [],
+      "hashes": {
+        "dependency_hashes": {},
+        "planner_algorithm_version": "PHASE6_LEG_OPTIMIZER_V1",
+        "self_hash32": "0x5D0F6CED",
+        "validity_hash": "66e2ba0b67117310f42c5b602a8b9dad8b0f9db669d3a83d052e287038f32ddb"
+      },
+      "key": {
+        "from_state_id": "P_START",
+        "route_family": "PICK_1_TO_3",
+        "to_state_id": "P_PICK_1",
+        "topology_profile": "S_LTR_SYNTHETIC"
+      },
+      "leg_id": "LEG_B0C5708476D2",
+      "nodes": [
+        {
+          "flags": 1,
+          "local_s_mm": 0,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 0,
+          "y_mm": 0,
+          "yaw_ddeg": 0
+        },
+        {
+          "arrival_state_id": "P_PICK_1",
+          "flags": 6,
+          "local_s_mm": 100,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 100,
+          "y_mm": 0,
+          "yaw_ddeg": 0
+        }
+      ],
+      "review": {
+        "approved": true,
+        "locked": false,
+        "notes": "synthetic example leg",
+        "state": "VALID"
+      },
+      "source": "PHASE9_SYNTHETIC_EXAMPLE",
+      "state": "VALID",
+      "topology_profile": "S_LTR_SYNTHETIC",
+      "yaw_profile": {
+        "index": 47,
+        "model": "SYNTHETIC_STRAIGHT"
+      }
+    },
+    {
+      "analysis": {
+        "max_metrics": {
+          "max_wheel_rpm": 0.0
+        },
+        "planned_time_ms": 100,
+        "total_length_mm": 100
+      },
+      "control_points": [],
+      "hashes": {
+        "dependency_hashes": {},
+        "planner_algorithm_version": "PHASE6_LEG_OPTIMIZER_V1",
+        "self_hash32": "0x997C2AEE",
+        "validity_hash": "1839407e0c18d9aaa5bbb9147e151a7d897ffb186294c0228cb6b84ecd5abfd7"
+      },
+      "key": {
+        "from_state_id": "P_PICK_1",
+        "route_family": "PICK_1_TO_3",
+        "to_state_id": "P_PICK_2L",
+        "topology_profile": "S_LTR_SYNTHETIC"
+      },
+      "leg_id": "LEG_B2BAEB841F0C",
+      "nodes": [
+        {
+          "arrival_state_id": "P_PICK_1",
+          "flags": 6,
+          "local_s_mm": 0,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 100,
+          "y_mm": 0,
+          "yaw_ddeg": 0
+        },
+        {
+          "arrival_state_id": "P_PICK_2L",
+          "flags": 6,
+          "local_s_mm": 100,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 200,
+          "y_mm": 0,
+          "yaw_ddeg": 0
+        }
+      ],
+      "review": {
+        "approved": true,
+        "locked": false,
+        "notes": "synthetic example leg",
+        "state": "VALID"
+      },
+      "source": "PHASE9_SYNTHETIC_EXAMPLE",
+      "state": "VALID",
+      "topology_profile": "S_LTR_SYNTHETIC",
+      "yaw_profile": {
+        "index": 48,
+        "model": "SYNTHETIC_STRAIGHT"
+      }
+    },
+    {
+      "analysis": {
+        "max_metrics": {
+          "max_wheel_rpm": 0.0
+        },
+        "planned_time_ms": 100,
+        "total_length_mm": 100
+      },
+      "control_points": [],
+      "hashes": {
+        "dependency_hashes": {},
+        "planner_algorithm_version": "PHASE6_LEG_OPTIMIZER_V1",
+        "self_hash32": "0x9BE848AE",
+        "validity_hash": "78f1549b4f806ecd7b10555aaa097cecb119dd38d1d8f4c3ff89bbbf5f5bf4a6"
+      },
+      "key": {
+        "from_state_id": "DROP_STEP_2",
+        "route_family": "PICK_3_TO_1",
+        "to_state_id": "DROP_STEP_3",
+        "topology_profile": "S_RTL_SYNTHETIC"
+      },
+      "leg_id": "LEG_B3764A9F1D97",
+      "nodes": [
+        {
+          "arrival_state_id": "DROP_STEP_2",
+          "flags": 6,
+          "local_s_mm": 0,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 100,
+          "y_mm": 500,
+          "yaw_ddeg": 0
+        },
+        {
+          "arrival_state_id": "DROP_STEP_3",
+          "flags": 6,
+          "local_s_mm": 100,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 200,
+          "y_mm": 500,
+          "yaw_ddeg": 900
+        }
+      ],
+      "review": {
+        "approved": true,
+        "locked": false,
+        "notes": "synthetic example leg",
+        "state": "VALID"
+      },
+      "source": "PHASE9_SYNTHETIC_EXAMPLE",
+      "state": "VALID",
+      "topology_profile": "S_RTL_SYNTHETIC",
+      "yaw_profile": {
+        "index": 49,
+        "model": "SYNTHETIC_STRAIGHT"
+      }
+    },
+    {
+      "analysis": {
+        "max_metrics": {
+          "max_wheel_rpm": 0.0
+        },
+        "planned_time_ms": 200,
+        "total_length_mm": 200
+      },
+      "control_points": [],
+      "hashes": {
+        "dependency_hashes": {},
+        "planner_algorithm_version": "PHASE6_LEG_OPTIMIZER_V1",
+        "self_hash32": "0x81C3E41E",
+        "validity_hash": "7110af596f9c2f07d76882f624b807883bcc834a6f5547afe7d3124cd4027fd1"
+      },
+      "key": {
+        "from_state_id": "DROP_STEP_1",
+        "route_family": "PICK_1_TO_3",
+        "to_state_id": "DROP_STEP_2",
+        "topology_profile": "S_LTR_SYNTHETIC"
+      },
+      "leg_id": "LEG_B9064C2278FE",
+      "nodes": [
+        {
+          "arrival_state_id": "DROP_STEP_1",
+          "flags": 6,
+          "local_s_mm": 0,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 400,
+          "y_mm": 500,
+          "yaw_ddeg": 900
+        },
+        {
+          "arrival_state_id": "DROP_STEP_2",
+          "flags": 6,
+          "local_s_mm": 200,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 200,
+          "y_mm": 500,
+          "yaw_ddeg": -450
+        }
+      ],
+      "review": {
+        "approved": true,
+        "locked": false,
+        "notes": "synthetic example leg",
+        "state": "VALID"
+      },
+      "source": "PHASE9_SYNTHETIC_EXAMPLE",
+      "state": "VALID",
+      "topology_profile": "S_LTR_SYNTHETIC",
+      "yaw_profile": {
+        "index": 50,
+        "model": "SYNTHETIC_STRAIGHT"
+      }
+    },
+    {
+      "analysis": {
+        "max_metrics": {
+          "max_wheel_rpm": 0.0
+        },
+        "planned_time_ms": 100,
+        "total_length_mm": 100
+      },
+      "control_points": [],
+      "hashes": {
+        "dependency_hashes": {},
+        "planner_algorithm_version": "PHASE6_LEG_OPTIMIZER_V1",
+        "self_hash32": "0x3BA24B03",
+        "validity_hash": "a3baf21f828632a13d2cf1671c25fee39d7ee493a19d66b1fe37245a8cd7be1f"
+      },
+      "key": {
+        "from_state_id": "DROP_STEP_1",
+        "route_family": "PICK_3_TO_1",
+        "to_state_id": "DROP_STEP_2",
+        "topology_profile": "S_RTL_SYNTHETIC"
+      },
+      "leg_id": "LEG_C33B92B34355",
+      "nodes": [
+        {
+          "arrival_state_id": "DROP_STEP_1",
+          "flags": 6,
+          "local_s_mm": 0,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 100,
+          "y_mm": 500,
+          "yaw_ddeg": -900
+        },
+        {
+          "arrival_state_id": "DROP_STEP_2",
+          "flags": 6,
+          "local_s_mm": 100,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 200,
+          "y_mm": 500,
+          "yaw_ddeg": 0
+        }
+      ],
+      "review": {
+        "approved": true,
+        "locked": false,
+        "notes": "synthetic example leg",
+        "state": "VALID"
+      },
+      "source": "PHASE9_SYNTHETIC_EXAMPLE",
+      "state": "VALID",
+      "topology_profile": "S_RTL_SYNTHETIC",
+      "yaw_profile": {
+        "index": 51,
+        "model": "SYNTHETIC_STRAIGHT"
+      }
+    },
+    {
+      "analysis": {
+        "max_metrics": {
+          "max_wheel_rpm": 0.0
+        },
+        "planned_time_ms": 200,
+        "total_length_mm": 200
+      },
+      "control_points": [],
+      "hashes": {
+        "dependency_hashes": {},
+        "planner_algorithm_version": "PHASE6_LEG_OPTIMIZER_V1",
+        "self_hash32": "0x7A9D89AA",
+        "validity_hash": "29437d1bd85c08838e5a3a40905479262d7007a2efb124e108ed4b87c695ed92"
+      },
+      "key": {
+        "from_state_id": "P_PICK_2L",
+        "route_family": "PICK_1_TO_3",
+        "to_state_id": "P_PICK_3",
+        "topology_profile": "S_LTR_SYNTHETIC"
+      },
+      "leg_id": "LEG_C8B4C3A732A2",
+      "nodes": [
+        {
+          "arrival_state_id": "P_PICK_2L",
+          "flags": 6,
+          "local_s_mm": 0,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 200,
+          "y_mm": 0,
+          "yaw_ddeg": 0
+        },
+        {
+          "arrival_state_id": "P_PICK_3",
+          "flags": 6,
+          "local_s_mm": 200,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 400,
+          "y_mm": 0,
+          "yaw_ddeg": 0
+        }
+      ],
+      "review": {
+        "approved": true,
+        "locked": false,
+        "notes": "synthetic example leg",
+        "state": "VALID"
+      },
+      "source": "PHASE9_SYNTHETIC_EXAMPLE",
+      "state": "VALID",
+      "topology_profile": "S_LTR_SYNTHETIC",
+      "yaw_profile": {
+        "index": 52,
+        "model": "SYNTHETIC_STRAIGHT"
+      }
+    },
+    {
+      "analysis": {
+        "max_metrics": {
+          "max_wheel_rpm": 0.0
+        },
+        "planned_time_ms": 200,
+        "total_length_mm": 200
+      },
+      "control_points": [],
+      "hashes": {
+        "dependency_hashes": {},
+        "planner_algorithm_version": "PHASE6_LEG_OPTIMIZER_V1",
+        "self_hash32": "0xE6838BA2",
+        "validity_hash": "482a3959e17bc132f8270b39270165287b0415b64c71f6f2a7ee42c71611dc4a"
+      },
+      "key": {
+        "from_state_id": "DROP_STEP_1",
+        "route_family": "PICK_1_TO_3",
+        "to_state_id": "DROP_STEP_2",
+        "topology_profile": "S_LTR_SYNTHETIC"
+      },
+      "leg_id": "LEG_CB0AA17372E5",
+      "nodes": [
+        {
+          "arrival_state_id": "DROP_STEP_1",
+          "flags": 6,
+          "local_s_mm": 0,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 300,
+          "y_mm": 500,
+          "yaw_ddeg": 450
+        },
+        {
+          "arrival_state_id": "DROP_STEP_2",
+          "flags": 6,
+          "local_s_mm": 200,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 100,
+          "y_mm": 500,
+          "yaw_ddeg": -900
+        }
+      ],
+      "review": {
+        "approved": true,
+        "locked": false,
+        "notes": "synthetic example leg",
+        "state": "VALID"
+      },
+      "source": "PHASE9_SYNTHETIC_EXAMPLE",
+      "state": "VALID",
+      "topology_profile": "S_LTR_SYNTHETIC",
+      "yaw_profile": {
+        "index": 53,
+        "model": "SYNTHETIC_STRAIGHT"
+      }
+    },
+    {
+      "analysis": {
+        "max_metrics": {
+          "max_wheel_rpm": 0.0
+        },
+        "planned_time_ms": 100,
+        "total_length_mm": 100
+      },
+      "control_points": [],
+      "hashes": {
+        "dependency_hashes": {},
+        "planner_algorithm_version": "PHASE6_LEG_OPTIMIZER_V1",
+        "self_hash32": "0x41E2280F",
+        "validity_hash": "c8cebfc1b1073cce10a9d7007f930d479ae1e424c38931259ba7df4d3eaef0a9"
+      },
+      "key": {
+        "from_state_id": "DROP_STEP_1",
+        "route_family": "PICK_3_TO_1",
+        "to_state_id": "DROP_STEP_2",
+        "topology_profile": "S_RTL_SYNTHETIC"
+      },
+      "leg_id": "LEG_CC9DEE19A2C0",
+      "nodes": [
+        {
+          "arrival_state_id": "DROP_STEP_1",
+          "flags": 6,
+          "local_s_mm": 0,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 100,
+          "y_mm": 500,
+          "yaw_ddeg": -450
+        },
+        {
+          "arrival_state_id": "DROP_STEP_2",
+          "flags": 6,
+          "local_s_mm": 100,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 200,
+          "y_mm": 500,
+          "yaw_ddeg": 900
+        }
+      ],
+      "review": {
+        "approved": true,
+        "locked": false,
+        "notes": "synthetic example leg",
+        "state": "VALID"
+      },
+      "source": "PHASE9_SYNTHETIC_EXAMPLE",
+      "state": "VALID",
+      "topology_profile": "S_RTL_SYNTHETIC",
+      "yaw_profile": {
+        "index": 54,
+        "model": "SYNTHETIC_STRAIGHT"
+      }
+    },
+    {
+      "analysis": {
+        "max_metrics": {
+          "max_wheel_rpm": 0.0
+        },
+        "planned_time_ms": 539,
+        "total_length_mm": 539
+      },
+      "control_points": [],
+      "hashes": {
+        "dependency_hashes": {},
+        "planner_algorithm_version": "PHASE6_LEG_OPTIMIZER_V1",
+        "self_hash32": "0xC0BD2275",
+        "validity_hash": "36fd5a2e011fcd4624a35a5bf155a3194e98190cb70ef86ffd38a202ff799452"
+      },
+      "key": {
+        "from_state_id": "P_PICK_3",
+        "route_family": "PICK_1_TO_3",
+        "to_state_id": "DROP_STEP_1",
+        "topology_profile": "S_LTR_SYNTHETIC"
+      },
+      "leg_id": "LEG_CF925ABEFABD",
+      "nodes": [
+        {
+          "arrival_state_id": "P_PICK_3",
+          "flags": 6,
+          "local_s_mm": 0,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 400,
+          "y_mm": 0,
+          "yaw_ddeg": 0
+        },
+        {
+          "arrival_state_id": "DROP_STEP_1",
+          "flags": 6,
+          "local_s_mm": 539,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 200,
+          "y_mm": 500,
+          "yaw_ddeg": 900
+        }
+      ],
+      "review": {
+        "approved": true,
+        "locked": false,
+        "notes": "synthetic example leg",
+        "state": "VALID"
+      },
+      "source": "PHASE9_SYNTHETIC_EXAMPLE",
+      "state": "VALID",
+      "topology_profile": "S_LTR_SYNTHETIC",
+      "yaw_profile": {
+        "index": 55,
+        "model": "SYNTHETIC_STRAIGHT"
+      }
+    },
+    {
+      "analysis": {
+        "max_metrics": {
+          "max_wheel_rpm": 0.0
+        },
+        "planned_time_ms": 200,
+        "total_length_mm": 200
+      },
+      "control_points": [],
+      "hashes": {
+        "dependency_hashes": {},
+        "planner_algorithm_version": "PHASE6_LEG_OPTIMIZER_V1",
+        "self_hash32": "0x4D4D2DA8",
+        "validity_hash": "db5cb5dab4a315d182a116ceb88bf61f038a3bd70a51c49ebc49535d48ad8025"
+      },
+      "key": {
+        "from_state_id": "DROP_STEP_1",
+        "route_family": "PICK_3_TO_1",
+        "to_state_id": "DROP_STEP_2",
+        "topology_profile": "S_RTL_SYNTHETIC"
+      },
+      "leg_id": "LEG_D3FAC454F8A2",
+      "nodes": [
+        {
+          "arrival_state_id": "DROP_STEP_1",
+          "flags": 6,
+          "local_s_mm": 0,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 200,
+          "y_mm": 500,
+          "yaw_ddeg": -900
+        },
+        {
+          "arrival_state_id": "DROP_STEP_2",
+          "flags": 6,
+          "local_s_mm": 200,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 400,
+          "y_mm": 500,
+          "yaw_ddeg": 450
+        }
+      ],
+      "review": {
+        "approved": true,
+        "locked": false,
+        "notes": "synthetic example leg",
+        "state": "VALID"
+      },
+      "source": "PHASE9_SYNTHETIC_EXAMPLE",
+      "state": "VALID",
+      "topology_profile": "S_RTL_SYNTHETIC",
+      "yaw_profile": {
+        "index": 56,
+        "model": "SYNTHETIC_STRAIGHT"
+      }
+    },
+    {
+      "analysis": {
+        "max_metrics": {
+          "max_wheel_rpm": 0.0
+        },
+        "planned_time_ms": 100,
+        "total_length_mm": 100
+      },
+      "control_points": [],
+      "hashes": {
+        "dependency_hashes": {},
+        "planner_algorithm_version": "PHASE6_LEG_OPTIMIZER_V1",
+        "self_hash32": "0xCA499971",
+        "validity_hash": "eec6950fdd0c223614bc94421beedbff6a2fbcc63d58f9e4b223c80b77847cfc"
+      },
+      "key": {
+        "from_state_id": "DROP_STEP_1",
+        "route_family": "PICK_1_TO_3",
+        "to_state_id": "DROP_STEP_2",
+        "topology_profile": "S_LTR_SYNTHETIC"
+      },
+      "leg_id": "LEG_D656D9923470",
+      "nodes": [
+        {
+          "arrival_state_id": "DROP_STEP_1",
+          "flags": 6,
+          "local_s_mm": 0,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 300,
+          "y_mm": 500,
+          "yaw_ddeg": 900
+        },
+        {
+          "arrival_state_id": "DROP_STEP_2",
+          "flags": 6,
+          "local_s_mm": 100,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 200,
+          "y_mm": 500,
+          "yaw_ddeg": 0
+        }
+      ],
+      "review": {
+        "approved": true,
+        "locked": false,
+        "notes": "synthetic example leg",
+        "state": "VALID"
+      },
+      "source": "PHASE9_SYNTHETIC_EXAMPLE",
+      "state": "VALID",
+      "topology_profile": "S_LTR_SYNTHETIC",
+      "yaw_profile": {
+        "index": 57,
+        "model": "SYNTHETIC_STRAIGHT"
+      }
+    },
+    {
+      "analysis": {
+        "max_metrics": {
+          "max_wheel_rpm": 0.0
+        },
+        "planned_time_ms": 100,
+        "total_length_mm": 100
+      },
+      "control_points": [],
+      "hashes": {
+        "dependency_hashes": {},
+        "planner_algorithm_version": "PHASE6_LEG_OPTIMIZER_V1",
+        "self_hash32": "0x2BE6908B",
+        "validity_hash": "b9072ee2763e86a513a334d6c084723a754cb0db5e8fd4ae4e1729a61a18af71"
+      },
+      "key": {
+        "from_state_id": "DROP_STEP_2",
+        "route_family": "PICK_3_TO_1",
+        "to_state_id": "DROP_STEP_3",
+        "topology_profile": "S_RTL_SYNTHETIC"
+      },
+      "leg_id": "LEG_D8920D855415",
+      "nodes": [
+        {
+          "arrival_state_id": "DROP_STEP_2",
+          "flags": 6,
+          "local_s_mm": 0,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 200,
+          "y_mm": 500,
+          "yaw_ddeg": 0
+        },
+        {
+          "arrival_state_id": "DROP_STEP_3",
+          "flags": 6,
+          "local_s_mm": 100,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 300,
+          "y_mm": 500,
+          "yaw_ddeg": 900
+        }
+      ],
+      "review": {
+        "approved": true,
+        "locked": false,
+        "notes": "synthetic example leg",
+        "state": "VALID"
+      },
+      "source": "PHASE9_SYNTHETIC_EXAMPLE",
+      "state": "VALID",
+      "topology_profile": "S_RTL_SYNTHETIC",
+      "yaw_profile": {
+        "index": 58,
+        "model": "SYNTHETIC_STRAIGHT"
+      }
+    },
+    {
+      "analysis": {
+        "max_metrics": {
+          "max_wheel_rpm": 0.0
+        },
+        "planned_time_ms": 100,
+        "total_length_mm": 100
+      },
+      "control_points": [],
+      "hashes": {
+        "dependency_hashes": {},
+        "planner_algorithm_version": "PHASE6_LEG_OPTIMIZER_V1",
+        "self_hash32": "0xB04B8056",
+        "validity_hash": "b3999b57b9fb64d588b88913d2c24dccfd9ac9b4d487f34e7ce56b192170d0c4"
+      },
+      "key": {
+        "from_state_id": "DROP_STEP_2",
+        "route_family": "PICK_1_TO_3",
+        "to_state_id": "DROP_STEP_3",
+        "topology_profile": "S_LTR_SYNTHETIC"
+      },
+      "leg_id": "LEG_E177B1F367EF",
+      "nodes": [
+        {
+          "arrival_state_id": "DROP_STEP_2",
+          "flags": 6,
+          "local_s_mm": 0,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 200,
+          "y_mm": 500,
+          "yaw_ddeg": 0
+        },
+        {
+          "arrival_state_id": "DROP_STEP_3",
+          "flags": 6,
+          "local_s_mm": 100,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 100,
+          "y_mm": 500,
+          "yaw_ddeg": -900
+        }
+      ],
+      "review": {
+        "approved": true,
+        "locked": false,
+        "notes": "synthetic example leg",
+        "state": "VALID"
+      },
+      "source": "PHASE9_SYNTHETIC_EXAMPLE",
+      "state": "VALID",
+      "topology_profile": "S_LTR_SYNTHETIC",
+      "yaw_profile": {
+        "index": 59,
+        "model": "SYNTHETIC_STRAIGHT"
+      }
+    },
+    {
+      "analysis": {
+        "max_metrics": {
+          "max_wheel_rpm": 0.0
+        },
+        "planned_time_ms": 500,
+        "total_length_mm": 500
+      },
+      "control_points": [],
+      "hashes": {
+        "dependency_hashes": {},
+        "planner_algorithm_version": "PHASE6_LEG_OPTIMIZER_V1",
+        "self_hash32": "0x06A460D4",
+        "validity_hash": "9932bacffbad38a33f4b77d1bfdac6094057e91851dcb45eb13e00f888df1a2b"
+      },
+      "key": {
+        "from_state_id": "P_PICK_3",
+        "route_family": "PICK_1_TO_3",
+        "to_state_id": "DROP_STEP_1",
+        "topology_profile": "S_LTR_SYNTHETIC"
+      },
+      "leg_id": "LEG_E2B01B37C462",
+      "nodes": [
+        {
+          "arrival_state_id": "P_PICK_3",
+          "flags": 6,
+          "local_s_mm": 0,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 400,
+          "y_mm": 0,
+          "yaw_ddeg": 0
+        },
+        {
+          "arrival_state_id": "DROP_STEP_1",
+          "flags": 6,
+          "local_s_mm": 500,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 400,
+          "y_mm": 500,
+          "yaw_ddeg": 450
+        }
+      ],
+      "review": {
+        "approved": true,
+        "locked": false,
+        "notes": "synthetic example leg",
+        "state": "VALID"
+      },
+      "source": "PHASE9_SYNTHETIC_EXAMPLE",
+      "state": "VALID",
+      "topology_profile": "S_LTR_SYNTHETIC",
+      "yaw_profile": {
+        "index": 60,
+        "model": "SYNTHETIC_STRAIGHT"
+      }
+    },
+    {
+      "analysis": {
+        "max_metrics": {
+          "max_wheel_rpm": 0.0
+        },
+        "planned_time_ms": 100,
+        "total_length_mm": 100
+      },
+      "control_points": [],
+      "hashes": {
+        "dependency_hashes": {},
+        "planner_algorithm_version": "PHASE6_LEG_OPTIMIZER_V1",
+        "self_hash32": "0x530EE51B",
+        "validity_hash": "eb014636f8355627061b20f82b83c754c3cc4a269bf2a440c038e222ad030d59"
+      },
+      "key": {
+        "from_state_id": "DROP_STEP_1",
+        "route_family": "PICK_3_TO_1",
+        "to_state_id": "DROP_STEP_2",
+        "topology_profile": "S_RTL_SYNTHETIC"
+      },
+      "leg_id": "LEG_E5A93E7C034F",
+      "nodes": [
+        {
+          "arrival_state_id": "DROP_STEP_1",
+          "flags": 6,
+          "local_s_mm": 0,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 300,
+          "y_mm": 500,
+          "yaw_ddeg": -450
+        },
+        {
+          "arrival_state_id": "DROP_STEP_2",
+          "flags": 6,
+          "local_s_mm": 100,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 400,
+          "y_mm": 500,
+          "yaw_ddeg": 900
+        }
+      ],
+      "review": {
+        "approved": true,
+        "locked": false,
+        "notes": "synthetic example leg",
+        "state": "VALID"
+      },
+      "source": "PHASE9_SYNTHETIC_EXAMPLE",
+      "state": "VALID",
+      "topology_profile": "S_RTL_SYNTHETIC",
+      "yaw_profile": {
+        "index": 61,
+        "model": "SYNTHETIC_STRAIGHT"
+      }
+    },
+    {
+      "analysis": {
+        "max_metrics": {
+          "max_wheel_rpm": 0.0
+        },
+        "planned_time_ms": 200,
+        "total_length_mm": 200
+      },
+      "control_points": [],
+      "hashes": {
+        "dependency_hashes": {},
+        "planner_algorithm_version": "PHASE6_LEG_OPTIMIZER_V1",
+        "self_hash32": "0x8F237F0F",
+        "validity_hash": "2533bff596f8cb74af684071fcc85dae33f1473c15f29535b78109601f845a61"
+      },
+      "key": {
+        "from_state_id": "DROP_STEP_1",
+        "route_family": "PICK_3_TO_1",
+        "to_state_id": "DROP_STEP_2",
+        "topology_profile": "S_RTL_SYNTHETIC"
+      },
+      "leg_id": "LEG_E7C54ED6EFB7",
+      "nodes": [
+        {
+          "arrival_state_id": "DROP_STEP_1",
+          "flags": 6,
+          "local_s_mm": 0,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 100,
+          "y_mm": 500,
+          "yaw_ddeg": -900
+        },
+        {
+          "arrival_state_id": "DROP_STEP_2",
+          "flags": 6,
+          "local_s_mm": 200,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 300,
+          "y_mm": 500,
+          "yaw_ddeg": 0
+        }
+      ],
+      "review": {
+        "approved": true,
+        "locked": false,
+        "notes": "synthetic example leg",
+        "state": "VALID"
+      },
+      "source": "PHASE9_SYNTHETIC_EXAMPLE",
+      "state": "VALID",
+      "topology_profile": "S_RTL_SYNTHETIC",
+      "yaw_profile": {
+        "index": 62,
+        "model": "SYNTHETIC_STRAIGHT"
+      }
+    },
+    {
+      "analysis": {
+        "max_metrics": {
+          "max_wheel_rpm": 0.0
+        },
+        "planned_time_ms": 100,
+        "total_length_mm": 100
+      },
+      "control_points": [],
+      "hashes": {
+        "dependency_hashes": {},
+        "planner_algorithm_version": "PHASE6_LEG_OPTIMIZER_V1",
+        "self_hash32": "0x26B03F4B",
+        "validity_hash": "4098525afc05ccb90f26296dd0ed1f877e05e6693214cf4320093d937645d15b"
+      },
+      "key": {
+        "from_state_id": "DROP_STEP_2",
+        "route_family": "PICK_1_TO_3",
+        "to_state_id": "DROP_STEP_3",
+        "topology_profile": "S_LTR_SYNTHETIC"
+      },
+      "leg_id": "LEG_EA2236C43CE1",
+      "nodes": [
+        {
+          "arrival_state_id": "DROP_STEP_2",
+          "flags": 6,
+          "local_s_mm": 0,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 300,
+          "y_mm": 500,
+          "yaw_ddeg": 0
+        },
+        {
+          "arrival_state_id": "DROP_STEP_3",
+          "flags": 6,
+          "local_s_mm": 100,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 200,
+          "y_mm": 500,
+          "yaw_ddeg": -900
+        }
+      ],
+      "review": {
+        "approved": true,
+        "locked": false,
+        "notes": "synthetic example leg",
+        "state": "VALID"
+      },
+      "source": "PHASE9_SYNTHETIC_EXAMPLE",
+      "state": "VALID",
+      "topology_profile": "S_LTR_SYNTHETIC",
+      "yaw_profile": {
+        "index": 63,
+        "model": "SYNTHETIC_STRAIGHT"
+      }
+    },
+    {
+      "analysis": {
+        "max_metrics": {
+          "max_wheel_rpm": 0.0
+        },
+        "planned_time_ms": 200,
+        "total_length_mm": 200
+      },
+      "control_points": [],
+      "hashes": {
+        "dependency_hashes": {},
+        "planner_algorithm_version": "PHASE6_LEG_OPTIMIZER_V1",
+        "self_hash32": "0xE5C3105F",
+        "validity_hash": "55aa39ab2ca15ad4a78050d9940e4075ddc13b037bb1d503874acaf7a8762cc8"
+      },
+      "key": {
+        "from_state_id": "DROP_STEP_2",
+        "route_family": "PICK_3_TO_1",
+        "to_state_id": "DROP_STEP_3",
+        "topology_profile": "S_RTL_SYNTHETIC"
+      },
+      "leg_id": "LEG_F78F572E389E",
+      "nodes": [
+        {
+          "arrival_state_id": "DROP_STEP_2",
+          "flags": 6,
+          "local_s_mm": 0,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 200,
+          "y_mm": 500,
+          "yaw_ddeg": 0
+        },
+        {
+          "arrival_state_id": "DROP_STEP_3",
+          "flags": 6,
+          "local_s_mm": 200,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 400,
+          "y_mm": 500,
+          "yaw_ddeg": 900
+        }
+      ],
+      "review": {
+        "approved": true,
+        "locked": false,
+        "notes": "synthetic example leg",
+        "state": "VALID"
+      },
+      "source": "PHASE9_SYNTHETIC_EXAMPLE",
+      "state": "VALID",
+      "topology_profile": "S_RTL_SYNTHETIC",
+      "yaw_profile": {
+        "index": 64,
+        "model": "SYNTHETIC_STRAIGHT"
+      }
+    },
+    {
+      "analysis": {
+        "max_metrics": {
+          "max_wheel_rpm": 0.0
+        },
+        "planned_time_ms": 200,
+        "total_length_mm": 200
+      },
+      "control_points": [],
+      "hashes": {
+        "dependency_hashes": {},
+        "planner_algorithm_version": "PHASE6_LEG_OPTIMIZER_V1",
+        "self_hash32": "0x112B1B88",
+        "validity_hash": "64649d7d57a937e7ffe259bc69166447d2dfd98f464d2d9b71ab331db12c1f14"
+      },
+      "key": {
+        "from_state_id": "DROP_STEP_1",
+        "route_family": "PICK_1_TO_3",
+        "to_state_id": "DROP_STEP_2",
+        "topology_profile": "S_LTR_SYNTHETIC"
+      },
+      "leg_id": "LEG_FD634BF0FCC4",
+      "nodes": [
+        {
+          "arrival_state_id": "DROP_STEP_1",
+          "flags": 6,
+          "local_s_mm": 0,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 200,
+          "y_mm": 500,
+          "yaw_ddeg": 450
+        },
+        {
+          "arrival_state_id": "DROP_STEP_2",
+          "flags": 6,
+          "local_s_mm": 200,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 0,
+          "y_mm": 500,
+          "yaw_ddeg": -900
+        }
+      ],
+      "review": {
+        "approved": true,
+        "locked": false,
+        "notes": "synthetic example leg",
+        "state": "VALID"
+      },
+      "source": "PHASE9_SYNTHETIC_EXAMPLE",
+      "state": "VALID",
+      "topology_profile": "S_LTR_SYNTHETIC",
+      "yaw_profile": {
+        "index": 65,
+        "model": "SYNTHETIC_STRAIGHT"
+      }
+    }
+  ],
+  "planner_version": "PHASE6_LEG_OPTIMIZER_V1",
+  "project_hash": "28f7ef60"
+}

@@ -1,0 +1,27 @@
+{
+  "format": "HJMB_ROUTE_CASE_TABLE_JSON_V40",
+  "source_csv": "traj_id.csv",
+  "source_csv_sha256": "0",
+  "case_count": 1,
+  "cases": [
+    {
+      "traj_id": 0,
+      "file_name": "P0000.BIN",
+      "bean_code": 0,
+      "drop_code": 0,
+      "pick_assignment": {
+        "PICK_1": "YELLOW",
+        "PICK_2": "GREEN",
+        "PICK_3": "WHITE"
+      },
+      "label_positions": {
+        "1": "F_DROP_4",
+        "2": "F_DROP_5",
+        "3": "F_DROP_6",
+        "4": "F_DROP_7",
+        "5": "F_DROP_8"
+      },
+      "source_row_hash": "0"
+    }
+  ]
+}

@@ -1,0 +1,237 @@
+{
+  "format": "HJMB_ROUTE_CASE_JSON_V40",
+  "storage_mode": "EMBEDDED",
+  "path_source": "TASK_COMPILED",
+  "traj_id": 7,
+  "bean_code": 0,
+  "drop_code": 7,
+  "source_mapping": {
+    "fixture": "phase2_synthetic"
+  },
+  "selected_plan": {
+    "route_family": "PICK_1_TO_3",
+    "vehicle_bin_assignment": {
+      "BIN_1": "YELLOW",
+      "BIN_2": "GREEN",
+      "BIN_3": "WHITE"
+    },
+    "drop_targets": [
+      "F_DROP_4"
+    ],
+    "unload_sequence": [
+      "BIN_1"
+    ],
+    "yaw_direction": "SHORTEST",
+    "locked_by_user": true
+  },
+  "manual_path": null,
+  "arrival_states": [
+    {
+      "state_id": "A_PICK_1",
+      "type": "PICK",
+      "site_key": "P_PICK_1"
+    },
+    {
+      "state_id": "A_DROP_1",
+      "type": "DROP",
+      "site_key": "F_DROP_4"
+    }
+  ],
+  "leg_refs": [
+    {
+      "leg_id": "LEG_SYN_0001",
+      "expected_leg_hash32": "0x11111111"
+    },
+    {
+      "leg_id": "LEG_SYN_0002",
+      "expected_leg_hash32": "0x22222222"
+    }
+  ],
+  "actions": {
+    "source": [],
+    "compiled": [
+      {
+        "action": "PICK",
+        "mode": "STOP_AND_WAIT",
+        "arrival_state_id": "A_PICK_1",
+        "timeout_ms": 1500,
+        "post_wait_ms": 100,
+        "check_start_s_mm": 65535
+      },
+      {
+        "action": "PREP_STORE_1",
+        "mode": "KINEMATIC",
+        "timeout_ms": 2000,
+        "post_wait_ms": 0,
+        "check_start_s_mm": 150,
+        "accel_limit_mmps2": 500,
+        "beta_limit_ddegps2": 0,
+        "wz_limit_ddegps": 0,
+        "speed_limit_mmps": 0,
+        "stable_time_ms": 50
+      },
+      {
+        "action": "DROP_1",
+        "mode": "STOP_AND_WAIT",
+        "arrival_state_id": "A_DROP_1",
+        "timeout_ms": 1800,
+        "post_wait_ms": 100,
+        "check_start_s_mm": 65535
+      }
+    ]
+  },
+  "finish": {
+    "mode": "AT_FINAL_DROP",
+    "signal_flags": 0
+  },
+  "estimates": {
+    "planned_motion_time_ms": 3000,
+    "planned_mechanism_time_ms": 1500,
+    "planned_total_estimate_ms": 4500
+  },
+  "hashes": {
+    "fixture_hash": "phase2"
+  },
+  "review": {
+    "detached_from_library": false,
+    "approved": true,
+    "override_reason": ""
+  },
+  "embedded_legs": [
+    {
+      "leg_id": "LEG_SYN_0001",
+      "key": {
+        "from_state_key": "P_START@0",
+        "to_state_key": "A_PICK_1",
+        "route_family": "PICK_1_TO_3",
+        "topology_profile": "SYNTHETIC"
+      },
+      "state": "VALID",
+      "source": "PHASE2_SYNTHETIC_FIXTURE",
+      "topology_profile": "SYNTHETIC",
+      "control_points": [],
+      "yaw_profile": {
+        "model": "TWO_LOW_SPEED_WINDOWS",
+        "direction": "SHORTEST",
+        "alpha": 0.5,
+        "start_window_end_s_mm": 0,
+        "finish_window_start_s_mm": 100
+      },
+      "nodes": [
+        {
+          "local_s_mm": 0,
+          "x_mm": 0,
+          "y_mm": 0,
+          "yaw_ddeg": 0,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "flags": 1
+        },
+        {
+          "local_s_mm": 100,
+          "x_mm": 100,
+          "y_mm": 0,
+          "yaw_ddeg": 0,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "flags": 6,
+          "arrival_state_id": "A_PICK_1"
+        }
+      ],
+      "analysis": {
+        "planned_time_ms": 1000,
+        "total_length_mm": 100,
+        "max_speed_mmps": 200,
+        "max_accel_mmps2": 200,
+        "max_wz_ddegps": 0,
+        "max_beta_ddegps2": 0,
+        "max_wheel_rpm": 100,
+        "min_clearance_mm": 100,
+        "optimizer_seed": 0,
+        "optimizer_elapsed_ms": 0
+      },
+      "hashes": {
+        "self_hash32": "0x11111111"
+      },
+      "review": {
+        "approved": true,
+        "notes": "Phase2 synthetic fixture"
+      }
+    },
+    {
+      "leg_id": "LEG_SYN_0002",
+      "key": {
+        "from_state_key": "A_PICK_1",
+        "to_state_key": "A_DROP_1",
+        "route_family": "PICK_1_TO_3",
+        "topology_profile": "SYNTHETIC"
+      },
+      "state": "VALID",
+      "source": "PHASE2_SYNTHETIC_FIXTURE",
+      "topology_profile": "SYNTHETIC",
+      "control_points": [],
+      "yaw_profile": {
+        "model": "TWO_LOW_SPEED_WINDOWS",
+        "direction": "SHORTEST",
+        "alpha": 0.5,
+        "start_window_end_s_mm": 0,
+        "finish_window_start_s_mm": 200
+      },
+      "nodes": [
+        {
+          "local_s_mm": 0,
+          "x_mm": 100,
+          "y_mm": 0,
+          "yaw_ddeg": 0,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "flags": 6,
+          "arrival_state_id": "A_PICK_1"
+        },
+        {
+          "local_s_mm": 120,
+          "x_mm": 220,
+          "y_mm": 0,
+          "yaw_ddeg": 0,
+          "vx_mmps": 120,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "flags": 0
+        },
+        {
+          "local_s_mm": 200,
+          "x_mm": 300,
+          "y_mm": 0,
+          "yaw_ddeg": 0,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "flags": 6,
+          "arrival_state_id": "A_DROP_1"
+        }
+      ],
+      "analysis": {
+        "planned_time_ms": 2000,
+        "total_length_mm": 200,
+        "max_speed_mmps": 200,
+        "max_accel_mmps2": 200,
+        "max_wz_ddegps": 0,
+        "max_beta_ddegps2": 0,
+        "max_wheel_rpm": 100,
+        "min_clearance_mm": 100,
+        "optimizer_seed": 0,
+        "optimizer_elapsed_ms": 0
+      },
+      "hashes": {
+        "self_hash32": "0x22222222"
+      },
+      "review": {
+        "approved": true,
+        "notes": "Phase2 synthetic fixture"
+      }
+    }
+  ]
+}

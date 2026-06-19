@@ -1,0 +1,40 @@
+{
+  "format": "HJMB_ROUTE_CASE_JSON_V40",
+  "storage_mode": "REFERENCED",
+  "path_source": "TASK_COMPILED",
+  "traj_id": 0,
+  "bean_code": 0,
+  "drop_code": 0,
+  "source_mapping": {},
+  "selected_plan": {
+    "route_family": "PICK_1_TO_3",
+    "vehicle_bin_assignment": {
+      "BIN_1": "YELLOW",
+      "BIN_2": "GREEN",
+      "BIN_3": "WHITE"
+    },
+    "drop_targets": [],
+    "unload_sequence": [],
+    "yaw_direction": "SHORTEST",
+    "locked_by_user": false
+  },
+  "manual_path": null,
+  "arrival_states": [],
+  "leg_refs": [],
+  "actions": {
+    "source": [],
+    "compiled": []
+  },
+  "finish": {},
+  "estimates": {
+    "planned_motion_time_ms": 0,
+    "planned_mechanism_time_ms": 0,
+    "planned_total_estimate_ms": 0
+  },
+  "hashes": {},
+  "review": {
+    "detached_from_library": false,
+    "approved": false,
+    "override_reason": ""
+  }
+}

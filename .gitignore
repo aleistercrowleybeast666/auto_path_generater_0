@@ -1,0 +1,50 @@
+# Python caches
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Test/type/lint caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Build and packaging outputs
+build/
+dist/
+release/
+*.egg-info/
+*.spec
+!packaging/*.spec
+
+# Runtime logs and temporary files
+*.log
+*.tmp
+*.bak
+*.swp
+~$*
+
+# HJMB generated outputs and caches
+/P[0-9][0-9][0-9][0-9].BIN
+/P[0-9][0-9][0-9][0-9].bin
+/P[0-9][0-9][0-9][0-9].json
+/bin/
+/cases/
+/portable/
+/reports/
+/cache/
+
+# Local IDE/workspace files
+.vscode/
+.idea/
+*.code-workspace
+
+# Local rendered reference images
+/pdf_page*.png

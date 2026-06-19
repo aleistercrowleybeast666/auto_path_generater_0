@@ -1,0 +1,1972 @@
+HJMB 搬运豆子机器人路径工程与执行文件协议 V4.0
+=================================================
+
+文档状态：正式设计稿
+协议版本：40
+JSON 版本：V40
+日期：2026-06-18
+适用范围：路径生成上位机、离线路段优化器、360 Case 编译器、BIN 编解码器；
+          STM32 固件后续按本协议实现运行时解析。
+
+V4.0 与 V3.5 及更早 JSON/BIN 不兼容，不要求静默迁移。
+旧工程只能作为人工参考，不得被 V4.0 编解码器当作合法输入。
+
+
+一、V4.0 的设计目标
+------------------
+
+V4.0 同时定义：
+
+1. 公共项目配置 project.json；
+2. traj_id.csv 的规范化映射 route_case_table.json；
+3. 可复用有向优化路段库 leg_library.json；
+4. cases/P0000.json ~ cases/P0359.json；
+5. 单条便携 Case JSON；
+6. bin/P0000.BIN ~ bin/P0359.BIN；
+7. 单条生成、全 360 条生成、验证、回读和报告规则；
+8. 固定起点、ARRIVAL 必停、机械动作 FIFO；
+9. 三种车体碰撞包络和 S 型拓扑约束；
+10. XY、yaw 和速度联合离线优化；
+11. 重复路段只优化一次并在多个 Case 中复用；
+12. 名义 4000×2000 mm 场地坐标，实际场地尺寸缩放由后续固件全局处理。
+
+关键原则：
+
+- BIN 中 vx/vy/wz 始终是准确期望前馈，不是速度上限；
+- START 和所有 ARRIVAL 的线速度、角速度均为 0；
+- 单纯速度或加速度过高必须通过降速求解，不能直接判“路径无解”；
+- 只有几何、固定边界、数值或业务约束本身矛盾时才允许规划失败；
+- 耗时规划只能由用户手动启动，编辑后只把结果标记为 STALE；
+- 360 个 traj_id 的映射以 traj_id.csv 为唯一权威来源；
+- 路段复用只属于上位机工程层，STM32 只读取拼接完成的 BIN。
+
+
+二、项目目录与文件名
+------------------
+
+推荐项目目录：
+
+    HJMB_Path_Project/
+    ├─ project.json
+    ├─ route_case_table.json
+    ├─ traj_id.csv
+    ├─ leg_library.json
+    ├─ cases/
+    │  ├─ P0000.json
+    │  ├─ P0001.json
+    │  ├─ ...
+    │  └─ P0359.json
+    ├─ bin/
+    │  ├─ P0000.BIN
+    │  ├─ P0001.BIN
+    │  ├─ ...
+    │  └─ P0359.BIN
+    ├─ portable/
+    │  └─ Pxxxx.portable.json
+    ├─ reports/
+    │  ├─ batch_summary.csv
+    │  ├─ validation_report.json
+    │  └─ optimization_log/
+    └─ cache/
+
+竞争 Case 文件名：
+
+    P0000.json ~ P0359.json
+    P0000.BIN  ~ P0359.BIN
+
+文件名中的数字必须与 traj_id 一致。
+
+单条生成：
+
+- 可以只生成当前选定的 Pxxxx.json 和 Pxxxx.BIN；
+- 可以额外导出 Pxxxx.portable.json；
+- 单条生成与批量生成同一 traj_id 时，最终 BIN 必须字节一致。
+
+批量生成：
+
+- 必须生成 cases/ 中 360 个 JSON；
+- 必须生成 bin/ 中 360 个 BIN；
+- 任一 Case 失败时不得写出未验证的 BIN；
+- 已验证文件必须原子写入，不留下半写文件。
+
+
+三、坐标、方向、单位和编号
+------------------------
+
+3.1 名义场地坐标
+~~~~~~~~~~~~~~~~
+
+名义场地：
+
+    长度 4000 mm
+    宽度 2000 mm
+
+以场地中心为世界坐标原点：
+
+    x ∈ [-2000, +2000]
+    y ∈ [-1000, +1000]
+
+约定：
+
+    车体 x 正方向：车头前方
+    车体 y 正方向：车体左方
+    z 正方向：上方
+    yaw=0°：车头面向取货区
+    yaw：右手系连续展开角
+
+实际场地如 4030×2004 mm 时，V4.0 JSON/BIN 仍保存名义场地轨迹。
+后续固件可以使用全局参数：
+
+    kx = actual_length_mm / 4000
+    ky = actual_width_mm  / 2000
+
+对 x/y/vx/vy 做仿射缩放，并把实际位姿逆变换回名义坐标计算路径进度。
+实际场地尺寸不重复写入 360 个 BIN。
+
+3.2 单位
+~~~~~~~~
+
+    x/y/s/距离                   mm
+    vx/vy/线速度                 mm/s
+    线加速度                     mm/s^2
+    yaw                          0.1 度，ddeg
+    wz                           ddeg/s
+    beta                         ddeg/s^2
+    时间                         ms
+    轮速                         rpm
+
+多字节字段使用 Little-Endian。
+所有 reserved 字段必须为 0。
+
+3.3 取货侧编号
+~~~~~~~~~~~~~~
+
+面对取货区，从左到右：
+
+    PICK_1
+    PICK_2
+    PICK_3
+
+PICK_2 的两种接近状态：
+
+    P_PICK_2L：从 PICK_1 一侧接近
+    P_PICK_2R：从 PICK_3 一侧接近
+
+固定取货到达状态：
+
+    P_PICK_1
+    P_PICK_2L
+    P_PICK_2R
+    P_PICK_3
+
+3.4 放货区物理位置
+~~~~~~~~~~~~~~~~~~
+
+规则中的五个物理位置：
+
+    F_DROP_4
+    F_DROP_5
+    F_DROP_6
+    F_DROP_7
+    F_DROP_8
+
+每个 Case 中，贴数字 1、2、3 的三个箱子是有效目标；数字 4、5 是空箱。
+三个有效目标按面对放货区从左到右重新排序为：
+
+    DROP_TARGET_1
+    DROP_TARGET_2
+    DROP_TARGET_3
+
+DROP_TARGET_1/2/3 是当前 Case 的空间顺序，不能与箱子贴纸数字 1/2/3 混用。
+
+3.5 车载暂存箱
+~~~~~~~~~~~~~~
+
+面对车尾，从左到右：
+
+    BIN_1
+    BIN_2
+    BIN_3
+
+单箱倒货名义 yaw：
+
+    BIN_1： +900 ddeg
+    BIN_2：    0 ddeg
+    BIN_3： -900 ddeg（显示时可等价为 2700 ddeg）
+
+内部必须使用连续展开角。例如持续顺时针：
+
+    +900 → 0 → -900
+
+允许倒货组合：
+
+    BIN_1
+    BIN_2
+    BIN_3
+    BIN_12
+    BIN_23
+
+禁止：
+
+    BIN_13
+    BIN_123
+
+BIN_12 和 BIN_23 的到达 yaw 必须由人工标定配置给出，程序不得猜测。
+同一物理放货点当前默认使用同一个人工设置 x/y；不同 unload_mask 主要改变 yaw 和动作码。
+接口上允许为各 unload_mask 配置 dx/dy 偏置，但默认必须为 0。
+
+
+四、traj_id.csv 与 360 Case 映射
+-------------------------------
+
+traj_id.csv 是唯一权威来源。
+
+总体关系：
+
+    bean_code：0~5
+    drop_code：0~59
+    traj_id = bean_code * 60 + drop_code
+
+程序必须验证：
+
+1. CSV 恰好 360 行；
+2. traj_id 恰好覆盖 0~359；
+3. 文件名与 traj_id 一致；
+4. bean_code 每个值恰好出现 60 次；
+5. 每个 bean_code 下 drop_code 恰好覆盖 0~59；
+6. 每行数字 1~5 在 F_DROP_4~F_DROP_8 中各出现一次；
+7. 数字 1=黄豆目标箱，2=绿豆目标箱，3=白芸豆目标箱；
+8. 数字 4、5 都是空箱，业务上等价；
+9. 不允许在其他源文件中再硬编码第二套 traj_id 映射。
+
+bean_code 的六种取货豆种排列必须原样保留 CSV 含义。
+route_case_table.json 必须保存 CSV 原始字段和每行源哈希，便于追溯。
+
+
+五、任务拓扑和路线族
+------------------
+
+5.1 取货宏路线
+~~~~~~~~~~~~~~
+
+自动生成只考虑两种合法宏路线：
+
+ROUTE_FAMILY_PICK_1_TO_3：
+
+    START
+      → P_PICK_1
+      → P_PICK_2L
+      → P_PICK_3
+      → 进入放货区 DROP_TARGET_3 一侧
+
+ROUTE_FAMILY_PICK_3_TO_1：
+
+    START
+      → P_PICK_3
+      → P_PICK_2R
+      → P_PICK_1
+      → 进入放货区 DROP_TARGET_1 一侧
+
+其他取货顺序不作为自动候选。
+
+5.2 放货扫掠
+~~~~~~~~~~~~
+
+优先保持车体持续同方向旋转：
+
+- PICK_1_TO_3 对应 DROP_TARGET_3 → DROP_TARGET_2 → DROP_TARGET_1；
+- PICK_3_TO_1 对应 DROP_TARGET_1 → DROP_TARGET_2 → DROP_TARGET_3。
+
+放货到达状态由以下内容共同决定：
+
+- 物理位置 F_DROP_4~F_DROP_8；
+- 当前 Case 的目标豆种；
+- unload_mask；
+- 人工标定 yaw；
+- 连续展开方向；
+- 可选 dx/dy 偏置。
+
+5.3 同时倒两个
+~~~~~~~~~~~~~~
+
+BIN_12/BIN_23 是任务编译阶段的离散候选，会改变：
+
+- 停车次数；
+- 到达位姿；
+- 前后有向路段；
+- 机械动作时间；
+- 总时间。
+
+不得先规划单箱路径，再只替换动作码。
+
+任务编译器可以比较少量合法方案：
+
+    estimated_total_time
+      = Σ planned_motion_time
+      + Σ mechanism_estimated_time
+      + Σ post_wait_time
+
+mechanism_estimated_time 仅用于离线方案比较，不代替固件机械模块 DONE。
+用户必须能锁定某个方案。
+
+5.4 S 型绕障拓扑
+~~~~~~~~~~~~~~~~
+
+规则要求货物按规定方式绕过两个圆柱形成 S 型。
+V4.0 使用“有序虚拟门”约束拓扑：
+
+- 虚拟门只存在于 project.json/leg_library.json；
+- 虚拟门不是机械 Gate，不写入 BIN；
+- 优化器可以改变穿门位置和曲线形状；
+- 优化器不得改变门顺序和规定绕行侧。
+
+
+六、公共项目 JSON：project.json
+------------------------------
+
+格式：
+
+    HJMB_PATH_PROJECT_JSON_V40
+
+project.json 保存人工公共配置，不保存 360 条最终节点。
+
+必需顶层字段：
+
+    format
+    project_id
+    protocol_version
+    nominal_field
+    coordinate_system
+    site_pose_provider
+    sites
+    field_objects
+    vehicle
+    dynamics
+    unload_profiles
+    topology_profiles
+    action_profiles
+    planner_profiles
+    start_check
+    arrival_check
+    finish_policy
+    output
+    traj_table
+
+6.1 点位来源
+~~~~~~~~~~~~
+
+当前唯一正式实现：
+
+    "site_pose_provider": {"type": "MANUAL"}
+
+程序内部应通过统一 SitePoseProvider 接口取点。
+可以预留但不得伪装成已实现：
+
+    LIDAR
+    VISION
+    HYBRID
+
+6.2 sites
+~~~~~~~~~
+
+至少包括：
+
+    P_START
+    P_PICK_1
+    P_PICK_2L
+    P_PICK_2R
+    P_PICK_3
+    F_DROP_4
+    F_DROP_5
+    F_DROP_6
+    F_DROP_7
+    F_DROP_8
+
+P_START 和取货状态保存 x/y/yaw。
+F_DROP_4~8 当前保存统一 x/y，yaw 由 unload_profiles 和 Case 连续展开决定。
+
+6.3 field_objects
+~~~~~~~~~~~~~~~~~
+
+至少包括：
+
+- PICK_BOX_1、PICK_BOX_2、PICK_BOX_3 的矩形位置和尺寸；
+- DROP_BOX_4~DROP_BOX_8 的矩形位置和尺寸；
+- CYLINDER_1、CYLINDER_2 的中心和半径；
+- 场地边界。
+
+6.4 vehicle
+~~~~~~~~~~~
+
+必须包含：
+
+    footprint.r_large_mm
+    footprint.r_small_mm
+    footprint.arc_segments
+    footprint.collision_resolution_mm
+    wheel.radius_mm
+    wheel.rotation_radius_mm
+    wheel.plan_limit_rpm
+    wheel.hard_limit_rpm
+
+三种等效包络：
+
+- 圆柱障碍：完整大圆；
+- 放货区箱子：小圆；
+- 取货区箱子：大圆与 u<=R_small 半平面的交集。
+
+取货圆缺：
+
+    u²+v² <= R_large²
+    u <= R_small
+
+弦：
+
+    u = R_small
+
+6.5 dynamics
+~~~~~~~~~~~~
+
+至少包含：
+
+    max_speed_mmps
+    linear_accel_mmps2
+    braking_accel_mmps2
+    lateral_accel_mmps2
+    max_wz_ddegps
+    angular_accel_moving_ddegps2
+    angular_accel_rotate_ddegps2
+    dynamic_margin_ratio
+
+6.6 unload_profiles
+~~~~~~~~~~~~~~~~~~~
+
+每个 unload_mask 保存：
+
+    yaw_ddeg
+    dx_mm
+    dy_mm
+    estimated_action_time_ms
+
+BIN_1/BIN_2/BIN_3 默认 yaw 分别为 +900/0/-900 ddeg。
+BIN_12/BIN_23 必须人工填写 yaw。
+dx/dy 默认 0。
+
+6.7 project.json 示例骨架
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+{
+  "format": "HJMB_PATH_PROJECT_JSON_V40",
+  "project_id": "bean_robot_2026",
+  "protocol_version": 40,
+  "nominal_field": {"length_mm": 4000, "width_mm": 2000},
+  "coordinate_system": {
+    "origin": "FIELD_CENTER",
+    "yaw_zero": "ROBOT_FRONT_TO_PICK_AREA",
+    "yaw_positive": "RIGHT_HAND_Z"
+  },
+  "site_pose_provider": {"type": "MANUAL"},
+  "sites": {
+    "P_START":   {"x_mm": 0, "y_mm": 0, "yaw_ddeg": 0},
+    "P_PICK_1":  {"x_mm": 0, "y_mm": 0, "yaw_ddeg": 0},
+    "P_PICK_2L": {"x_mm": 0, "y_mm": 0, "yaw_ddeg": 0},
+    "P_PICK_2R": {"x_mm": 0, "y_mm": 0, "yaw_ddeg": 0},
+    "P_PICK_3":  {"x_mm": 0, "y_mm": 0, "yaw_ddeg": 0},
+    "F_DROP_4":  {"x_mm": 0, "y_mm": 0},
+    "F_DROP_5":  {"x_mm": 0, "y_mm": 0},
+    "F_DROP_6":  {"x_mm": 0, "y_mm": 0},
+    "F_DROP_7":  {"x_mm": 0, "y_mm": 0},
+    "F_DROP_8":  {"x_mm": 0, "y_mm": 0}
+  },
+  "vehicle": {
+    "footprint": {
+      "r_large_mm": 0,
+      "r_small_mm": 0,
+      "arc_segments": 48,
+      "collision_resolution_mm": 2
+    },
+    "wheel": {
+      "radius_mm": 0,
+      "rotation_radius_mm": 0,
+      "plan_limit_rpm": 0,
+      "hard_limit_rpm": 0
+    }
+  },
+  "unload_profiles": {
+    "BIN_1":  {"yaw_ddeg": 900,  "dx_mm": 0, "dy_mm": 0},
+    "BIN_2":  {"yaw_ddeg": 0,    "dx_mm": 0, "dy_mm": 0},
+    "BIN_3":  {"yaw_ddeg": -900, "dx_mm": 0, "dy_mm": 0},
+    "BIN_12": {"yaw_ddeg": 0,    "dx_mm": 0, "dy_mm": 0},
+    "BIN_23": {"yaw_ddeg": 0,    "dx_mm": 0, "dy_mm": 0}
+  },
+  "traj_table": {
+    "source_csv": "traj_id.csv",
+    "expected_case_count": 360
+  }
+}
+
+完整实现必须补全 dynamics、field_objects、topology_profiles、action_profiles、
+planner_profiles、检查容差、finish_policy 和 output。
+
+
+七、Case 映射 JSON：route_case_table.json
+---------------------------------------
+
+格式：
+
+    HJMB_ROUTE_CASE_TABLE_JSON_V40
+
+结构：
+
+{
+  "format": "HJMB_ROUTE_CASE_TABLE_JSON_V40",
+  "source_csv": "traj_id.csv",
+  "source_csv_sha256": "...",
+  "case_count": 360,
+  "cases": [
+    {
+      "traj_id": 0,
+      "file_name": "P0000.BIN",
+      "bean_code": 0,
+      "drop_code": 0,
+      "pick_assignment": {
+        "PICK_1": "YELLOW",
+        "PICK_2": "GREEN",
+        "PICK_3": "WHITE"
+      },
+      "label_positions": {
+        "1": "F_DROP_4",
+        "2": "F_DROP_5",
+        "3": "F_DROP_6",
+        "4": "F_DROP_7",
+        "5": "F_DROP_8"
+      },
+      "source_row_hash": "..."
+    }
+  ]
+}
+
+本文件只表示抽签结果，不保存最终路线选择和曲线。
+
+
+八、可复用路段库 JSON：leg_library.json
+-------------------------------------
+
+格式：
+
+    HJMB_LEG_LIBRARY_JSON_V40
+
+leg_library.json 保存重复使用的有向优化路段。
+
+8.1 路段唯一键
+~~~~~~~~~~~~~~
+
+唯一性必须包含：
+
+    from_state_key
+    to_state_key
+    from_pose
+    to_pose
+    route_family
+    topology_profile
+    footprint_profile_hash
+    dynamics_profile_hash
+    field_geometry_hash
+    planner_version
+    optional load/mechanism state
+
+只使用 from_site→to_site 作为键是不合法的。
+
+8.2 每条 leg 必需字段
+~~~~~~~~~~~~~~~~~~~~~
+
+    leg_id
+    key
+    state
+    source
+    topology_profile
+    control_points
+    yaw_profile
+    nodes
+    analysis
+    hashes
+    review
+
+state：
+
+    VALID
+    STALE
+    FAILED
+    MANUAL_OVERRIDE
+
+nodes 为局部节点，local_s_mm 从 0 开始，至少包含：
+
+    local_s_mm
+    x_mm
+    y_mm
+    yaw_ddeg
+    vx_mmps
+    vy_mmps
+    wz_ddegps
+    flags
+
+analysis 至少包含：
+
+    planned_time_ms
+    total_length_mm
+    max_speed_mmps
+    max_accel_mmps2
+    max_wz_ddegps
+    max_beta_ddegps2
+    max_wheel_rpm
+    min_clearance_mm
+    optimizer_seed
+    optimizer_elapsed_ms
+
+8.3 yaw_profile
+~~~~~~~~~~~~~~~
+
+V4.0 推荐“双低速窗口单调 yaw”模型：
+
+    model = "TWO_LOW_SPEED_WINDOWS"
+    direction = "CW_ONLY" / "CCW_ONLY" / "SHORTEST"
+    alpha
+    start_window_end_s_mm
+    finish_window_start_s_mm
+
+起步窗口承担 alpha 比例的角度，末端窗口承担剩余角度。
+每个窗口使用五次平滑函数，起终点 wz=0。
+
+允许以后增加：
+
+    MONOTONIC_BSPLINE
+
+但未知模型必须拒绝，不得静默降级。
+
+8.4 示例骨架
+~~~~~~~~~~~~
+
+{
+  "format": "HJMB_LEG_LIBRARY_JSON_V40",
+  "planner_version": "4.0.0",
+  "project_hash": "...",
+  "legs": [
+    {
+      "leg_id": "LEG_0001",
+      "state": "VALID",
+      "key": {
+        "from_state_key": "P_START@0",
+        "to_state_key": "P_PICK_1@0",
+        "route_family": "PICK_1_TO_3",
+        "topology_profile": "S_LTR_A"
+      },
+      "control_points": [],
+      "yaw_profile": {
+        "model": "TWO_LOW_SPEED_WINDOWS",
+        "direction": "CW_ONLY",
+        "alpha": 0.5,
+        "start_window_end_s_mm": 0,
+        "finish_window_start_s_mm": 0
+      },
+      "nodes": [],
+      "analysis": {},
+      "hashes": {},
+      "review": {"approved": false, "notes": ""}
+    }
+  ]
+}
+
+
+九、每条路径 JSON：cases/Pxxxx.json
+----------------------------------
+
+格式：
+
+    HJMB_ROUTE_CASE_JSON_V40
+
+9.1 两种存储模式
+~~~~~~~~~~~~~~~~
+
+    REFERENCED：引用 leg_library.json，不重复嵌入节点；
+    EMBEDDED：便携单条导出，在 embedded_legs 中嵌入全部依赖路段。
+
+cases/ 目录默认使用 REFERENCED。
+portable/Pxxxx.portable.json 使用 EMBEDDED。
+
+9.2 必需内容
+~~~~~~~~~~~~
+
+    format
+    storage_mode
+    traj_id
+    bean_code
+    drop_code
+    source_mapping
+    selected_plan
+    arrival_states
+    leg_refs
+    actions
+    finish
+    estimates
+    hashes
+    review
+
+selected_plan 至少包含：
+
+    route_family
+    vehicle_bin_assignment
+    drop_targets
+    unload_sequence
+    yaw_direction
+    locked_by_user
+
+arrival_states 中每个状态至少包含：
+
+    state_id
+    type = PICK / DROP
+    site_key 或 physical_drop_site
+    x_mm
+    y_mm
+    yaw_ddeg（连续展开）
+    unload_mask（DROP 才有）
+    bean_type
+
+leg_refs 按执行顺序引用：
+
+    from_state_id
+    to_state_id
+    leg_id
+    expected_leg_hash
+
+9.3 动作源配置与编译结果
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+Case JSON 保存人工/任务编译动作源：
+
+    actions.source[]
+
+不允许人工保存 check_start_s_mm。
+
+生成结果可以保存只读派生信息：
+
+    actions.compiled[]
+
+compiled 中允许包含：
+
+    arrival_id
+    check_start_s_mm
+    auto_execution_hint
+
+编译 BIN 时必须重新验证，不得盲信旧 compiled 值。
+
+9.4 Case 示例骨架
+~~~~~~~~~~~~~~~~~
+
+{
+  "format": "HJMB_ROUTE_CASE_JSON_V40",
+  "storage_mode": "REFERENCED",
+  "traj_id": 0,
+  "bean_code": 0,
+  "drop_code": 0,
+  "source_mapping": {},
+  "selected_plan": {
+    "route_family": "PICK_1_TO_3",
+    "vehicle_bin_assignment": {
+      "BIN_1": "YELLOW",
+      "BIN_2": "GREEN",
+      "BIN_3": "WHITE"
+    },
+    "unload_sequence": [],
+    "yaw_direction": "CW_ONLY",
+    "locked_by_user": false
+  },
+  "arrival_states": [],
+  "leg_refs": [],
+  "actions": {
+    "source": [],
+    "compiled": []
+  },
+  "finish": {},
+  "estimates": {
+    "planned_motion_time_ms": 0,
+    "planned_mechanism_time_ms": 0,
+    "planned_total_estimate_ms": 0
+  },
+  "hashes": {},
+  "review": {
+    "detached_from_library": false,
+    "approved": false,
+    "override_reason": ""
+  }
+}
+
+9.5 人工覆盖
+~~~~~~~~~~~~
+
+人工修改某个 Case 的曲线后：
+
+    detached_from_library = true
+
+必须保存 override_reason。
+后续批量重生成不得静默覆盖，必须让用户选择：
+
+- 保留覆盖；
+- 恢复公共路段；
+- 另存新方案。
+
+
+十、碰撞与连续验证要求
+--------------------
+
+10.1 圆柱障碍
+~~~~~~~~~~~~~
+
+禁入半径：
+
+    R_large + R_cylinder
+
+10.2 放货箱
+~~~~~~~~~~~
+
+使用小圆包络与矩形箱体做 Minkowski 膨胀。
+当前目标箱允许按明确到达状态靠近，但不能简单关闭全部碰撞检查。
+
+10.3 取货箱
+~~~~~~~~~~~
+
+使用旋转后的圆缺凸包：
+
+    u²+v² <= R_large²
+    u <= R_small
+
+10.4 连续段
+~~~~~~~~~~~
+
+不能只检查节点。
+对相邻采样递归细分，直到：
+
+    平移距离 + R_large * abs(delta_yaw_rad)
+      <= collision_resolution_mm
+
+相切可视为合法，但内部使用小的数值容差避免浮点抖动。
+
+10.5 场地误差
+~~~~~~~~~~~~~
+
+V4.0 名义路径应有足够裕度。
+实际场地最多约 1% 的长宽差异由固件仿射缩放处理；上位机不因此重新优化。
+
+
+十一、规划器行为要求
+------------------
+
+11.1 手动启动
+~~~~~~~~~~~~~
+
+修改点位、控制点、yaw、车辆、动力学、动作或公共配置后：
+
+- 只刷新人工图形；
+- 将相关 leg/case 标记为 STALE；
+- 禁止导出旧 BIN；
+- 不得自动运行几何、碰撞、速度或优化。
+
+用户必须点击：
+
+    快速预览
+    标准优化
+    最终优化
+    仅重新计算速度
+    生成当前
+    生成全部
+
+11.2 时间最优目标
+~~~~~~~~~~~~~~~~~
+
+主要目标：
+
+    minimize planned_motion_time
+
+任务方案比较可以加入机械预计时间：
+
+    minimize planned_total_estimate
+
+能量不作为优化目标。
+
+11.3 稳健速度规划
+~~~~~~~~~~~~~~~~~
+
+使用 z=v² 做可达/可控传播：
+
+    z[i+1] = z[i] + 2*a_t[i]*ds
+
+约束：
+
+    v <= max_speed
+    v²*abs(kappa) <= lateral_accel_limit
+    sqrt(a_t²+a_n²) <= linear_accel_limit
+    abs(q*v) <= max_wz
+    abs(q*a_t + q_prime*v²) <= max_beta
+    每个麦轮 rpm <= plan_limit
+    START/ARRIVAL v=0
+
+算法必须单调收紧速度包络。
+当前候选速度不可行时应降速、反向传播或细分，不得立刻报错。
+
+允许规划失败的结构性原因：
+
+- 零长度或重复固定端点造成不可定义几何；
+- 曲率、q、q_prime 为 NaN/Inf；
+- 同一固定位置要求互相矛盾的姿态；
+- 碰撞或拓扑门不可满足；
+- 约束参数非法；
+- 降到零仍存在数值/几何矛盾。
+
+11.4 路段优化和复用
+~~~~~~~~~~~~~~~~~~~
+
+先编译全部 Case，再收集唯一有向状态转换。
+只优化缺失或过期 leg。
+
+推荐时间预算：
+
+- 快速预览：5~15 s；
+- 标准优化：30~60 s；
+- 最终优化：单条完整路径或关键路段最多约 5 min；
+- 全 360 条通过复用目标约 15 min。
+
+优化必须支持固定 seed 和取消。
+
+
+十二、BIN 文件总体结构
+--------------------
+
+V4.0 BIN：
+
+    +------------------------------------------+
+    | BeanTrajectoryHeaderV40_t       104 bytes|
+    +------------------------------------------+
+    | BeanTrajectoryNodeV40_t[]        16 bytes|
+    +------------------------------------------+
+    | BeanTrajectorySegmentV40_t[]     24 bytes|
+    +------------------------------------------+
+    | BeanMechanicalActionV40_t[]      22 bytes|
+    +------------------------------------------+
+
+    file_size = 104
+              + node_count*16
+              + segment_count*24
+              + action_count*22
+
+限制：
+
+    traj_id          0~359
+    bean_code        0~5
+    drop_code        0~59
+    node_count       2~2500
+    segment_count    1~64
+    action_count     0~64
+    arrival_count    1~32
+    total_length     0~65535 mm
+
+
+十三、HeaderV40：104 bytes
+------------------------
+
+#pragma pack(push, 1)
+
+typedef struct
+{
+    char     magic[4];                    // "HJMB"
+    uint8_t  version;                     // 40
+    uint8_t  header_size;                 // 104
+    uint8_t  node_size;                   // 16
+    uint8_t  segment_size;                // 24
+
+    uint8_t  action_size;                 // 22
+    uint8_t  route_family;                // ROUTE_FAMILY_*
+    uint8_t  finish_mode;                 // FINISH_MODE_*
+    uint8_t  reserved_u8;                 // 0
+
+    uint16_t traj_id;                     // 0~359
+    uint16_t flags;                       // FILE_FLAG_*
+    uint8_t  bean_code;                   // 0~5
+    uint8_t  drop_code;                   // 0~59
+
+    uint16_t field_width_mm;              // 4000
+    uint16_t field_height_mm;             // 2000
+    uint16_t nominal_spacing_mm;          // 1~50，建议 25
+    uint16_t node_count;                  // 2~2500
+    uint16_t segment_count;               // 1~64
+
+    uint8_t  action_count;                // 0~64
+    uint8_t  arrival_count;               // 1~32
+    uint16_t reserved0;                   // 0
+
+    uint32_t file_crc32;                  // 计算时本字段置 0
+    uint32_t node_offset;                 // 104
+    uint32_t segment_offset;              // node_offset + node_count*16
+    uint32_t action_offset;               // segment_offset + segment_count*24
+
+    uint32_t total_length_mm;
+    uint32_t planned_motion_time_ms;      // 底盘运动时间
+    uint32_t planned_total_estimate_ms;   // 仅诊断，不用于动作完成
+    uint32_t source_case_hash32;
+    uint32_t source_project_hash32;
+
+    uint16_t start_pos_tolerance_mm;
+    uint16_t start_yaw_tolerance_ddeg;
+    uint16_t start_stable_time_ms;
+
+    uint16_t arrival_pos_tolerance_mm;
+    uint16_t arrival_yaw_tolerance_ddeg;
+    uint16_t arrival_speed_tolerance_mmps;
+    uint16_t arrival_wz_tolerance_ddegps;
+    uint16_t arrival_stable_time_ms;
+
+    uint8_t  finish_axis;                 // 0=X, 1=Y
+    int8_t   finish_direction;            // +1 或 -1
+    int16_t  finish_line_mm;
+    uint16_t finish_envelope_margin_mm;
+    uint16_t finish_stable_time_ms;
+    uint16_t finish_brake_accel_mmps2;
+    uint16_t finish_max_runout_mm;
+    uint16_t finish_hard_timeout_ms;
+    uint16_t finish_signal_flags;
+
+    uint32_t reserved1;                   // 0
+} BeanTrajectoryHeaderV40_t;
+
+#pragma pack(pop)
+
+Python struct：
+
+    <4sBBBBBBBBHHBBHHHHHBBHIIIIIIIIIHHHHHHHHBbhHHHHHHI
+
+结构大小必须为 104 bytes。
+
+13.1 route_family
+~~~~~~~~~~~~~~~~~
+
+#define ROUTE_FAMILY_MANUAL_FREE       0x00U
+#define ROUTE_FAMILY_PICK_1_TO_3       0x01U
+#define ROUTE_FAMILY_PICK_3_TO_1       0x02U
+
+13.2 finish_mode
+~~~~~~~~~~~~~~~~
+
+#define FINISH_MODE_AT_FINAL_DROP              0x00U
+#define FINISH_MODE_RESERVED_OLD_HALF_PLANE    0x01U
+
+13.3 Header flags
+~~~~~~~~~~~~~~~~~
+
+#define FILE_FLAG_SPATIAL_TRAJECTORY      0x0001U
+#define FILE_FLAG_WORLD_VELOCITY          0x0002U
+#define FILE_FLAG_FIXED_DIRECT_START      0x0004U
+#define FILE_FLAG_ARRIVAL_ALWAYS_STOP     0x0008U
+#define FILE_FLAG_ACTION_STATUS_REQUIRED  0x0010U
+#define FILE_FLAG_SEGMENT_TABLE_PRESENT   0x0020U
+#define FILE_FLAG_FINISH_POLICY_PRESENT   0x0040U
+#define FILE_FLAG_CASE_METADATA_PRESENT   0x0080U
+#define FILE_FLAG_RUNTIME_FIELD_SCALE     0x0100U
+#define FILE_FLAG_MANUAL_OVERRIDE         0x0200U
+
+V4.0 必须设置前九项中的：
+
+    SPATIAL_TRAJECTORY
+    WORLD_VELOCITY
+    FIXED_DIRECT_START
+    ARRIVAL_ALWAYS_STOP
+    ACTION_STATUS_REQUIRED
+    SEGMENT_TABLE_PRESENT
+    FINISH_POLICY_PRESENT
+    CASE_METADATA_PRESENT
+    RUNTIME_FIELD_SCALE
+
+MANUAL_OVERRIDE 仅人工脱离路段库的 Case 设置。
+
+13.4 finish_signal_flags
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+#define FINISH_SIGNAL_LED       0x0001U
+#define FINISH_SIGNAL_BUZZER    0x0002U
+#define FINISH_SIGNAL_HOST      0x0004U
+
+
+十四、NodeV40：16 bytes
+---------------------
+
+#pragma pack(push, 1)
+
+typedef struct
+{
+    uint16_t s_mm;
+    int16_t  x_mm;
+    int16_t  y_mm;
+    int16_t  yaw_ddeg;
+    int16_t  vx_mmps;
+    int16_t  vy_mmps;
+    int16_t  wz_ddegps;
+    uint8_t  arrival_id;
+    uint8_t  flags;
+} BeanTrajectoryNodeV40_t;
+
+#pragma pack(pop)
+
+Python struct：
+
+    <HhhhhhhBB
+
+结构大小必须为 16 bytes。
+
+节点 flags：
+
+#define TRAJ_FLAG_START        0x01U
+#define TRAJ_FLAG_ARRIVAL      0x02U
+#define TRAJ_FLAG_EXACT_PASS   0x04U
+#define TRAJ_FLAG_FINISH_ARM   0x08U
+#define TRAJ_FLAG_SAFE_END     0x10U  // Phase7 reserved; formal V4.0 output must keep this bit 0.
+
+0x20~0x80 保留。
+
+节点规则：
+
+1. 第 0 节点必须 s=0 且设置 START；
+2. START 唯一，vx/vy/wz=0，arrival_id=0xFF；
+3. 所有 ARRIVAL 必须精确经过，vx/vy/wz=0；
+4. arrival_id 按路径顺序连续为 0~arrival_count-1；
+5. 非 ARRIVAL 节点 arrival_id=0xFF；
+6. FINISH_ARM 全文件恰好一个；
+7. 最后一个节点必须设置 FINISH_ARM，且必须同时是最终放货 ARRIVAL、vx/vy/wz=0；
+8. SAFE_END 为保留位，正式 V4.0 输出必须为 0；
+9. yaw 保存连续展开角，不使用 0xFF 哨兵；
+10. 任意相邻节点距离不得超过 max_spacing_mm；
+11. 相邻 yaw 变化建议不超过 3°；
+12. s_mm 必须单调不减，除同一物理边界去重前不得重复。
+
+
+十五、SegmentV40：24 bytes
+------------------------
+
+#pragma pack(push, 1)
+
+typedef struct
+{
+    uint16_t segment_id;
+    uint16_t start_node_index;
+    uint16_t end_node_index;
+    uint16_t start_s_mm;
+    uint16_t end_s_mm;
+
+    uint8_t  start_arrival_id;          // START 为 0xFF
+    uint8_t  end_arrival_id;            // 非 ARRIVAL 安全终点为 0xFF
+    uint8_t  flags;
+    uint8_t  reserved0;
+
+    uint32_t planned_time_ms;
+    uint32_t source_leg_hash32;
+    uint16_t reserved1;
+} BeanTrajectorySegmentV40_t;
+
+#pragma pack(pop)
+
+Python struct：
+
+    <HHHHHBBBBIIH
+
+结构大小必须为 24 bytes。
+
+Segment flags：
+
+#define SEGMENT_FLAG_NORMAL            0x01U
+#define SEGMENT_FLAG_FINISH_CLEAR      0x02U  // Phase7 reserved; formal V4.0 output must keep this bit 0.
+#define SEGMENT_FLAG_LIBRARY_REUSED    0x04U
+#define SEGMENT_FLAG_MANUAL_OVERRIDE   0x08U
+#define SEGMENT_FLAG_OPTIMIZED         0x10U
+
+规则：
+
+1. segment_id 从 0 连续递增；
+2. start_node_index/end_node_index 合法且 start<=end；
+3. start_s/end_s 必须等于对应节点；
+4. 相邻 Segment 共享一个边界节点，不在 Node 表复制；
+5. planned_time_ms 之和等于 Header.planned_motion_time_ms，允许整数化 1 ms 误差；
+6. FINISH_CLEAR 为保留位，正式 V4.0 输出必须为 0；
+7. source_leg_hash32 只用于诊断和追溯，固件不得依赖上位机 leg_library。
+
+
+十六、ActionV40：22 bytes
+-----------------------
+
+#pragma pack(push, 1)
+
+typedef struct
+{
+    uint8_t  action_seq;
+    uint8_t  action;
+    uint8_t  mode;
+    uint8_t  arrival_id;
+
+    uint16_t timeout_ms;
+    uint16_t post_wait_ms;
+    uint16_t check_start_s_mm;
+
+    uint16_t accel_limit_mmps2;
+    uint16_t beta_limit_ddegps2;
+    uint16_t wz_limit_ddegps;
+    uint16_t speed_limit_mmps;
+    uint16_t stable_time_ms;
+    uint16_t reserved;
+} BeanMechanicalActionV40_t;
+
+#pragma pack(pop)
+
+Python struct：
+
+    <BBBBHHHHHHHHH
+
+结构大小必须为 22 bytes。
+
+16.1 动作编号
+~~~~~~~~~~~~~
+
+#define PATH_ACT_NONE                 0x00U
+#define PATH_ACT_PREP_PICK_1          0x11U
+#define PATH_ACT_PREP_PICK_2L         0x12U
+#define PATH_ACT_PREP_PICK_2R         0x13U
+#define PATH_ACT_PREP_PICK_3          0x14U
+#define PATH_ACT_PICK                 0x20U
+#define PATH_ACT_DROP_1               0x31U
+#define PATH_ACT_DROP_2               0x32U
+#define PATH_ACT_DROP_3               0x33U
+#define PATH_ACT_DROP_12              0x34U
+#define PATH_ACT_DROP_23              0x35U
+#define PATH_ACT_STORE                0x40U
+#define PATH_ACT_PREP_STORE_1         0x41U
+#define PATH_ACT_PREP_STORE_2         0x42U
+#define PATH_ACT_PREP_STORE_3         0x43U
+
+16.2 动作模式
+~~~~~~~~~~~~~
+
+#define ACTION_MODE_STOP_AND_WAIT     0x00U
+#define ACTION_MODE_ASYNC             0x01U
+#define ACTION_MODE_KINEMATIC         0x02U
+
+16.3 STOP_AND_WAIT
+~~~~~~~~~~~~~~~~~~
+
+- arrival_id 合法；
+- check_start_s_mm=0xFFFF；
+- 四种运动限制和 stable_time=0；
+- ARRIVAL 确认后按 FIFO 启动；
+- 机械模块 DONE + post_wait 完成前不得离开。
+
+16.4 ASYNC
+~~~~~~~~~~
+
+- arrival_id=0xFF；
+- check_start_s_mm=0xFFFF；
+- 四种运动限制和 stable_time=0；
+- 成为 FIFO 队首且机械模块空闲后立即启动；
+- 不主动阻塞底盘；
+- FIFO 必须等 DONE + post_wait 后才能取下一动作。
+
+16.5 KINEMATIC
+~~~~~~~~~~~~~~
+
+- arrival_id=0xFF；
+- check_start_s_mm 由生成器自动计算；
+- 至少一个运动限制非 0；
+- stable_time_ms>0；
+- 用户不得填写人工窗口；
+- 没有 expire_s 或 missed-window；
+- 成为 FIFO 队首、s>=check_start_s、实际条件连续稳定后启动。
+
+实际条件：
+
+    actual_accel_xy <= accel_limit       （0 忽略）
+    abs(actual_beta_z) <= beta_limit     （0 忽略）
+    abs(actual_wz) <= wz_limit           （0 忽略）
+    actual_speed <= speed_limit          （0 忽略）
+
+V4.0 路径文件只定义启动前条件。
+动作 ACTIVE 期间的底盘安全策略留给后续固件实现。
+
+16.6 完成与超时
+~~~~~~~~~~~~~~~
+
+机械模块至少返回：
+
+    IDLE
+    BUSY
+    DONE
+    ERROR
+
+规则：
+
+- timeout 从 start() 返回 ACCEPTED 后开始；
+- 等待队首、等待 s、等待稳定条件时不计 timeout；
+- DONE 是正常完成主要依据；
+- post_wait_ms 是 DONE 后额外硬等待；
+- ERROR 或超时进入路径故障；
+- END 前 FIFO 必须为空。
+
+
+十七、ARRIVAL 离开锁
+------------------
+
+若 STOP_AND_WAIT 动作引用某 arrival_id，则该 ARRIVAL 自动形成离开锁：
+
+    departure_action_seq[arrival_id]
+      = max(同 arrival_id 的 STOP_AND_WAIT.action_seq)
+
+离开条件：
+
+    completed_action_seq >= departure_action_seq[arrival_id]
+
+严格 FIFO 同时保证所有更早 ASYNC/KINEMATIC 已完成。
+不在 BIN 额外保存 completion barrier。
+
+STOP_AND_WAIT 的 arrival_id 按 action_seq 必须非递减。
+
+
+十八、KINEMATIC 自动开始点
+------------------------
+
+18.1 搜索下界
+~~~~~~~~~~~~~
+
+前序最后一个 STOP_AND_WAIT 所绑定 ARRIVAL 的 global_s；若不存在则为 0。
+
+18.2 规划值扫描
+~~~~~~~~~~~~~~~
+
+从下界开始扫描：
+
+    planned_speed
+    planned_accel_xy
+    planned_wz
+    planned_beta_z
+
+找到第一个所有启用条件连续满足 stable_time_ms 的区间：
+
+    check_start_s_mm = 区间起点
+
+18.3 停车兜底
+~~~~~~~~~~~~~
+
+若运动段找不到：
+
+- 使用下界后的第一个 ARRIVAL；
+- 没有则使用后续第一个 ARRIVAL；若已到最后则使用最终放货 ARRIVAL；
+- 给出“预计停车执行”警告；
+- 不视为路径规划失败。
+
+编译完成后 Case JSON 可保存只读结果，但 BIN 生成时必须重算和验证。
+
+
+十九、完赛与安全停车策略
+----------------------
+
+V4.0 把“裁判完赛判定”和“物理安全停车”分开。
+
+19.1 Reserved legacy FINISH_MODE_AT_SAFE_END
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+旧 SAFE_END 完赛模式在 Phase7 正式 V4.0 输出中保留为历史说明；编码器必须拒绝生成。
+
+19.2 Reserved legacy FINISH_MODE_HALF_PLANE_THEN_SAFE_BRAKE
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+条件：
+
+1. 已通过唯一 FINISH_ARM 节点；
+2. 所有必需机械动作完成；
+3. 机器人最不利可移动包络按 finish_envelope_margin 完全越过指定半平面；
+4. 条件连续满足 finish_stable_time_ms。
+
+成立后：
+
+- 立即按 finish_signal_flags 发出完成提示；
+- 底盘继续执行预定安全制动；
+- Phase7 正式 V4.0 输出不得生成 SAFE_END；
+- 超过 finish_max_runout 或 finish_hard_timeout 时强制安全停车。
+
+半平面：
+
+    axis = X 或 Y
+    direction = +1 或 -1
+    coordinate * direction
+      >= finish_line_mm * direction + envelope_margin
+
+finish_brake_accel_mmps2 是安全制动目标，不表示允许无限冲出场地。
+
+Phase7 正式 V4.0 输出必须在最终放货 ARRIVAL 设置唯一 FINISH_ARM；
+不得同时设置 SAFE_END，不得增加 FINISH_CLEAR Segment。
+
+
+二十、从 leg_library 装配 BIN
+---------------------------
+
+1. 按 Case 的 leg_refs 顺序读取 VALID leg；
+2. 验证 key/hash 与公共配置匹配；
+3. 拼接节点时删除重复边界端点；
+4. 重新计算 global_s；
+5. 重新编号 arrival_id；
+6. 生成 Segment 表；
+7. 将动作 arrival_state_id 编译为 arrival_id；
+8. 重新计算 KINEMATIC check_start_s_mm；
+9. 在最后一个放货 ARRIVAL 设置唯一 FINISH_ARM，且不设置 SAFE_END；
+10. 量化 x/y/yaw/vx/vy/wz；
+11. 严格检查速度、加速度、yaw、轮速和碰撞；
+12. 填写 offsets、长度、时间、hash；
+13. file_crc32 置 0 后计算完整文件 CRC；
+14. 原子写入；
+15. 立即回读并再次验证。
+
+单条生成和批量生成必须调用同一装配代码路径。
+
+
+二十一、Hash 与 CRC
+------------------
+
+BIN CRC：
+
+    CRC-32/IEEE，与 zlib.crc32 一致
+    "123456789" -> 0xCBF43926
+
+计算时 Header.file_crc32 置 0，对完整文件计算后按小端写回。
+
+source_case_hash32/source_project_hash32：
+
+- 对规范化 JSON 计算 CRC-32/IEEE；
+- 规范化：UTF-8、无 BOM、键排序、无多余空白；
+- 排除 generated_at、updated_at、self_hash 等非功能字段；
+- 仅用于追溯，不作为安全认证。
+
+
+二十二、JSON/BIN 静态校验
+-----------------------
+
+22.1 JSON
+~~~~~~~~~
+
+- format 必须精确匹配 V40；
+- 不接受 V3.x；
+- 360 Case 表完整且可追溯；
+- 点位来源必须为已实现 provider；
+- BIN_12/BIN_23 yaw 已人工配置；
+- 路线族只能为三种枚举；
+- 路段引用存在且 VALID；
+- 人工覆盖状态明确；
+- 动作 FIFO 合法；
+- 不允许旧 Gate、CUT_IN、STOP flag、trigger/window 等字段。
+
+必须明确拒绝至少以下旧字段：
+
+    cut_in
+    stop_required
+    gate_id
+    unlock_gate_id
+    action.flags
+    trigger
+    trigger_s_mm
+    expire_s_mm
+    window_start
+    window_end
+    arm_s_mm
+    disarm_s_mm
+    min_wait_ms
+
+22.2 BIN
+~~~~~~~~
+
+- magic="HJMB"；
+- version=40；
+- sizes=104/16/24/22；
+- offsets 和 file_size 正确；
+- traj_id/bean_code/drop_code 与文件名和 Case 一致；
+- 必需 flags 设置；
+- START 唯一且首速度 0；
+- ARRIVAL 连续且全部停车；
+- FINISH_ARM 唯一；
+- SAFE_END 和 FINISH_CLEAR 为保留位，正式输出必须为 0；
+- Segment 连续、边界正确、时间和正确；
+- action_seq 连续；
+- 动作模式字段组合合法；
+- KINEMATIC check_start 合法；
+- reserved 全 0；
+- 动力学、轮速、碰撞通过；
+- CRC 正确。
+
+
+二十三、单条与 360 条输出规则
+----------------------------
+
+23.1 单条
+~~~~~~~~~
+
+用户选择 traj_id 后可以：
+
+- 只编译当前 Case；
+- 只优化其缺失/过期 leg；
+- 输出 cases/Pxxxx.json；
+- 输出 bin/Pxxxx.BIN；
+- 可选输出 portable/Pxxxx.portable.json；
+- 输出单条验证报告。
+
+23.2 全量
+~~~~~~~~~
+
+流程：
+
+1. 验证 traj_id.csv；
+2. 生成 route_case_table；
+3. 编译 360 Case 候选；
+4. 收集和去重唯一 leg；
+5. 只优化缺失/过期 leg；
+6. 装配 360 Case；
+7. 生成 360 JSON/BIN；
+8. 回读全部 BIN；
+9. 生成 batch_summary.csv 和 validation_report.json。
+
+批量结果至少显示：
+
+    traj_id
+    bean_code/drop_code
+    route_family
+    unload_sequence
+    leg 数量
+    总长度
+    planned_motion_time
+    planned_total_estimate
+    最大速度/加速度/wz/beta/轮速
+    最小净距
+    KINEMATIC 自动开始点
+    警告/错误
+    人工覆盖状态
+
+
+二十四、UI 和工作进程要求
+-----------------------
+
+- 禁止编辑后自动规划；
+- 任何功能变化把结果标记 STALE；
+- STALE/FAILED 结果禁止导出；
+- 规划放在独立 worker process；
+- 支持进度、取消、超时和日志；
+- UI 规划期间保持响应；
+- 取消后保留已原子写入且验证通过的结果；
+- 不保留半写 leg、JSON 或 BIN。
+
+建议阶段：
+
+    1/8 编译任务
+    2/8 收集唯一路段
+    3/8 构建碰撞模型
+    4/8 优化 XY
+    5/8 优化 yaw
+    6/8 时间最优参数化
+    7/8 严格验证
+    8/8 装配和写出
+
+
+二十五、版本拒绝和迁移
+--------------------
+
+V4.0 不直接兼容 V3.x。
+
+允许提供“人工迁移助手”，但必须：
+
+- 明确显示旧版本；
+- 只导入人工点和可理解参数；
+- 不复用旧 BIN；
+- 不复用旧速度曲线；
+- 不把 CUT_IN/Gate/STOP 等旧语义静默转换；
+- 迁移后必须重新规划和审核。
+
+
+二十六、结构大小与测试向量
+------------------------
+
+必须通过：
+
+    struct.calcsize(HeaderFmt)  == 104
+    struct.calcsize(NodeFmt)    == 16
+    struct.calcsize(SegmentFmt) == 24
+    struct.calcsize(ActionFmt)  == 22
+
+Python formats：
+
+    HEADER_FMT  = "<4sBBBBBBBBHHBBHHHHHBBHIIIIIIIIIHHHHHHHHBbhHHHHHHI"
+    NODE_FMT    = "<HhhhhhhBB"
+    SEGMENT_FMT = "<HHHHHBBBBIIH"
+    ACTION_FMT  = "<BBBBHHHHHHHHH"
+
+CRC 测试：
+
+    zlib.crc32(b"123456789") & 0xFFFFFFFF == 0xCBF43926
+
+正式实现必须增加：
+
+- 最小合法 BIN fixture；
+- 拒绝 FINISH_CLEAR reserved bit 的 fixture；
+- 三种动作模式 fixture；
+- 360 Case 文件名/ID 回读测试；
+- 单条与批量同 ID 字节一致测试；
+- 急弯自动降速而不假失败的性质测试。
+
+
+二十七、关键结论
+----------------
+
+1. V4.0 使用 project/table/leg_library/case 多 JSON 体系；
+2. 360 个 Case JSON 和 BIN 分别进入 cases/ 与 bin/；
+3. 单条和批量生成共用同一编译、装配和验证路径；
+4. traj_id.csv 是唯一编号权威；
+5. 取货自动路线只有 PICK_1→2L→3 和 PICK_3→2R→1 两族；
+6. 放货状态由物理位置、车载 BIN、单倒/双倒和连续 yaw 共同决定；
+7. 同一物理放货点当前共用一个人工 x/y，接口预留动作偏置；
+8. 点位当前人工测定，自动测定只留 provider 接口；
+9. 圆柱用大圆、放货箱用小圆、取货箱用圆缺包络；
+10. S 型拓扑由有序虚拟门保证，不写入 BIN；
+11. 重复有向路段集中存在 leg_library.json，只优化一次；
+12. yaw 优先分配到低速窗口，但最终以时间最短和碰撞合法为准；
+13. 速度规划必须降速求解，不能把当前候选超限误判为全局无解；
+14. BIN 结构固定为 Header104/Node16/Segment24/Action22；
+15. ARRIVAL 全部停车，路段可以独立优化和无速度跳变拼接；
+16. ASYNC 无触发，KINEMATIC 只有自动 check_start 和 stable_time；
+17. 完赛判定绑定最终放货 ARRIVAL/DROP DONE，SAFE_END/FINISH_CLEAR 保留为 0；
+18. 实际场地约 1% 长宽差异由后续固件统一仿射缩放；
+19. 所有耗时规划手动启动并支持进度、取消和可复现 seed；
+20. V4.0 与 V3.x 不兼容，所有旧路径必须重新生成。
+ 
+Phase 4 in-place clarification for V4.0 project/manual-path configuration
+=========================================================================
+
+This section is an in-place clarification of V4.0. It does not create V4.1 and
+does not change BIN version 40 or the packed Header/Node/Segment/Action sizes.
+
+1. project.json site configuration
+----------------------------------
+
+`project.json` is the only authority for the ten fixed manually measured site
+poses:
+
+    P_START
+    P_PICK_1
+    P_PICK_2L
+    P_PICK_2R
+    P_PICK_3
+    F_DROP_4
+    F_DROP_5
+    F_DROP_6
+    F_DROP_7
+    F_DROP_8
+
+The `sites` object must contain exactly these ten keys. No key may be omitted
+or added. Every site object must contain `configured`.
+
+Pickup-side sites (`P_START`, `P_PICK_1`, `P_PICK_2L`, `P_PICK_2R`,
+`P_PICK_3`) contain `configured`, `x_mm`, `y_mm`, and `yaw_ddeg`.
+Drop-side physical sites (`F_DROP_4` ... `F_DROP_8`) contain `configured`,
+`x_mm`, and `y_mm` only. Drop physical sites do not contain fixed yaw; yaw is
+selected from `unload_profiles` and continuous yaw unwrapping. `(0, 0)` is a
+valid configured coordinate. Unconfigured sites must be represented by
+`configured: false`, not by a coordinate sentinel.
+
+2. site pose provider
+---------------------
+
+The only implemented provider in V4.0 is `{"type": "MANUAL"}`. `LIDAR`,
+`VISION`, and `HYBRID` are reserved provider names only. A V4.0 tool must not
+claim those providers are implemented until real provider services and tests
+exist.
+
+3. unload_profiles
+------------------
+
+`unload_profiles` must contain exactly `BIN_1`, `BIN_2`, `BIN_3`, `BIN_12`,
+and `BIN_23`. Each profile contains `configured`, `yaw_ddeg`, `dx_mm`,
+`dy_mm`, and `estimated_action_time_ms`. `BIN_12` and `BIN_23` must be
+configured manually before a dual-unload candidate may use them. `BIN_13` and
+`BIN_123` remain forbidden.
+
+4. readiness, hashes, and stale semantics
+-----------------------------------------
+
+The route table can be generated without site coordinates. Semantic task
+candidates can be reviewed without optimized geometry. Manual planning requires
+all referenced sites and used unload profiles to be configured, and requires
+vehicle/dynamics limits. Full 360 planning additionally requires complete
+action/topology/planner configuration and later valid leg/collision results.
+
+V4.0 project tools should compute and report `site_config_hash`,
+`vehicle_config_hash`, `dynamics_config_hash`, `planner_config_hash`,
+`action_profile_hash`, and `topology_config_hash`. UI notes, timestamps, and
+self-hash fields are nonfunctional and are excluded. When a functional hash
+changes, dependent legs/cases/reports must be marked `STALE`; editing must not
+automatically start heavy planning.
+
+5. site pose preset JSON
+------------------------
+
+Site pose presets use `format = HJMB_SITE_POSE_PRESET_JSON_V40` and path
+`presets/<name>.site_poses.json`. A preset stores the MANUAL provider and the
+exact ten-site `sites` object. Import preview, apply, and export must use
+validated JSON and atomic writes. Applying a preset changes site poses only; it
+must not change traj_id mappings, dynamics, action profiles, or route tables.
+
+6. manual free Case
+-------------------
+
+`HJMB_ROUTE_CASE_JSON_V40` includes `path_source = TASK_COMPILED | MANUAL_FREE`
+and `manual_path = null | object`. `TASK_COMPILED` cases set `manual_path` to
+null. `MANUAL_FREE` cases require `selected_plan.route_family = MANUAL_FREE`,
+`review.detached_from_library = true`, a non-empty `review.override_reason`,
+and empty `leg_refs`. The generated BIN keeps version 40 and sets Header
+`route_family` to `MANUAL_FREE` and `FILE_FLAG_MANUAL_OVERRIDE`.
+
+Manual path point types are `START`, `WAYPOINT`, and `ARRIVAL`. START is first
+and unique, contains x/y/yaw, and has zero velocity. WAYPOINT contains x/y and
+must not define yaw. ARRIVAL contains x/y/yaw and is a full stop. No CUT_IN,
+Gate, trigger window, or runtime path unlock semantics are introduced.
+
+7. robust time parameterization
+-------------------------------
+
+For a finite already-defined geometry, V4.0 time parameterization operates on
+`z = v^2` with forward reachable and backward controllable propagation. It must
+enforce max speed, lateral acceleration, total acceleration, braking, yaw rate,
+yaw acceleration, and four-wheel rpm. A high candidate speed is reducible by
+envelope tightening and is not a structural path failure. The result diagnostics
+must distinguish invalid input, structural geometry error, invalid limits,
+numerical failure, quantization range error, and no finite-time solution.
+
+Phase 5 in-place clarification for V4.0 collision validation
+============================================================
+
+This section is an in-place clarification of V4.0. It does not create V4.1 and
+does not change BIN version 40 or the packed Header/Node/Segment/Action sizes.
+
+1. project.json collision footprint configuration
+-------------------------------------------------
+
+`project.json.vehicle.footprint` must contain:
+
+    r_large_mm
+    r_small_mm
+    collision_resolution_mm
+    strict_validation_resolution_mm
+    numerical_epsilon_mm
+    pickup_arc_segments
+    field_boundary_footprint_profile
+
+Rules:
+
+- `r_large_mm > r_small_mm > 0`.
+- `collision_resolution_mm > 0`.
+- `strict_validation_resolution_mm > 0` and must not be coarser than
+  `collision_resolution_mm`.
+- `numerical_epsilon_mm` is only floating-point tolerance, not safety margin.
+- `pickup_arc_segments >= 3`.
+- Phase 5 uses `field_boundary_footprint_profile = LARGE_CIRCLE`.
+
+Changing any functional footprint value changes `collision_config_hash`.
+
+2. project.json field_objects
+-----------------------------
+
+`project.json.field_objects` must contain:
+
+    cylinders
+    pickup_boxes
+    drop_boxes
+    field_boundary
+
+`cylinders` contains exactly the two official cylinder objects. Each item has:
+
+    obstacle_id
+    center_x_mm
+    center_y_mm
+    radius_mm
+    configured
+    enabled
+
+`pickup_boxes` contains exactly three physical pickup boxes with
+`physical_pick_site` values `PICK_1`, `PICK_2`, and `PICK_3`. `P_PICK_2L` and
+`P_PICK_2R` are arrival states only and both map to the single physical
+`PICK_2` box. Each item has:
+
+    obstacle_id
+    physical_pick_site
+    center_x_mm
+    center_y_mm
+    length_mm
+    width_mm
+    yaw_ddeg
+    configured
+    enabled
+
+`drop_boxes` contains exactly five physical drop boxes with `physical_drop_site`
+values `F_DROP_4` through `F_DROP_8`. Each item has:
+
+    obstacle_id
+    physical_drop_site
+    center_x_mm
+    center_y_mm
+    length_mm
+    width_mm
+    yaw_ddeg
+    configured
+    enabled
+
+`field_boundary` uses the nominal V4.0 field:
+
+    enabled
+    x_min_mm = -2000
+    x_max_mm =  2000
+    y_min_mm = -1000
+    y_max_mm =  1000
+    footprint_profile = LARGE_CIRCLE
+
+Changing obstacle positions, sizes, orientations, enable flags, or configured
+flags changes `obstacle_geometry_hash`.
+
+3. Collision footprints
+-----------------------
+
+The obstacle-to-footprint mapping is:
+
+    CYLINDER       -> LARGE_CIRCLE
+    DROP_BOX       -> SMALL_CIRCLE
+    PICKUP_BOX     -> PICKUP_CLIPPED_DISK
+    FIELD_BOUNDARY -> LARGE_CIRCLE
+
+`LARGE_CIRCLE` is `u^2 + v^2 <= r_large_mm^2`.
+`SMALL_CIRCLE` is `u^2 + v^2 <= r_small_mm^2`.
+`PICKUP_CLIPPED_DISK` is the convex set:
+
+    u^2 + v^2 <= r_large_mm^2
+    u <= r_small_mm
+
+The chord is at `u = r_small_mm` and its endpoints are:
+
+    (r_small_mm, +/-sqrt(r_large_mm^2 - r_small_mm^2))
+
+The clipped disk rotates with robot yaw. It is not a large circle minus a small
+circle and it does not keep the `u >= r_small_mm` cap.
+
+4. Clearance and tangency
+-------------------------
+
+Every collision check reports signed clearance. Classification is shared by all
+collision algorithms:
+
+    clearance > epsilon       -> CLEAR
+    -epsilon <= clearance <= epsilon -> TOUCHING
+    clearance < -epsilon      -> PENETRATING
+
+`TOUCHING` is legal. Safety margin belongs in the configured radii or obstacle
+geometry, not in `numerical_epsilon_mm`.
+
+5. Continuous collision validation
+----------------------------------
+
+Path collision validation must not only inspect nodes. For adjacent poses:
+
+    P0 = (x0, y0, yaw0)
+    P1 = (x1, y1, yaw1)
+
+the subdivision control bound is:
+
+    hypot(x1 - x0, y1 - y0) + r_large_mm * abs((yaw1 - yaw0) in radians)
+
+If this bound is greater than the selected validation resolution, the interval
+is subdivided and the midpoint is checked recursively. Yaw differences use the
+continuous unwrapped value, not a shortest-wrap replacement. Pure rotation and
+translation plus rotation are valid intervals.
+
+Validation must have maximum recursion depth and maximum checked-pose limits.
+Exceeding a limit reports `NUMERICAL_ERROR`; it must not pass by default.
+
+6. Collision validation result and export guard
+-----------------------------------------------
+
+Collision results use these statuses:
+
+    NOT_CHECKED
+    PASSED
+    FAILED
+    STALE
+    NUMERICAL_ERROR
+    NO_GEOMETRY
+
+The result records:
+
+    checked_config_hash
+    checked_path_hash
+    validation_resolution_mm
+    min_clearance_mm
+    min_clearance_pose
+    min_clearance_obstacle
+    collision_count
+    first_collision
+    checked_pose_count
+    subdivision_count
+    warnings
+    errors
+
+Formal competition export is blocked unless collision status is `PASSED` and
+the normal Phase 4 dynamics/protocol validation also passes. `FAILED`,
+`NOT_CHECKED`, `STALE`, `NUMERICAL_ERROR`, and `NO_GEOMETRY` are not formal
+exportable states.
+
+Phase 6 implementation clarification
+------------------------------------
+
+Phase 6 does not change BIN version 40 or any packed struct size. The directed
+leg optimizer stores planning metadata only inside existing `leg_library.json`
+fields.
+
+The implemented XY representation is `PIECEWISE_CUBIC_BEZIER`. Topology gates
+are ordered virtual line segments used only by optimization and validation;
+they never appear in BIN nodes, segments, or actions.
+
+Leg library reusable states are `VALID`, `APPROVED`, and `LOCKED`. `PREVIEW_VALID`
+is generated by quick preview optimization and is not accepted as a final
+compiled dependency. Approved or locked legs must not be overwritten silently.
+
+Phase 7 final-drop completion clarification
+-------------------------------------------
+
+This is an in-place V4.0 clarification. It does not create V4.1 and does not
+change BIN version 40 or the packed Header/Node/Segment/Action sizes.
+
+This section supersedes the earlier historical descriptions of
+`FINISH_MODE_AT_SAFE_END`, `FINISH_MODE_HALF_PLANE_THEN_SAFE_BRAKE`,
+`SAFE_END`, and `FINISH_CLEAR`.
+
+Formal competition output supports only:
+
+    FINISH_MODE_AT_FINAL_DROP = 0x00
+
+Completion occurs at the final drop. The last drop ARRIVAL is the only
+`FINISH_ARM` node in the file. It must also be an ARRIVAL and EXACT_PASS node
+with zero vx/vy/wz. The final compiled action must be a `DROP_*`
+`STOP_AND_WAIT` action bound to that final ARRIVAL. Completion is emitted only
+after that DROP action reports DONE, its `post_wait_ms` has elapsed, the
+mechanical FIFO is empty, and the chassis is stopped at the final ARRIVAL.
+
+Formal V4.0 output must not generate post-drop clearing motion, half-plane
+finish motion, `SAFE_END` nodes, or `FINISH_CLEAR` segments. The legacy finish
+fields remain physically present in the 104-byte Header for binary layout
+stability, but `finish_axis`, `finish_direction`, `finish_line_mm`,
+`finish_envelope_margin_mm`, `finish_stable_time_ms`,
+`finish_brake_accel_mmps2`, `finish_max_runout_mm`, and
+`finish_hard_timeout_ms` must all be zero.
+
+`TRAJ_FLAG_SAFE_END` and `SEGMENT_FLAG_FINISH_CLEAR` are reserved bits in
+formal V4.0 output and must be zero. Decoders and validators should reject
+formal output that sets either reserved bit.
