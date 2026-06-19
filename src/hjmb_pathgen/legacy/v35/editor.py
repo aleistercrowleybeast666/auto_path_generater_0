@@ -188,6 +188,13 @@ def parse_editor_int(text: str, default: int = 0) -> int:
         return default
 
 
+def parse_fixed_site_yaw_text(text: str) -> int:
+    value = str(text).strip()
+    if value.lower() in {"x", "×", "0xff"}:
+        return YAW_UNSPECIFIED_DDEG
+    return parse_editor_int(value)
+
+
 def point_colors(point: EditPoint, selected: bool) -> Tuple[QBrush, QPen]:
     if point.type == POINT_TYPE_START:
         brush = QColor("#2563eb")
@@ -611,7 +618,7 @@ class FieldView(QGraphicsView):
         selected_fixed_site_id: Optional[int],
         fixed_site_yaw_edit_enabled: bool,
     ):
-        if project.path_mode != PATH_MODE_FIXED_8:
+        if project.path_mode != PATH_MODE_FIXED_8 and not fixed_site_yaw_edit_enabled:
             return
         used_site_ids = {
             point.site_id
@@ -624,7 +631,7 @@ class FieldView(QGraphicsView):
             color = QColor("#f59e0b" if selected else "#16a34a" if site.site_id in used_site_ids else "#64748b")
             pen = QPen(color, 2.4 if selected else 1.6)
             size = 48 if selected else 36
-            yaw_text = "0xFF" if site.yaw_ddeg == YAW_UNSPECIFIED_DDEG else str(site.yaw_ddeg)
+            yaw_text = "×" if site.yaw_ddeg == YAW_UNSPECIFIED_DDEG else str(site.yaw_ddeg)
             tooltip = (
                 f"{site.site_id} {site.site_key}\n"
                 f"x={site.x_mm:g}, y={site.y_mm:g}, yaw={yaw_text}"
@@ -647,6 +654,15 @@ class FieldView(QGraphicsView):
                 for line in (line_a, line_b):
                     line.setZValue(92)
                     line.setToolTip(tooltip)
+                marker = self.add_world_text(
+                    site.x_mm - 10,
+                    site.y_mm + 12,
+                    "×",
+                    color,
+                    11,
+                )
+                marker.setZValue(94)
+                marker.setToolTip(tooltip)
             else:
                 center = self.add_world_ellipse(
                     site.x_mm,
@@ -1634,7 +1650,7 @@ class MainWindow(QMainWindow):
                 self.fixed_site_table,
                 row,
                 4,
-                "0xFF" if site.yaw_ddeg == YAW_UNSPECIFIED_DDEG else str(site.yaw_ddeg),
+                "×" if site.yaw_ddeg == YAW_UNSPECIFIED_DDEG else str(site.yaw_ddeg),
             )
 
     def refresh_parameter_widgets(self):
@@ -2360,12 +2376,12 @@ class MainWindow(QMainWindow):
             elif column == 3:
                 site.y_mm = float(text)
             elif column == 4:
-                yaw_ddeg = parse_editor_int(text)
+                yaw_ddeg = parse_fixed_site_yaw_text(text)
                 if (
                     yaw_ddeg == YAW_UNSPECIFIED_DDEG
                     and not fixed_site_key_allows_yaw_override(site.site_key)
                 ):
-                    self.update_status("Only DROP fixed sites may use yaw=0xFF")
+                    self.update_status("Only DROP fixed sites may use yaw=× / 0xFF")
                     self.updating_ui = True
                     self.refresh_fixed_site_table()
                     self.fixed_site_table.selectRow(row)

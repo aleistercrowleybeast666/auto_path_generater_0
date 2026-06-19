@@ -3,57 +3,57 @@
     {
       "site_id": 0,
       "site_key": "P_START",
-      "x_mm": -201,
-      "y_mm": 0,
+      "x_mm": -200.0,
+      "y_mm": 0.0,
       "yaw_ddeg": 0
     },
     {
       "site_id": 1,
       "site_key": "P_PICK_1",
       "x_mm": 1502,
-      "y_mm": 503,
+      "y_mm": 504,
       "yaw_ddeg": 0
     },
     {
       "site_id": 2,
       "site_key": "P_PICK_2L",
-      "x_mm": 1307,
-      "y_mm": 319,
-      "yaw_ddeg": -541
+      "x_mm": 1250,
+      "y_mm": 346,
+      "yaw_ddeg": -437
     },
     {
       "site_id": 3,
       "site_key": "P_PICK_2R",
-      "x_mm": 1307,
-      "y_mm": -307,
-      "yaw_ddeg": 502
+      "x_mm": 1247,
+      "y_mm": -369,
+      "yaw_ddeg": 516
     },
     {
       "site_id": 4,
       "site_key": "P_PICK_3",
-      "x_mm": 1497,
-      "y_mm": -497,
+      "x_mm": 1499,
+      "y_mm": -502,
       "yaw_ddeg": 0
     },
     {
       "site_id": 5,
       "site_key": "P_DROP_1",
-      "x_mm": -1464,
-      "y_mm": 425,
+      "x_mm": -1438,
+      "y_mm": 416,
       "yaw_ddeg": 255
     },
     {
       "site_id": 6,
       "site_key": "P_DROP_2",
-      "x_mm": -1447,
-      "y_mm": 0,
+      "x_mm": -1455,
+      "y_mm": 10,
       "yaw_ddeg": 255
     },
     {
       "site_id": 7,
       "site_key": "P_DROP_3",
-      "x_mm": -1458,
-      "y_mm": -380,
+      "x_mm": -1455,
+      "y_mm": -374,
       "yaw_ddeg": 255
     }
   ]

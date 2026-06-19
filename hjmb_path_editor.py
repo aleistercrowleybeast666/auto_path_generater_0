@@ -11,7 +11,7 @@ from hjmb_pathgen.legacy.v35.editor import *  # noqa: F401,F403
 
 
 def main() -> int:
-    from hjmb_pathgen.ui.main_window import main as v4_main
+    from hjmb_pathgen.ui.legacy_shell import main as v4_main
 
     return v4_main()
 

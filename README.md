@@ -52,6 +52,10 @@ See:
   `docs/phase8_acceptance.md` for Phase 8 workflow behavior.
 - `docs/phase9_acceptance.md` plus the Chinese user manuals under `docs/`
   for final verification, packaging, delivery, and operator workflows.
+- `docs/gui_field_editor.md`, `docs/gui_fixed_sites.md`,
+  `docs/gui_manual_free.md`, `docs/gui_route_leg.md`,
+  `docs/gui_actions.md`, `docs/gui_regression_fix.md`, and
+  `docs/phase9_gui_addendum.md` for the final source-level GUI regression fix.
 
 ## Environment
 
