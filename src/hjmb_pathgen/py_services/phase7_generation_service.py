@@ -981,7 +981,7 @@ def _leg_id_for_transition(transition: TransitionRequirement, project: ProjectV4
     request = leg_request_from_transition(
         transition,
         project,
-        yaw_policy=_case_yaw_policy(case) if case is not None else YawPolicy.SHORTEST,
+        yaw_policy=_case_yaw_policy(case, transition) if case is not None else YawPolicy.SHORTEST,
     )
     return leg_id_from_key(leg_key_from_request(request))
 
@@ -993,8 +993,16 @@ def _leg_by_id(library: LegLibraryV40, leg_id: str) -> LegV40 | None:
     return None
 
 
-def _case_yaw_policy(case: CaseManifestV40 | None) -> YawPolicy:
+def _case_yaw_policy(
+    case: CaseManifestV40 | None,
+    transition: TransitionRequirement | None = None,
+) -> YawPolicy:
     if case is None:
+        return YawPolicy.SHORTEST
+    if transition is not None and not (
+        transition.from_state_id.startswith("DROP_STEP_")
+        and transition.to_state_id.startswith("DROP_STEP_")
+    ):
         return YawPolicy.SHORTEST
     try:
         return YawPolicy(str(case.selected_plan.get("yaw_direction", YawPolicy.SHORTEST.value)))
@@ -1010,7 +1018,7 @@ def _yaw_policy_from_usage(layout: ProjectLayout, target: UniqueLegRequirement) 
     row = _row_by_traj_id(table, first.traj_id)
     project = load_project(layout.project_json)
     case = build_case_draft(row, project, preferred_candidate_id=first.candidate_id).case
-    return _case_yaw_policy(case)
+    return _case_yaw_policy(case, target.transition)
 
 
 def _finish_policy(project: ProjectV40) -> dict[str, Any]:

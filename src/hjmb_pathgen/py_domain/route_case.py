@@ -11,6 +11,7 @@ from hjmb_pathgen.py_io.codecs.legacy_rejection import reject_deleted_fields, re
 from .enums import GenerationMode, RouteFamily, StorageMode
 from .errors import V40ValidationError, expect_equal, expect_int_range, reject_unknown_fields, require_fields
 from .manual_path import validate_manual_path_dict
+from .semi_path import validate_semi_path_dict
 from .protocol import (
     CASE_FORMAT,
     LOGICAL_TASK_POINT_KEYS,
@@ -46,6 +47,7 @@ CASE_FIELDS = {
     "source_mapping",
     "selected_plan",
     "manual_path",
+    "semi_path",
     "logical_points",
     "auxiliary_points",
     "derived_from",
@@ -155,6 +157,7 @@ class CaseManifestV40:
     hashes: dict[str, Any]
     review: dict[str, Any]
     manual_path: dict[str, Any] | None = None
+    semi_path: dict[str, Any] | None = None
     auxiliary_points: tuple[dict[str, Any], ...] = ()
     derived_from: dict[str, Any] | None = None
     embedded_legs: tuple[dict[str, Any], ...] = ()
@@ -167,7 +170,7 @@ class CaseManifestV40:
         reject_unknown_fields(data, CASE_FIELDS, "CaseManifestV40")
         require_fields(
             data,
-            CASE_FIELDS - {"embedded_legs", "auxiliary_points", "derived_from"},
+            CASE_FIELDS - {"embedded_legs", "auxiliary_points", "derived_from", "semi_path"},
             "CaseManifestV40",
         )
         expect_equal(data["format"], CASE_FORMAT, "CaseManifestV40", "format")
@@ -177,16 +180,30 @@ class CaseManifestV40:
         if not re.fullmatch(r"P\d{4}", f"P{traj_id:04d}"):
             raise V40ValidationError("CaseManifestV40", "traj_id", "invalid case id", actual=traj_id)
         manual_path = data.get("manual_path")
-        if generation_mode in {GenerationMode.SEMI_AUTO, GenerationMode.FULL_AUTO}:
+        semi_path = data.get("semi_path")
+        if generation_mode == GenerationMode.SEMI_AUTO and semi_path is None:
+            # Explicit in-place migration for pre-ordered-path V4 drafts.  The old
+            # snapshot stored eight anchors plus an unordered auxiliary list.  New
+            # files always write one ordered semi_path, so project.json remains the
+            # only authority for fixed poses.
+            semi_path = _legacy_semi_path_from_case_data(data)
+        if generation_mode == GenerationMode.MANUAL:
+            manual_path = validate_manual_path_dict(manual_path)
+            if semi_path is not None:
+                raise V40ValidationError("CaseManifestV40", "semi_path", "MANUAL cases must set semi_path to null", actual=semi_path)
+        elif generation_mode == GenerationMode.SEMI_AUTO:
             if manual_path is not None:
+                raise V40ValidationError("CaseManifestV40", "manual_path", "SEMI_AUTO cases must set manual_path to null", actual=manual_path)
+            if semi_path is not None:
+                semi_path = validate_semi_path_dict(semi_path, require_complete=True)
+        else:
+            if manual_path is not None or semi_path is not None:
                 raise V40ValidationError(
                     "CaseManifestV40",
-                    "manual_path",
-                    f"{generation_mode.value} cases must set manual_path to null",
-                    actual=manual_path,
+                    "manual_path/semi_path",
+                    "FULL_AUTO cases must not contain a user path",
+                    actual={"manual_path": manual_path, "semi_path": semi_path},
                 )
-        else:
-            manual_path = validate_manual_path_dict(manual_path)
         logical_points = tuple(dict(item) for item in data["logical_points"])
         return cls(
             storage_mode=storage_mode,
@@ -205,7 +222,12 @@ class CaseManifestV40:
             hashes=dict(data["hashes"]),
             review=dict(data["review"]),
             manual_path=manual_path,
-            auxiliary_points=tuple(dict(item) for item in data.get("auxiliary_points", ())),
+            semi_path=semi_path,
+            auxiliary_points=(
+                ()
+                if generation_mode == GenerationMode.SEMI_AUTO and data.get("semi_path") is None
+                else tuple(dict(item) for item in data.get("auxiliary_points", ()))
+            ),
             derived_from=dict(data["derived_from"]) if data.get("derived_from") is not None else None,
             embedded_legs=tuple(dict(item) for item in data.get("embedded_legs", ())),
         )._validated_generation_mode()
@@ -221,6 +243,7 @@ class CaseManifestV40:
             "source_mapping": self.source_mapping,
             "selected_plan": self.selected_plan,
             "manual_path": self.manual_path,
+            "semi_path": self.semi_path,
             "logical_points": list(self.logical_points),
             "auxiliary_points": list(self.auxiliary_points),
             "derived_from": self.derived_from,
@@ -237,11 +260,9 @@ class CaseManifestV40:
         return data
 
     def _validated_generation_mode(self) -> "CaseManifestV40":
-        if self.generation_mode in {GenerationMode.SEMI_AUTO, GenerationMode.FULL_AUTO}:
+        if self.generation_mode == GenerationMode.FULL_AUTO:
             _validate_logical_points(self.logical_points)
-            if self.generation_mode == GenerationMode.SEMI_AUTO:
-                _validate_auxiliary_points(self.auxiliary_points)
-            elif self.auxiliary_points:
+            if self.auxiliary_points:
                 raise V40ValidationError(
                     "CaseManifestV40",
                     "auxiliary_points",
@@ -249,6 +270,18 @@ class CaseManifestV40:
                     actual=len(self.auxiliary_points),
                     expected=0,
                 )
+            return self
+        if self.generation_mode == GenerationMode.SEMI_AUTO:
+            if self.logical_points:
+                # Legacy snapshots remain readable, but new writers leave this empty
+                # so project.json is the only authority for the eight fixed poses.
+                _validate_logical_points(self.logical_points)
+            if self.semi_path is None:
+                raise V40ValidationError("CaseManifestV40", "semi_path", "SEMI_AUTO cases require an ordered semi_path")
+            if self.leg_refs:
+                raise V40ValidationError("CaseManifestV40", "leg_refs", "user-drawn SEMI_AUTO paths do not reference leg_library", actual=self.leg_refs)
+            if self.auxiliary_points:
+                raise V40ValidationError("CaseManifestV40", "auxiliary_points", "SEMI_AUTO waypoints belong in semi_path execution order", actual=self.auxiliary_points)
             return self
         route_family = str(self.selected_plan.get("route_family", ""))
         if route_family not in {RouteFamily.MANUAL.name, "MANUAL", "ROUTE_FAMILY_MANUAL"}:
@@ -278,6 +311,52 @@ class CaseManifestV40:
                 expected=0,
             )
         return self
+
+
+def _legacy_semi_path_from_case_data(data: dict[str, Any]) -> dict[str, Any]:
+    selected = data.get("selected_plan") if isinstance(data.get("selected_plan"), dict) else {}
+    route_raw = str(selected.get("route_family", ""))
+    pickup_order = tuple(str(value) for value in selected.get("pickup_arrival_state_order", ()))
+    if route_raw in {"PICK_1_TO_3", "ROUTE_FAMILY_PICK_1_TO_3", "1"} or pickup_order[:3] == ("P_PICK_1", "P_PICK_2L", "P_PICK_3"):
+        sequence = ("P_START", "P_PICK_1", "P_PICK_2L", "P_PICK_3", "P_DROP_3", "P_DROP_2", "P_DROP_1")
+    elif route_raw in {"PICK_3_TO_1", "ROUTE_FAMILY_PICK_3_TO_1", "2"} or pickup_order[:3] == ("P_PICK_3", "P_PICK_2R", "P_PICK_1"):
+        sequence = ("P_START", "P_PICK_3", "P_PICK_2R", "P_PICK_1", "P_DROP_1", "P_DROP_2", "P_DROP_3")
+    else:
+        raise V40ValidationError(
+            "CaseManifestV40",
+            "semi_path",
+            "legacy SEMI_AUTO case cannot be migrated because its route family is not one of the two legal routes",
+            actual={"route_family": route_raw, "pickup_arrival_state_order": list(pickup_order)},
+        )
+
+    points: list[dict[str, Any]] = []
+    for index, site_key in enumerate(sequence):
+        points.append(
+            {
+                "type": "START" if index == 0 else "ARRIVAL",
+                "site_key": site_key,
+                "state_id": site_key,
+            }
+        )
+    auxiliary = data.get("auxiliary_points", ())
+    if isinstance(auxiliary, (list, tuple)) and auxiliary:
+        migrated_waypoints: list[dict[str, Any]] = []
+        for item in auxiliary:
+            if not isinstance(item, dict) or "x_mm" not in item or "y_mm" not in item:
+                continue
+            migrated_waypoints.append(
+                {
+                    "type": "WAYPOINT",
+                    "x_mm": int(item["x_mm"]),
+                    "y_mm": int(item["y_mm"]),
+                    "exact_pass": str(item.get("policy", "LOCKED_PASS")) == "LOCKED_PASS",
+                }
+            )
+        # The legacy format did not record which leg owned an auxiliary point.
+        # Keep them in their previous display-compatible location immediately
+        # before the final fixed arrival instead of silently discarding them.
+        points[-1:-1] = migrated_waypoints
+    return {"points": points, "notes": "migrated from legacy unordered SEMI_AUTO anchors"}
 
 
 def _validate_logical_points(points: tuple[dict[str, Any], ...]) -> None:

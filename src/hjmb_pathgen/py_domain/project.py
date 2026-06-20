@@ -16,6 +16,7 @@ from .protocol import (
     PROJECT_FORMAT,
     REQUIRED_SITE_KEYS,
     REQUIRED_UNLOAD_PROFILE_KEYS,
+    YAW_UNSPECIFIED_DDEG,
 )
 
 PROJECT_REQUIRED_FIELDS = {
@@ -151,7 +152,7 @@ def validate_project_sites(data: object, object_type: str, field_path: str) -> d
         raise V40ValidationError(
             object_type,
             field_path,
-            "sites must contain exactly the five shared V4.0 pickup-side poses",
+            "sites must contain exactly the eight reusable fixed poses",
             actual=sorted(actual_keys),
             expected=list(REQUIRED_SITE_KEYS),
         )
@@ -168,7 +169,11 @@ def validate_project_sites(data: object, object_type: str, field_path: str) -> d
             "x_mm": _expect_site_int(raw["x_mm"], object_type, f"{field_path}.{key}.x_mm"),
             "y_mm": _expect_site_int(raw["y_mm"], object_type, f"{field_path}.{key}.y_mm"),
         }
-        item["yaw_ddeg"] = _expect_site_int(raw["yaw_ddeg"], object_type, f"{field_path}.{key}.yaw_ddeg")
+        yaw_ddeg = _expect_site_int(raw["yaw_ddeg"], object_type, f"{field_path}.{key}.yaw_ddeg")
+        # Earlier builds accidentally used the one-byte 0xFF marker for the
+        # JSON/UI yaw sentinel.  Accept it only as an input migration and
+        # normalize immediately so a real 25.5 degree yaw is never displayed.
+        item["yaw_ddeg"] = YAW_UNSPECIFIED_DDEG if yaw_ddeg == 0xFF else yaw_ddeg
         result[key] = item
     return result
 

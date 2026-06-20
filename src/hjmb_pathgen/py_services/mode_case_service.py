@@ -7,23 +7,44 @@ from typing import Any, Callable
 
 from hjmb_pathgen.py_domain.enums import GenerationMode
 from hjmb_pathgen.py_domain.errors import CompileError
-from hjmb_pathgen.py_domain.leg_optimization import LegOptimizationProfileName
 from hjmb_pathgen.py_domain.route_case import CaseManifestV40
+from hjmb_pathgen.py_domain.semi_path import ROUTE_A_SITE_SEQUENCE, ROUTE_B_SITE_SEQUENCE
 from hjmb_pathgen.py_io.codecs.canonical_json import canonical_json_crc32_hex
-from hjmb_pathgen.py_io.codecs.json_codec import (
-    load_case,
-    load_leg_library,
-    load_project,
-    save_case,
-)
-
-from .case_compiler import CaseCompileRequest, compile_case_to_trajectory
-from .leg_optimization_service import optimize_current_case_leg
-from .output_service import CaseOutputOptions, CaseOutputResult, write_case_outputs
-from .path_validation_service import case_with_collision_result, validate_time_parameterized_trajectory
-from .phase7_generation_service import _compiled_actions, _leg_refs_and_arrival_s
+from hjmb_pathgen.py_io.codecs.json_codec import load_case, save_case
 from hjmb_pathgen.py_io.layout.project_layout import ProjectLayout
-from .task_compiler import transition_requirements_for_case
+
+
+def _semi_path_from_full_case(source: CaseManifestV40) -> dict[str, Any]:
+    route_family = str(source.selected_plan.get("route_family", ""))
+    if route_family == "PICK_1_TO_3":
+        sequence = ROUTE_A_SITE_SEQUENCE
+    elif route_family == "PICK_3_TO_1":
+        sequence = ROUTE_B_SITE_SEQUENCE
+    else:
+        raise CompileError(f"FULL_AUTO case has unsupported route family: {route_family}")
+
+    drop_state_by_rank: dict[int, str] = {}
+    for step in source.selected_plan.get("unload_sequence", ()):  # one stop or a legal dual stop
+        state_id = f"DROP_STEP_{int(step.get('step_index', len(drop_state_by_rank) + 1))}"
+        for rank in step.get("target_ranks", ()):
+            drop_state_by_rank[int(rank)] = state_id
+
+    points: list[dict[str, Any]] = []
+    for index, site_key in enumerate(sequence):
+        state_id = site_key
+        if site_key.startswith("P_DROP_"):
+            state_id = drop_state_by_rank.get(int(site_key.rsplit("_", 1)[1]), site_key)
+        points.append(
+            {
+                "type": "START" if index == 0 else "ARRIVAL",
+                "site_key": site_key,
+                "state_id": state_id,
+            }
+        )
+    return {
+        "points": points,
+        "notes": "derived from FULL_AUTO; add free WAYPOINT rows manually where required",
+    }
 
 
 def convert_full_auto_to_semi_auto(
@@ -32,7 +53,7 @@ def convert_full_auto_to_semi_auto(
     *,
     overwrite: bool = False,
 ) -> CaseManifestV40:
-    """Create an editable SEMI_AUTO copy without mutating the FULL_AUTO source."""
+    """Create an editable ordered SEMI_AUTO copy without mutating FULL_AUTO."""
 
     source_path = layout.case_json_path_for_mode(traj_id, GenerationMode.FULL_AUTO)
     target_path = layout.case_json_path_for_mode(traj_id, GenerationMode.SEMI_AUTO)
@@ -48,21 +69,26 @@ def convert_full_auto_to_semi_auto(
         **source.review,
         "state": "STALE",
         "approved": False,
-        "detached_from_library": False,
+        "detached_from_library": True,
         "manual_override": True,
-        "override_reason": "converted from FULL_AUTO for assisted editing",
+        "override_reason": "converted from FULL_AUTO for ordered semi-auto editing",
         "stale_reason": "SEMI_AUTO copy requires explicit regeneration",
     }
     selected_plan = {
         **source.selected_plan,
+        "yaw_direction": "SHORTEST",
         "locked_by_user": True,
         "selection_state": "DERIVED_SEMI_AUTO",
-        "initial_curve_leg_refs": [dict(item) for item in source.leg_refs],
     }
     converted = replace(
         source,
         generation_mode=GenerationMode.SEMI_AUTO,
         selected_plan=selected_plan,
+        manual_path=None,
+        semi_path=_semi_path_from_full_case(source),
+        logical_points=(),
+        auxiliary_points=(),
+        leg_refs=(),
         derived_from={
             "generation_mode": GenerationMode.FULL_AUTO.value,
             "traj_id": traj_id,
@@ -70,6 +96,8 @@ def convert_full_auto_to_semi_auto(
         },
         review=review,
     )
+    # Re-parse to apply all SEMI_AUTO invariants before writing.
+    converted = CaseManifestV40.from_dict(converted.to_dict())
     layout.ensure_directories()
     save_case(target_path, converted)
     return converted
@@ -79,121 +107,46 @@ def generate_semi_auto(
     layout: ProjectLayout,
     traj_id: int,
     *,
-    profile_name: LegOptimizationProfileName = LegOptimizationProfileName.STANDARD,
-    seed: int = 0,
     progress_callback: Callable[[dict[str, Any]], None] | None = None,
     cancel_check: Callable[[], bool] | None = None,
-) -> CaseOutputResult:
-    """Optimize only between the eight fixed SEMI_AUTO anchors and assemble V4 output."""
+):
+    """Plan the user-drawn ordered SEMI_AUTO path without replacing its geometry."""
 
+    if cancel_check is not None and cancel_check():
+        raise RuntimeError("CANCELLED")
+    if progress_callback is not None:
+        progress_callback(
+            {
+                "stage": "SEMI_RESOLVE",
+                "message": "解析固定点与人工途径点",
+                "completed_count": 0,
+                "total_count": 1,
+                "percent": 10,
+            }
+        )
     case_path = layout.case_json_path_for_mode(traj_id, GenerationMode.SEMI_AUTO)
     if not case_path.exists():
         raise CompileError(f"SEMI_AUTO case does not exist: {case_path}")
     case = load_case(case_path)
     if case.generation_mode != GenerationMode.SEMI_AUTO:
         raise CompileError(f"case is not SEMI_AUTO: {case.generation_mode.value}")
-    project = load_project(layout.project_json)
-    synced_case = replace(case, arrival_states=_semi_arrival_states(case))
-    save_case(case_path, synced_case)
-    requirements = transition_requirements_for_case(synced_case, project)
-    for index, requirement in enumerate(requirements):
-        if cancel_check is not None and cancel_check():
-            raise RuntimeError("CANCELLED")
-        result = optimize_current_case_leg(
-            layout,
-            case_path,
-            requirement.requirement_id,
-            profile_name=profile_name,
-            seed=seed + index,
-            replace_existing=True,
-        )
-        if not result.success or result.leg is None:
-            raise CompileError(
-                f"SEMI_AUTO transition {requirement.requirement_id} failed: {result.diagnostics}"
-            )
-        if progress_callback is not None:
-            completed = index + 1
-            progress_callback(
-                {
-                    "current_item": requirement.requirement_id,
-                    "completed_count": completed,
-                    "total_count": len(requirements),
-                    "percent": round(90 * completed / max(len(requirements), 1)),
-                    "optimized_count": completed,
-                    "failed_count": 0,
-                }
-            )
-    library = load_leg_library(layout.leg_library_json)
-    leg_refs, arrival_s = _leg_refs_and_arrival_s(
-        requirements,
-        project,
-        synced_case,
-        library,
-    )
-    actions = {
-        "source": list(synced_case.actions.get("source", [])),
-        "compiled": _compiled_actions(synced_case, project, arrival_s),
-    }
-    ready_case = replace(
-        synced_case,
-        leg_refs=tuple(leg_refs),
-        actions=actions,
-        review={
-            **synced_case.review,
-            "state": "VALID",
-            "approved": False,
-            "stale_reason": "",
-        },
-    )
-    trajectory = compile_case_to_trajectory(
-        CaseCompileRequest(case=ready_case, leg_library=library, project=project)
-    )
-    collision = validate_time_parameterized_trajectory(tuple(trajectory.nodes), project, strict=True)
-    if not collision.passed:
-        raise CompileError(
-            f"SEMI_AUTO collision validation failed: {collision.status.value}"
-        )
-    ready_case = case_with_collision_result(ready_case, collision)
-    save_case(case_path, ready_case)
-    return write_case_outputs(
+
+    from .mode_output_service import write_semi_auto_outputs
+
+    result = write_semi_auto_outputs(
         layout,
-        CaseCompileRequest(case=ready_case, leg_library=library, project=project),
-        CaseOutputOptions(
-            generation_mode=GenerationMode.SEMI_AUTO,
-            require_approval=False,
-        ),
+        case,
+        cancel_check=cancel_check,
+        progress_callback=progress_callback,
     )
-
-
-def _semi_arrival_states(case: CaseManifestV40) -> tuple[dict, ...]:
-    pose_by_id = {str(item["point_id"]): dict(item["pose"]) for item in case.logical_points}
-    states: list[dict] = []
-    for state_id in case.selected_plan.get("pickup_arrival_state_order", ()): 
-        states.append(
+    if progress_callback is not None:
+        progress_callback(
             {
-                "state_id": str(state_id),
-                "type": "PICK",
-                "site_key": str(state_id),
-                "pose": pose_by_id[str(state_id)],
+                "stage": "SEMI_DONE",
+                "message": "半自动路径已按人工顺序生成",
+                "completed_count": 1,
+                "total_count": 1,
+                "percent": 100,
             }
         )
-    for step in case.selected_plan.get("unload_sequence", ()):
-        step_index = int(step["step_index"])
-        target_ranks = tuple(int(value) for value in step.get("target_ranks", ()))
-        if not target_ranks:
-            raise CompileError(f"SEMI_AUTO unload step {step_index} has no target rank")
-        point_id = f"P_DROP_{target_ranks[0]}"
-        states.append(
-            {
-                "state_id": f"DROP_STEP_{step_index}",
-                "type": "DROP",
-                "physical_drop_sites": list(step.get("physical_sites", ())),
-                "target_ranks": list(target_ranks),
-                "vehicle_bins": list(step.get("vehicle_bins", ())),
-                "unload_mask": str(step.get("unload_mask", "")),
-                "pose": pose_by_id[point_id],
-            }
-        )
-    if not states:
-        raise CompileError("SEMI_AUTO case has no executable arrival sequence")
-    return tuple(states)
+    return result

@@ -30,19 +30,19 @@ class Phase4ProjectConfigTest(unittest.TestCase):
         self.assertEqual(report.missing_unload_profiles, ())
         self.assertIn("site_config_hash", report.functional_hashes)
 
-    def test_sites_are_exact_five_shared_poses_and_drop_boxes_are_objects(self):
+    def test_sites_are_exact_eight_shared_poses_and_drop_boxes_are_objects(self):
         data = project_dict()
         data["sites"]["EXTRA"] = {"configured": True, "x_mm": 0, "y_mm": 0}
-        with self.assertRaisesRegex(V40ValidationError, "exactly the five"):
+        with self.assertRaisesRegex(V40ValidationError, "exactly the eight"):
             ProjectV40.from_dict(data)
 
         data = project_dict()
         data["sites"]["F_DROP_4"] = {"configured": True, "x_mm": 0, "y_mm": 0}
-        with self.assertRaisesRegex(V40ValidationError, "exactly the five"):
+        with self.assertRaisesRegex(V40ValidationError, "exactly the eight"):
             ProjectV40.from_dict(data)
 
         project = ProjectV40.from_dict(project_dict())
-        self.assertEqual(len(project.sites), 5)
+        self.assertEqual(len(project.sites), 8)
         self.assertEqual(len(project.field_objects["pickup_boxes"]), 3)
         self.assertEqual(len(project.field_objects["drop_boxes"]), 5)
         self.assertEqual(

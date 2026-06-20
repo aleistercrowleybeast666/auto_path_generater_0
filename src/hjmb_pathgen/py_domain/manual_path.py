@@ -9,6 +9,7 @@ from hjmb_pathgen.py_io.codecs.legacy_rejection import reject_deleted_fields
 
 from .enums import ManualPathPointType
 from .errors import V40ValidationError, reject_unknown_fields, require_fields
+from .protocol import YAW_UNSPECIFIED_DDEG
 
 MANUAL_PATH_FIELDS = {"points", "notes"}
 MANUAL_POINT_FIELDS = {
@@ -21,6 +22,7 @@ MANUAL_POINT_FIELDS = {
     "wz_ddegps",
     "exact_pass",
     "max_speed_mmps",
+    "corner_trim_mm",
     "hints",
 }
 
@@ -33,6 +35,7 @@ class ManualPathPointV40:
     yaw_ddeg: int | None = None
     exact_pass: bool = False
     max_speed_mmps: int | None = None
+    corner_trim_mm: float = 200.0
     hints: dict[str, Any] | None = None
 
     @classmethod
@@ -48,6 +51,8 @@ class ManualPathPointV40:
             if yaw_ddeg is None:
                 raise V40ValidationError("ManualPathPointV40", f"{field_path}.yaw_ddeg", "START/ARRIVAL require yaw_ddeg")
             yaw_ddeg = _expect_int(yaw_ddeg, f"{field_path}.yaw_ddeg")
+            if yaw_ddeg == 0xFF:
+                yaw_ddeg = YAW_UNSPECIFIED_DDEG
         elif yaw_ddeg is not None:
             raise V40ValidationError("ManualPathPointV40", f"{field_path}.yaw_ddeg", "WAYPOINT yaw must be null or omitted", actual=yaw_ddeg)
         for key in ("vx_mmps", "vy_mmps", "wz_ddegps"):
@@ -59,6 +64,15 @@ class ManualPathPointV40:
             max_speed = _expect_int(data["max_speed_mmps"], f"{field_path}.max_speed_mmps")
             if max_speed <= 0:
                 raise V40ValidationError("ManualPathPointV40", f"{field_path}.max_speed_mmps", "must be positive", actual=max_speed)
+        default_trim = 0.0 if point_type in (ManualPathPointType.START, ManualPathPointType.ARRIVAL) else 200.0
+        corner_trim = data.get("corner_trim_mm", default_trim)
+        if not isinstance(corner_trim, (int, float)) or isinstance(corner_trim, bool):
+            raise V40ValidationError("ManualPathPointV40", f"{field_path}.corner_trim_mm", "must be numeric", actual=corner_trim)
+        corner_trim = float(corner_trim)
+        if corner_trim < 0.0:
+            raise V40ValidationError("ManualPathPointV40", f"{field_path}.corner_trim_mm", "must be non-negative", actual=corner_trim)
+        if point_type in (ManualPathPointType.START, ManualPathPointType.ARRIVAL):
+            corner_trim = 0.0
         hints = None
         if "hints" in data and data["hints"] is not None:
             if not isinstance(data["hints"], dict):
@@ -71,6 +85,7 @@ class ManualPathPointV40:
             yaw_ddeg=yaw_ddeg,
             exact_pass=exact_pass,
             max_speed_mmps=max_speed,
+            corner_trim_mm=corner_trim,
             hints=hints,
         )
 
@@ -86,6 +101,8 @@ class ManualPathPointV40:
             data["exact_pass"] = True
         if self.max_speed_mmps is not None:
             data["max_speed_mmps"] = self.max_speed_mmps
+        if self.point_type == ManualPathPointType.WAYPOINT and self.corner_trim_mm != 200.0:
+            data["corner_trim_mm"] = self.corner_trim_mm
         if self.hints:
             data["hints"] = dict(self.hints)
         return data

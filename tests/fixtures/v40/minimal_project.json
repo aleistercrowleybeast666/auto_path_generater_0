@@ -1,87 +1,277 @@
 {
+  "action_profiles": {},
+  "arrival_check": {
+    "position_tolerance_mm": 20,
+    "speed_tolerance_mmps": 10,
+    "stable_time_ms": 100,
+    "wz_tolerance_ddegps": 10,
+    "yaw_tolerance_ddeg": 50
+  },
+  "coordinate_system": {
+    "origin": "FIELD_CENTER",
+    "yaw_positive": "RIGHT_HAND_Z",
+    "yaw_zero": "ROBOT_FRONT_TO_PICK_AREA"
+  },
+  "dynamics": {
+    "angular_accel_moving_ddegps2": 1000,
+    "angular_accel_rotate_ddegps2": 1500,
+    "braking_accel_mmps2": 800,
+    "dynamic_margin_ratio": 0.1,
+    "lateral_accel_mmps2": 800,
+    "linear_accel_mmps2": 800,
+    "max_speed_mmps": 1000,
+    "max_wz_ddegps": 900
+  },
+  "field_objects": {
+    "cylinders": [
+      {
+        "center_x_mm": -1200,
+        "center_y_mm": 350,
+        "configured": true,
+        "enabled": true,
+        "obstacle_id": "CYLINDER_1",
+        "radius_mm": 51
+      },
+      {
+        "center_x_mm": -1200,
+        "center_y_mm": -350,
+        "configured": true,
+        "enabled": true,
+        "obstacle_id": "CYLINDER_2",
+        "radius_mm": 51
+      }
+    ],
+    "drop_boxes": [
+      {
+        "center_x_mm": -1600,
+        "center_y_mm": -700,
+        "configured": true,
+        "enabled": true,
+        "length_mm": 140,
+        "obstacle_id": "DROP_BOX_4",
+        "physical_drop_site": "F_DROP_4",
+        "width_mm": 120,
+        "yaw_ddeg": 0
+      },
+      {
+        "center_x_mm": -1450,
+        "center_y_mm": -700,
+        "configured": true,
+        "enabled": true,
+        "length_mm": 140,
+        "obstacle_id": "DROP_BOX_5",
+        "physical_drop_site": "F_DROP_5",
+        "width_mm": 120,
+        "yaw_ddeg": 0
+      },
+      {
+        "center_x_mm": -1300,
+        "center_y_mm": -700,
+        "configured": true,
+        "enabled": true,
+        "length_mm": 140,
+        "obstacle_id": "DROP_BOX_6",
+        "physical_drop_site": "F_DROP_6",
+        "width_mm": 120,
+        "yaw_ddeg": 0
+      },
+      {
+        "center_x_mm": -1150,
+        "center_y_mm": -700,
+        "configured": true,
+        "enabled": true,
+        "length_mm": 140,
+        "obstacle_id": "DROP_BOX_7",
+        "physical_drop_site": "F_DROP_7",
+        "width_mm": 120,
+        "yaw_ddeg": 0
+      },
+      {
+        "center_x_mm": -1000,
+        "center_y_mm": -700,
+        "configured": true,
+        "enabled": true,
+        "length_mm": 140,
+        "obstacle_id": "DROP_BOX_8",
+        "physical_drop_site": "F_DROP_8",
+        "width_mm": 120,
+        "yaw_ddeg": 0
+      }
+    ],
+    "field_boundary": {
+      "enabled": true,
+      "footprint_profile": "LARGE_CIRCLE",
+      "x_max_mm": 2000,
+      "x_min_mm": -2000,
+      "y_max_mm": 1000,
+      "y_min_mm": -1000
+    },
+    "pickup_boxes": [
+      {
+        "center_x_mm": 1500,
+        "center_y_mm": 700,
+        "configured": true,
+        "enabled": true,
+        "length_mm": 140,
+        "obstacle_id": "PICKUP_BOX_1",
+        "physical_pick_site": "PICK_1",
+        "width_mm": 120,
+        "yaw_ddeg": 0
+      },
+      {
+        "center_x_mm": 1650,
+        "center_y_mm": 700,
+        "configured": true,
+        "enabled": true,
+        "length_mm": 140,
+        "obstacle_id": "PICKUP_BOX_2",
+        "physical_pick_site": "PICK_2",
+        "width_mm": 120,
+        "yaw_ddeg": 0
+      },
+      {
+        "center_x_mm": 1800,
+        "center_y_mm": 700,
+        "configured": true,
+        "enabled": true,
+        "length_mm": 140,
+        "obstacle_id": "PICKUP_BOX_3",
+        "physical_pick_site": "PICK_3",
+        "width_mm": 120,
+        "yaw_ddeg": 0
+      }
+    ]
+  },
+  "finish_policy": {
+    "mode": "AT_FINAL_DROP"
+  },
   "format": "HJMB_PATH_PROJECT_JSON_V40",
-  "project_id": "minimal_v40",
-  "protocol_version": 40,
   "nominal_field": {
     "length_mm": 4000,
     "width_mm": 2000
   },
-  "coordinate_system": {
-    "origin": "FIELD_CENTER",
-    "yaw_zero": "ROBOT_FRONT_TO_PICK_AREA",
-    "yaw_positive": "RIGHT_HAND_Z"
+  "output": {
+    "bin_dir": "bin",
+    "case_dir": "cases"
   },
+  "planner_profiles": {},
+  "project_id": "minimal_v40",
+  "protocol_version": 40,
   "site_pose_provider": {
     "type": "MANUAL"
   },
   "sites": {
-    "P_START": {"configured": true, "x_mm": 0, "y_mm": 0, "yaw_ddeg": 0},
-    "P_PICK_1": {"configured": true, "x_mm": 100, "y_mm": 0, "yaw_ddeg": 0},
-    "P_PICK_2L": {"configured": true, "x_mm": 200, "y_mm": 0, "yaw_ddeg": 0},
-    "P_PICK_2R": {"configured": true, "x_mm": 300, "y_mm": 0, "yaw_ddeg": 0},
-    "P_PICK_3": {"configured": true, "x_mm": 400, "y_mm": 0, "yaw_ddeg": 0}
+    "P_DROP_1": {
+      "configured": true,
+      "x_mm": -1600,
+      "y_mm": -700,
+      "yaw_ddeg": 65535
+    },
+    "P_DROP_2": {
+      "configured": true,
+      "x_mm": -1300,
+      "y_mm": -700,
+      "yaw_ddeg": 65535
+    },
+    "P_DROP_3": {
+      "configured": true,
+      "x_mm": -1000,
+      "y_mm": -700,
+      "yaw_ddeg": 65535
+    },
+    "P_PICK_1": {
+      "configured": true,
+      "x_mm": 100,
+      "y_mm": 0,
+      "yaw_ddeg": 0
+    },
+    "P_PICK_2L": {
+      "configured": true,
+      "x_mm": 200,
+      "y_mm": 0,
+      "yaw_ddeg": 0
+    },
+    "P_PICK_2R": {
+      "configured": true,
+      "x_mm": 300,
+      "y_mm": 0,
+      "yaw_ddeg": 0
+    },
+    "P_PICK_3": {
+      "configured": true,
+      "x_mm": 400,
+      "y_mm": 0,
+      "yaw_ddeg": 0
+    },
+    "P_START": {
+      "configured": true,
+      "x_mm": 0,
+      "y_mm": 0,
+      "yaw_ddeg": 0
+    }
   },
-  "field_objects": {
-    "cylinders": [
-      {"obstacle_id": "CYLINDER_1", "center_x_mm": -1200, "center_y_mm": 350, "radius_mm": 51, "configured": true, "enabled": true},
-      {"obstacle_id": "CYLINDER_2", "center_x_mm": -1200, "center_y_mm": -350, "radius_mm": 51, "configured": true, "enabled": true}
-    ],
-    "pickup_boxes": [
-      {"obstacle_id": "PICKUP_BOX_1", "physical_pick_site": "PICK_1", "center_x_mm": 1500, "center_y_mm": 700, "length_mm": 140, "width_mm": 120, "yaw_ddeg": 0, "configured": true, "enabled": true},
-      {"obstacle_id": "PICKUP_BOX_2", "physical_pick_site": "PICK_2", "center_x_mm": 1650, "center_y_mm": 700, "length_mm": 140, "width_mm": 120, "yaw_ddeg": 0, "configured": true, "enabled": true},
-      {"obstacle_id": "PICKUP_BOX_3", "physical_pick_site": "PICK_3", "center_x_mm": 1800, "center_y_mm": 700, "length_mm": 140, "width_mm": 120, "yaw_ddeg": 0, "configured": true, "enabled": true}
-    ],
-    "drop_boxes": [
-      {"obstacle_id": "DROP_BOX_4", "physical_drop_site": "F_DROP_4", "center_x_mm": -1600, "center_y_mm": -700, "length_mm": 140, "width_mm": 120, "yaw_ddeg": 0, "configured": true, "enabled": true},
-      {"obstacle_id": "DROP_BOX_5", "physical_drop_site": "F_DROP_5", "center_x_mm": -1450, "center_y_mm": -700, "length_mm": 140, "width_mm": 120, "yaw_ddeg": 0, "configured": true, "enabled": true},
-      {"obstacle_id": "DROP_BOX_6", "physical_drop_site": "F_DROP_6", "center_x_mm": -1300, "center_y_mm": -700, "length_mm": 140, "width_mm": 120, "yaw_ddeg": 0, "configured": true, "enabled": true},
-      {"obstacle_id": "DROP_BOX_7", "physical_drop_site": "F_DROP_7", "center_x_mm": -1150, "center_y_mm": -700, "length_mm": 140, "width_mm": 120, "yaw_ddeg": 0, "configured": true, "enabled": true},
-      {"obstacle_id": "DROP_BOX_8", "physical_drop_site": "F_DROP_8", "center_x_mm": -1000, "center_y_mm": -700, "length_mm": 140, "width_mm": 120, "yaw_ddeg": 0, "configured": true, "enabled": true}
-    ],
-    "field_boundary": {
-      "enabled": true,
-      "x_min_mm": -2000,
-      "x_max_mm": 2000,
-      "y_min_mm": -1000,
-      "y_max_mm": 1000,
-      "footprint_profile": "LARGE_CIRCLE"
+  "start_check": {
+    "position_tolerance_mm": 20,
+    "stable_time_ms": 100,
+    "yaw_tolerance_ddeg": 50
+  },
+  "topology_profiles": {},
+  "traj_table": {
+    "expected_case_count": 360,
+    "source_csv": "traj_id.csv"
+  },
+  "unload_profiles": {
+    "BIN_1": {
+      "configured": true,
+      "dx_mm": 0,
+      "dy_mm": 0,
+      "estimated_action_time_ms": 1000,
+      "yaw_ddeg": 900
+    },
+    "BIN_12": {
+      "configured": true,
+      "dx_mm": 0,
+      "dy_mm": 0,
+      "estimated_action_time_ms": 1200,
+      "yaw_ddeg": 450
+    },
+    "BIN_2": {
+      "configured": true,
+      "dx_mm": 0,
+      "dy_mm": 0,
+      "estimated_action_time_ms": 1000,
+      "yaw_ddeg": 0
+    },
+    "BIN_23": {
+      "configured": true,
+      "dx_mm": 0,
+      "dy_mm": 0,
+      "estimated_action_time_ms": 1200,
+      "yaw_ddeg": -450
+    },
+    "BIN_3": {
+      "configured": true,
+      "dx_mm": 0,
+      "dy_mm": 0,
+      "estimated_action_time_ms": 1000,
+      "yaw_ddeg": -900
     }
   },
   "vehicle": {
     "footprint": {
+      "collision_resolution_mm": 10,
+      "field_boundary_footprint_profile": "LARGE_CIRCLE",
+      "numerical_epsilon_mm": 1e-06,
+      "pickup_arc_segments": 64,
       "r_large_mm": 120,
       "r_small_mm": 70,
-      "collision_resolution_mm": 10,
-      "strict_validation_resolution_mm": 5,
-      "numerical_epsilon_mm": 0.000001,
-      "pickup_arc_segments": 64,
-      "field_boundary_footprint_profile": "LARGE_CIRCLE"
+      "strict_validation_resolution_mm": 5
     },
-    "wheel": {"radius_mm": 50, "rotation_radius_mm": 200, "plan_limit_rpm": 300, "hard_limit_rpm": 400}
-  },
-  "dynamics": {
-    "max_speed_mmps": 1000,
-    "linear_accel_mmps2": 800,
-    "braking_accel_mmps2": 800,
-    "lateral_accel_mmps2": 800,
-    "max_wz_ddegps": 900,
-    "angular_accel_moving_ddegps2": 1000,
-    "angular_accel_rotate_ddegps2": 1500,
-    "dynamic_margin_ratio": 0.1
-  },
-  "unload_profiles": {
-    "BIN_1": {"configured": true, "yaw_ddeg": 900, "dx_mm": 0, "dy_mm": 0, "estimated_action_time_ms": 1000},
-    "BIN_2": {"configured": true, "yaw_ddeg": 0, "dx_mm": 0, "dy_mm": 0, "estimated_action_time_ms": 1000},
-    "BIN_3": {"configured": true, "yaw_ddeg": -900, "dx_mm": 0, "dy_mm": 0, "estimated_action_time_ms": 1000},
-    "BIN_12": {"configured": true, "yaw_ddeg": 450, "dx_mm": 0, "dy_mm": 0, "estimated_action_time_ms": 1200},
-    "BIN_23": {"configured": true, "yaw_ddeg": -450, "dx_mm": 0, "dy_mm": 0, "estimated_action_time_ms": 1200}
-  },
-  "topology_profiles": {},
-  "action_profiles": {},
-  "planner_profiles": {},
-  "start_check": {"position_tolerance_mm": 20, "yaw_tolerance_ddeg": 50, "stable_time_ms": 100},
-  "arrival_check": {"position_tolerance_mm": 20, "yaw_tolerance_ddeg": 50, "speed_tolerance_mmps": 10, "wz_tolerance_ddegps": 10, "stable_time_ms": 100},
-  "finish_policy": {"mode": "AT_FINAL_DROP"},
-  "output": {"case_dir": "cases", "bin_dir": "bin"},
-  "traj_table": {"source_csv": "traj_id.csv", "expected_case_count": 360}
+    "wheel": {
+      "hard_limit_rpm": 400,
+      "plan_limit_rpm": 300,
+      "radius_mm": 50,
+      "rotation_radius_mm": 200
+    }
+  }
 }

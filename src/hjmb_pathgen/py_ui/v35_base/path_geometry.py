@@ -149,10 +149,10 @@ def validate_edit_points(points: Sequence[EditPoint]) -> List[str]:
         if point.type == POINT_TYPE_WAYPOINT:
             if point.yaw_ddeg != YAW_UNSPECIFIED_DDEG:
                 errors.append(
-                    f"WAYPOINT {index} 的 yaw_ddeg 必须为 0xFF，"
+                    f"WAYPOINT {index} 的 yaw_ddeg 必须为 0xFFFF，"
                     "WAYPOINT 不参与 yaw 规划"
                 )
-        elif not (-32768 <= point.yaw_ddeg <= 32767):
+        elif point.yaw_ddeg != YAW_UNSPECIFIED_DDEG and not (-32768 <= point.yaw_ddeg <= 32767):
             errors.append(f"编辑点 {index} 的 yaw_ddeg 超出 int16_t 范围")
         if point.type == POINT_TYPE_START:
             if index != 0:

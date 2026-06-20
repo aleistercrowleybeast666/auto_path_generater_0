@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field as dc_field, replace
 from typing import Dict, List, Optional, Tuple
 
+from hjmb_pathgen.py_domain.protocol import YAW_UNSPECIFIED_DDEG
+
 PROJECT_FORMAT = "HJMB_PATH_EDITOR_JSON_V35"
 
 POINT_TYPE_START = "START"
@@ -25,7 +27,6 @@ YAW_ROTATION_POLICIES = (
     YAW_ROTATION_CCW_ONLY,
 )
 
-YAW_UNSPECIFIED_DDEG = 0xFF
 SITE_ID_FREE = 0xFF
 
 ACTION_MODE_STOP_AND_WAIT = "STOP_AND_WAIT"
@@ -115,7 +116,8 @@ FIXED_SITE_KEYS = (
 
 
 def fixed_site_key_allows_yaw_override(site_key: str) -> bool:
-    return site_key.startswith("P_DROP_")
+    """All eight fixed sites may store 0xFFFF to mean yaw is unconstrained."""
+    return site_key in FIXED_SITE_KEYS
 
 REMOVED_TOP_LEVEL_FIELDS = {
     "cut_in",
@@ -357,14 +359,14 @@ def validate_fixed_sites(sites: List[FixedSite]) -> List[str]:
             )
         if not (-32768 <= site.x_mm <= 32767 and -32768 <= site.y_mm <= 32767):
             errors.append(f"fixed_sites[{site.site_id}] 坐标超出 int16_t 范围")
-        if not -32768 <= site.yaw_ddeg <= 32767:
+        if site.yaw_ddeg != YAW_UNSPECIFIED_DDEG and not -32768 <= site.yaw_ddeg <= 32767:
             errors.append(f"fixed_sites[{site.site_id}].yaw_ddeg 超出 int16_t 范围")
         if (
             site.yaw_ddeg == YAW_UNSPECIFIED_DDEG
             and not fixed_site_key_allows_yaw_override(expected_key)
         ):
             errors.append(
-                f"fixed_sites[{site.site_id}].yaw_ddeg=0xFF 仅允许 DROP 固定点使用"
+                f"fixed_sites[{site.site_id}].yaw_ddeg=0xFFFF 表示该固定点不约束到点方向"
             )
     if seen != set(range(len(FIXED_SITE_KEYS))):
         errors.append(f"fixed_sites site_id 必须恰好覆盖 0~7，当前为 {sorted(seen)}")
@@ -528,13 +530,16 @@ class EditPoint:
         default_site = SITE_ID_FREE
         default_corner_trim = 0 if point_type == POINT_TYPE_START else 200
         default_exact_pass = point_type == POINT_TYPE_START
+        yaw_ddeg = parse_int(data.get("yaw_ddeg", default_yaw), "point.yaw_ddeg")
+        if yaw_ddeg == 0xFF:
+            yaw_ddeg = YAW_UNSPECIFIED_DDEG
         return cls(
             point_id=parse_int(data.get("point_id", 0), "point.point_id"),
             type=point_type,
             site_id=parse_int(data.get("site_id", default_site), "point.site_id"),
             x_mm=parse_float(data.get("x_mm", 0), "point.x_mm"),
             y_mm=parse_float(data.get("y_mm", 0), "point.y_mm"),
-            yaw_ddeg=parse_int(data.get("yaw_ddeg", default_yaw), "point.yaw_ddeg"),
+            yaw_ddeg=yaw_ddeg,
             max_speed_mmps=parse_int(data.get("max_speed_mmps", 0), "point.max_speed_mmps"),
             corner_trim_mm=parse_float(
                 data.get("corner_trim_mm", default_corner_trim), "point.corner_trim_mm"
@@ -809,20 +814,8 @@ class PathProject:
                     }
                 )
                 return base
-            site = next(
-                (
-                    site
-                    for site in self.fixed_sites
-                    if site.site_id == point.site_id
-                ),
-                None,
-            )
-            if (
-                point.type == POINT_TYPE_ARRIVAL
-                and site is not None
-                and site.yaw_ddeg == YAW_UNSPECIFIED_DDEG
-            ):
-                base["yaw_ddeg"] = point.yaw_ddeg
+            # Fixed x/y/yaw live only in project.json/fixed_sites.  Even when
+            # yaw is 0xFFFF, do not copy an override into every path point.
             return base
         base.update(
             {
@@ -949,17 +942,9 @@ def resolve_edit_points(project: PathProject) -> List[EditPoint]:
             )
         resolved.x_mm = site.x_mm
         resolved.y_mm = site.y_mm
-        if site.yaw_ddeg == YAW_UNSPECIFIED_DDEG:
-            if not fixed_site_key_allows_yaw_override(site.site_key):
-                raise ValueError(
-                    f"FIXED_8 site_id={site.site_id} 不能使用 yaw_ddeg=0xFF"
-                )
-            if resolved.yaw_ddeg == YAW_UNSPECIFIED_DDEG:
-                raise ValueError(
-                    f"FIXED_8 ARRIVAL point_id={resolved.point_id} 缺少 yaw 覆盖值"
-                )
-        else:
-            resolved.yaw_ddeg = site.yaw_ddeg
+        # 0xFFFF is a complete fixed-site value meaning unconstrained yaw, not
+        # a request for a per-point override.
+        resolved.yaw_ddeg = site.yaw_ddeg
         points.append(resolved)
     return points
 

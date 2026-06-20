@@ -32,6 +32,12 @@ MIN_ARRIVAL_COUNT = 1
 MAX_ARRIVAL_COUNT = 32
 MAX_TOTAL_LENGTH_MM = 65535
 
+# JSON/UI-only sentinel meaning that an arrival orientation is unconstrained.
+# It is deliberately different from the one-byte 0xFF sentinels used by the
+# packed BIN arrival/action fields.  A concrete yaw is always resolved before
+# writing NodeV40.yaw_ddeg.
+YAW_UNSPECIFIED_DDEG = 0xFFFF
+
 PROJECT_FORMAT = "HJMB_PATH_PROJECT_JSON_V40"
 ROUTE_CASE_TABLE_FORMAT = "HJMB_ROUTE_CASE_TABLE_JSON_V40"
 LEG_LIBRARY_FORMAT = "HJMB_LEG_LIBRARY_JSON_V40"
@@ -73,8 +79,11 @@ REQUIRED_SITE_KEYS = (
     "P_PICK_2L",
     "P_PICK_2R",
     "P_PICK_3",
+    "P_DROP_1",
+    "P_DROP_2",
+    "P_DROP_3",
 )
-PICKUP_SITE_KEYS = REQUIRED_SITE_KEYS
+PICKUP_SITE_KEYS = REQUIRED_SITE_KEYS[:5]
 DROP_SITE_KEYS = (
     "F_DROP_4",
     "F_DROP_5",
@@ -83,16 +92,7 @@ DROP_SITE_KEYS = (
     "F_DROP_8",
 )
 
-LOGICAL_TASK_POINT_KEYS = (
-    "P_START",
-    "P_PICK_1",
-    "P_PICK_2L",
-    "P_PICK_2R",
-    "P_PICK_3",
-    "P_DROP_1",
-    "P_DROP_2",
-    "P_DROP_3",
-)
+LOGICAL_TASK_POINT_KEYS = REQUIRED_SITE_KEYS
 
 REQUIRED_UNLOAD_PROFILE_KEYS = (
     "BIN_1",

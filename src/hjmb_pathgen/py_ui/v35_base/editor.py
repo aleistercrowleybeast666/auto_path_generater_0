@@ -152,10 +152,10 @@ FIXED_SITE_TABLE_COLUMNS = ("site_id", "site_key", "x_mm", "y_mm", "yaw_ddeg")
 TABLE_COLUMN_TOOLTIPS = {
     "id": "编辑点序号。0 号点固定为 START，START 也只能出现在 0 号点。",
     "type": "点类型。0 号点只能是 START；其余点只能是 WAYPOINT 或 ARRIVAL。",
-    "site": "固定点索引。FREE 模式直接使用 x/y/yaw，site 灰显；FIXED_8 模式下 START 绑定 0，ARRIVAL 绑定 1-7。",
-    "x_mm": "场地坐标 X，单位 mm。FIXED_8 的 START/ARRIVAL 会从固定点表读取。",
-    "y_mm": "场地坐标 Y，单位 mm。FIXED_8 的 START/ARRIVAL 会从固定点表读取。",
-    "yaw_ddeg": "航向角，单位 0.1 度；WAYPOINT 固定为 0xFF，表示不约束航向。",
+    "site": "固定点索引。手动模式直接使用 x/y/yaw；半自动模式下 START 绑定 0，ARRIVAL 绑定 1-7。",
+    "x_mm": "场地坐标 X，单位 mm。半自动模式的 START/ARRIVAL 从固定点表读取。",
+    "y_mm": "场地坐标 Y，单位 mm。半自动模式的 START/ARRIVAL 从固定点表读取。",
+    "yaw_ddeg": "航向角，单位 0.1 度；0xFFFF/× 表示不约束到点方向。",
     "max_speed": "从该编辑点之后开始生效的局部速度上限，单位 mm/s；START 不使用。",
     "corner_trim": "WAYPOINT 的圆角过渡裁切距离，单位 mm；越大转角越圆。START 不使用。",
     "exact_pass": "仅 WAYPOINT 使用。1 表示精确经过该点，0 表示允许按 corner_trim 圆角通过。",
@@ -190,9 +190,9 @@ def parse_editor_int(text: str, default: int = 0) -> int:
 
 def parse_fixed_site_yaw_text(text: str) -> int:
     value = str(text).strip()
-    if value.lower() in {"x", "×", "0xff"}:
+    if value.lower() in {"x", "×", "0xff", "0xffff", "不约束"}:
         return YAW_UNSPECIFIED_DDEG
-    return parse_editor_int(value)
+    return int(value, 0)
 
 
 def point_colors(point: EditPoint, selected: bool) -> Tuple[QBrush, QPen]:
@@ -223,12 +223,11 @@ def point_uses_fixed_position(project: PathProject, point: EditPoint) -> bool:
 
 
 def point_uses_fixed_yaw(project: PathProject, point: EditPoint) -> bool:
+    # project.json is the only authority for every fixed pose.  A stored 0xFF
+    # is itself the authoritative value and means the arrival yaw is free; it
+    # must not create a per-path-point override field.
     site = fixed_site_for_point(project, point)
-    return (
-        point.type in (POINT_TYPE_START, POINT_TYPE_ARRIVAL)
-        and site is not None
-        and site.yaw_ddeg != YAW_UNSPECIFIED_DDEG
-    )
+    return point.type in (POINT_TYPE_START, POINT_TYPE_ARRIVAL) and site is not None
 
 
 def display_edit_points(project: PathProject) -> List[EditPoint]:
@@ -244,11 +243,7 @@ def display_edit_points(project: PathProject) -> List[EditPoint]:
         if site is not None:
             resolved.x_mm = site.x_mm
             resolved.y_mm = site.y_mm
-            if site.yaw_ddeg == YAW_UNSPECIFIED_DDEG:
-                if resolved.yaw_ddeg == YAW_UNSPECIFIED_DDEG:
-                    resolved.yaw_ddeg = 0
-            else:
-                resolved.yaw_ddeg = site.yaw_ddeg
+            resolved.yaw_ddeg = site.yaw_ddeg
         points.append(resolved)
     return points
 
@@ -803,7 +798,7 @@ class FieldView(QGraphicsView):
             self.scene_obj.addItem(label)
             self.point_labels[index] = label
 
-            if point.type != POINT_TYPE_WAYPOINT:
+            if point.type != POINT_TYPE_WAYPOINT and point.yaw_ddeg != YAW_UNSPECIFIED_DDEG:
                 yaw_rad = math.radians(point.yaw_ddeg / 10.0)
                 end_x = point.x_mm + math.cos(yaw_rad) * YAW_ARROW_LENGTH_MM
                 end_y = point.y_mm + math.sin(yaw_rad) * YAW_ARROW_LENGTH_MM
@@ -850,7 +845,7 @@ class FieldView(QGraphicsView):
         if label is not None and item is not None:
             label.setPos(item.pos() + QPointF(8, -23))
 
-        if point.type != POINT_TYPE_WAYPOINT:
+        if point.type != POINT_TYPE_WAYPOINT and point.yaw_ddeg != YAW_UNSPECIFIED_DDEG:
             yaw_rad = math.radians(point.yaw_ddeg / 10.0)
             end_x = x_mm + math.cos(yaw_rad) * YAW_ARROW_LENGTH_MM
             end_y = y_mm + math.sin(yaw_rad) * YAW_ARROW_LENGTH_MM
@@ -1112,11 +1107,11 @@ class MainWindow(QMainWindow):
         mode_row = QHBoxLayout()
         mode_row.addWidget(QLabel("点位模式:"))
         self.path_mode_combo = QComboBox()
-        self.path_mode_combo.addItem("自由点位 FREE", PATH_MODE_FREE)
-        self.path_mode_combo.addItem("固定 8 点 FIXED_8", PATH_MODE_FIXED_8)
+        self.path_mode_combo.addItem("手动模式 MANUAL", PATH_MODE_FREE)
+        self.path_mode_combo.addItem("半自动模式 SEMI_AUTO", PATH_MODE_FIXED_8)
         self.path_mode_combo.setToolTip(
-            "FREE: 每个点直接使用 x/y/yaw，site 不生效并灰显；"
-            "FIXED_8: START/ARRIVAL 引用固定 8 点表，site 可选。"
+            "MANUAL：每个点直接使用 x/y/yaw；"
+            "SEMI_AUTO：START/ARRIVAL 引用固定 8 点表，途径点仍由人工绘制。"
         )
         self.path_mode_combo.currentIndexChanged.connect(self.path_mode_changed)
         mode_row.addWidget(self.path_mode_combo)
@@ -1141,7 +1136,7 @@ class MainWindow(QMainWindow):
         layout.addLayout(buttons)
         hint = QLabel(
             "0 号点固定为 START，START 不能出现在其它行；最后一行 ARRIVAL 自动为 END。"
-            "site 仅 FIXED_8 使用，FREE 模式会灰显；WAYPOINT yaw 固定为 0xFF。"
+            "site 仅半自动模式使用；WAYPOINT 与不规定方向的固定点用 0xFFFF/× 表示。"
         )
         hint.setWordWrap(True)
         layout.addWidget(hint)
@@ -1463,8 +1458,6 @@ class MainWindow(QMainWindow):
         first = self.project.points[0]
         first.type = POINT_TYPE_START
         first.site_id = 0 if self.project.path_mode == PATH_MODE_FIXED_8 else SITE_ID_FREE
-        if first.yaw_ddeg == YAW_UNSPECIFIED_DDEG:
-            first.yaw_ddeg = 0
         first.max_speed_mmps = 0
         first.exact_pass = True
         first.corner_trim_mm = 0
@@ -1500,14 +1493,11 @@ class MainWindow(QMainWindow):
                 ]
             elif self.project.path_mode == PATH_MODE_FIXED_8 and point.type == POINT_TYPE_ARRIVAL:
                 site_values = [
-                    ("0xFF UNSET", SITE_ID_FREE),
-                ]
-                site_values.extend(
                     (f"{site.site_id} {site.site_key}", site.site_id)
                     for site in self.project.fixed_sites[1:]
-                )
+                ]
             else:
-                site_values = [("FREE 0xFF", SITE_ID_FREE)]
+                site_values = [("自由点", SITE_ID_FREE)]
                 site_values.extend(
                     (f"{site.site_id} {site.site_key}", site.site_id)
                     for site in self.project.fixed_sites
@@ -1535,9 +1525,9 @@ class MainWindow(QMainWindow):
                 self.point_table,
                 row,
                 5,
-                "0xFF"
+                "0xFFFF"
                 if point.type == POINT_TYPE_WAYPOINT
-                else str(display.yaw_ddeg),
+                else ("×" if display.yaw_ddeg == YAW_UNSPECIFIED_DDEG else str(display.yaw_ddeg)),
                 point.type != POINT_TYPE_WAYPOINT and not fixed_yaw,
             )
             self._set_item(self.point_table, row, 6, str(point.max_speed_mmps), point.type != POINT_TYPE_START)
@@ -1646,12 +1636,40 @@ class MainWindow(QMainWindow):
             self._set_item(self.fixed_site_table, row, 1, site.site_key, False)
             self._set_item(self.fixed_site_table, row, 2, f"{site.x_mm:g}")
             self._set_item(self.fixed_site_table, row, 3, f"{site.y_mm:g}")
-            self._set_item(
-                self.fixed_site_table,
-                row,
-                4,
-                "×" if site.yaw_ddeg == YAW_UNSPECIFIED_DDEG else str(site.yaw_ddeg),
+            self._set_item(self.fixed_site_table, row, 4, "", False)
+            combo = QComboBox()
+            combo.setEditable(True)
+            combo.setInsertPolicy(QComboBox.NoInsert)
+            values = [
+                ("× 不约束 (0xFFFF)", YAW_UNSPECIFIED_DDEG),
+                ("0°", 0),
+                ("+90°", 900),
+                ("-90°", -900),
+                ("180°", 1800),
+                ("+270°", 2700),
+            ]
+            if site.yaw_ddeg not in {value for _text, value in values}:
+                values.append((str(site.yaw_ddeg), site.yaw_ddeg))
+            combo.blockSignals(True)
+            for text, value in values:
+                combo.addItem(text, value)
+            index = combo.findData(site.yaw_ddeg)
+            combo.setCurrentIndex(max(0, index))
+            combo.setEditText("×" if site.yaw_ddeg == YAW_UNSPECIFIED_DDEG else str(site.yaw_ddeg))
+            combo.blockSignals(False)
+            combo.setToolTip("可直接输入 0.1° 单位角度；选择 × 或输入 0xFFFF 表示不约束方向")
+            # Do not use currentIndexChanged/editingFinished here. Opening an
+            # editable combo moves focus from its line edit to the popup; that
+            # used to commit immediately, rebuild the whole table and destroy
+            # the popup before the user could choose an angle.
+            combo.activated.connect(
+                lambda _index, row=row, combo=combo: self._fixed_site_yaw_combo_selected(row, combo)
             )
+            if combo.lineEdit() is not None:
+                combo.lineEdit().returnPressed.connect(
+                    lambda row=row, combo=combo: self._fixed_site_yaw_combo_edited(row, combo)
+                )
+            self.fixed_site_table.setCellWidget(row, 4, combo)
 
     def refresh_parameter_widgets(self):
         p = self.project
@@ -1900,11 +1918,7 @@ class MainWindow(QMainWindow):
         point.site_id = site.site_id
         point.x_mm = site.x_mm
         point.y_mm = site.y_mm
-        if site.yaw_ddeg == YAW_UNSPECIFIED_DDEG:
-            if point.yaw_ddeg == YAW_UNSPECIFIED_DDEG:
-                point.yaw_ddeg = 0
-        else:
-            point.yaw_ddeg = site.yaw_ddeg
+        point.yaw_ddeg = site.yaw_ddeg
 
     def _sync_points_from_fixed_site(self, site_id: int):
         site = next(
@@ -1920,11 +1934,7 @@ class MainWindow(QMainWindow):
                 continue
             point.x_mm = site.x_mm
             point.y_mm = site.y_mm
-            if site.yaw_ddeg == YAW_UNSPECIFIED_DDEG:
-                if point.yaw_ddeg == YAW_UNSPECIFIED_DDEG:
-                    point.yaw_ddeg = 0
-            else:
-                point.yaw_ddeg = site.yaw_ddeg
+            point.yaw_ddeg = site.yaw_ddeg
 
     def _materialize_current_points_to_fixed_sites(self):
         arrival_site_id = 1
@@ -2141,7 +2151,7 @@ class MainWindow(QMainWindow):
             return
         point = self.project.points[index]
         if point_uses_fixed_position(self.project, point):
-            self.update_status("FIXED_8 的 START/ARRIVAL 请在固定 8 点页编辑")
+            self.update_status("半自动模式的 START/ARRIVAL 请在固定 8 点页编辑")
             return
         self.project.points[index].x_mm = x_mm
         self.project.points[index].y_mm = y_mm
@@ -2157,7 +2167,7 @@ class MainWindow(QMainWindow):
         if self.project.points[index].type == POINT_TYPE_WAYPOINT:
             return
         if point_uses_fixed_yaw(self.project, self.project.points[index]):
-            self.update_status("FIXED_8 的 START/ARRIVAL yaw 请在固定 8 点页编辑")
+            self.update_status("半自动模式的 START/ARRIVAL yaw 请在固定 8 点页编辑")
             return
         self.project.points[index].yaw_ddeg = yaw_ddeg
         self.updating_ui = True
@@ -2181,20 +2191,24 @@ class MainWindow(QMainWindow):
         point.type = new_type
         if point.type == POINT_TYPE_START:
             point.site_id = 0 if self.project.path_mode == PATH_MODE_FIXED_8 else SITE_ID_FREE
-            point.yaw_ddeg = 0 if point.yaw_ddeg == YAW_UNSPECIFIED_DDEG else point.yaw_ddeg
             point.max_speed_mmps = 0
             point.exact_pass = True
             point.corner_trim_mm = 0
         if point.type == POINT_TYPE_WAYPOINT:
             point.site_id = SITE_ID_FREE
             point.yaw_ddeg = YAW_UNSPECIFIED_DDEG
-        elif point.yaw_ddeg == YAW_UNSPECIFIED_DDEG:
-            point.yaw_ddeg = 0
         if point.type == POINT_TYPE_ARRIVAL and self.project.path_mode == PATH_MODE_FIXED_8:
-            if point.site_id == 0:
-                point.site_id = SITE_ID_FREE
-            if point.yaw_ddeg == YAW_UNSPECIFIED_DDEG:
-                point.yaw_ddeg = 0
+            if point.site_id <= 0 or point.site_id >= len(self.project.fixed_sites):
+                used = {
+                    other.site_id
+                    for index, other in enumerate(self.project.points)
+                    if index != row and other.type == POINT_TYPE_ARRIVAL and other.site_id > 0
+                }
+                point.site_id = next(
+                    (site.site_id for site in self.project.fixed_sites[1:] if site.site_id not in used),
+                    1,
+                )
+            self._apply_fixed_site_to_point(point, point.site_id)
         if point.type == POINT_TYPE_START and self.project.path_mode == PATH_MODE_FIXED_8:
             self._apply_fixed_site_to_point(point, 0)
         self.updating_ui = True
@@ -2215,14 +2229,11 @@ class MainWindow(QMainWindow):
                 self._apply_fixed_site_to_point(point, 0)
         elif self.project.path_mode == PATH_MODE_FIXED_8 and point.type == POINT_TYPE_ARRIVAL:
             site_id = int(value)
-            if site_id == SITE_ID_FREE:
-                point.site_id = SITE_ID_FREE
-                if point.yaw_ddeg == YAW_UNSPECIFIED_DDEG:
-                    point.yaw_ddeg = 0
-            elif site_id == 0:
-                point.site_id = SITE_ID_FREE
-            else:
-                self._apply_fixed_site_to_point(point, site_id)
+            if not 1 <= site_id < len(self.project.fixed_sites):
+                self.update_status("半自动模式的 ARRIVAL 必须选择 1-7 号固定点")
+                self.refresh_point_table(row)
+                return
+            self._apply_fixed_site_to_point(point, site_id)
         else:
             point.site_id = SITE_ID_FREE
         self.updating_ui = True
@@ -2376,24 +2387,60 @@ class MainWindow(QMainWindow):
             elif column == 3:
                 site.y_mm = float(text)
             elif column == 4:
-                yaw_ddeg = parse_fixed_site_yaw_text(text)
-                if (
-                    yaw_ddeg == YAW_UNSPECIFIED_DDEG
-                    and not fixed_site_key_allows_yaw_override(site.site_key)
-                ):
-                    self.update_status("Only DROP fixed sites may use yaw=× / 0xFF")
-                    self.updating_ui = True
-                    self.refresh_fixed_site_table()
-                    self.fixed_site_table.selectRow(row)
-                    self.updating_ui = False
-                    return
-                site.yaw_ddeg = yaw_ddeg
+                self._set_fixed_site_yaw(row, parse_fixed_site_yaw_text(text))
+                return
         except ValueError:
             self.updating_ui = True
             self.refresh_fixed_site_table()
             self.fixed_site_table.selectRow(row)
             self.updating_ui = False
             return
+        self._sync_points_from_fixed_site(site.site_id)
+        selected_point = self.selected_point_row()
+        self.updating_ui = True
+        self.refresh_fixed_site_table()
+        self.refresh_point_table(selected_point)
+        self.fixed_site_table.selectRow(row)
+        self.updating_ui = False
+        self.refresh_field(self.selected_point_row())
+        self.schedule_plan()
+
+    def _fixed_site_yaw_combo_selected(self, row: int, combo: QComboBox) -> None:
+        if self.updating_ui:
+            return
+        value = combo.currentData()
+        if value is None:
+            return
+        self._set_fixed_site_yaw(row, int(value))
+
+    def _fixed_site_yaw_combo_edited(self, row: int, combo: QComboBox) -> None:
+        if self.updating_ui:
+            return
+        try:
+            value = parse_fixed_site_yaw_text(combo.currentText())
+        except ValueError:
+            self.updating_ui = True
+            self.refresh_fixed_site_table()
+            self.fixed_site_table.selectRow(row)
+            self.updating_ui = False
+            return
+        self._set_fixed_site_yaw(row, value)
+
+    def _set_fixed_site_yaw(self, row: int, yaw_ddeg: int) -> None:
+        if not 0 <= row < len(self.project.fixed_sites):
+            return
+        site = self.project.fixed_sites[row]
+        if yaw_ddeg != YAW_UNSPECIFIED_DDEG and not -32768 <= yaw_ddeg <= 32767:
+            self.update_status("固定点 yaw 必须位于 int16 范围内，或使用 × / 0xFFFF 表示不约束")
+            self.updating_ui = True
+            self.refresh_fixed_site_table()
+            self.fixed_site_table.selectRow(row)
+            self.updating_ui = False
+            return
+        if yaw_ddeg == YAW_UNSPECIFIED_DDEG and not fixed_site_key_allows_yaw_override(site.site_key):
+            self.update_status("该固定点不能设置为不约束方向")
+            return
+        site.yaw_ddeg = yaw_ddeg
         self._sync_points_from_fixed_site(site.site_id)
         selected_point = self.selected_point_row()
         self.updating_ui = True

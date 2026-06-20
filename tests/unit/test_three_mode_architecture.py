@@ -114,17 +114,35 @@ class ThreeModeArchitectureTest(unittest.TestCase):
             self.assertTrue(manual_path.exists())
             self.assertTrue(layout.case_json_path_for_mode(0, GenerationMode.SEMI_AUTO).exists())
 
-    def test_semi_auto_accepts_only_the_three_auxiliary_point_policies(self):
+    def test_semi_auto_uses_one_ordered_path_and_rejects_both_pick2_sides(self):
         data = json.loads((FIXTURES / "minimal_case.json").read_text(encoding="utf-8"))
-        data["generation_mode"] = GenerationMode.SEMI_AUTO.value
-        data["auxiliary_points"] = [
-            {"x_mm": 10, "y_mm": 20, "policy": policy}
-            for policy in ("LOCKED_PASS", "INITIAL_GUESS", "OPTIMIZABLE")
-        ]
-        self.assertEqual(len(CaseManifestV40.from_dict(data).auxiliary_points), 3)
-        data["auxiliary_points"][0]["policy"] = "AUTO_MOVE_ANCHOR"
-        with self.assertRaisesRegex(Exception, "unsupported semi-auto auxiliary"):
-            CaseManifestV40.from_dict(data)
+        data.update(
+            {
+                "generation_mode": GenerationMode.SEMI_AUTO.value,
+                "manual_path": None,
+                "logical_points": [],
+                "auxiliary_points": [],
+                "leg_refs": [],
+                "semi_path": {
+                    "points": [
+                        {"type": "START", "site_key": "P_START", "state_id": "P_START"},
+                        {"type": "ARRIVAL", "site_key": "P_PICK_1", "state_id": "P_PICK_1"},
+                        {"type": "WAYPOINT", "x_mm": 10, "y_mm": 20, "corner_trim_mm": 100},
+                        {"type": "ARRIVAL", "site_key": "P_PICK_2L", "state_id": "P_PICK_2L"},
+                        {"type": "ARRIVAL", "site_key": "P_PICK_3", "state_id": "P_PICK_3"},
+                        {"type": "ARRIVAL", "site_key": "P_DROP_3", "state_id": "DROP_STEP_1"},
+                        {"type": "ARRIVAL", "site_key": "P_DROP_2", "state_id": "DROP_STEP_2"},
+                        {"type": "ARRIVAL", "site_key": "P_DROP_1", "state_id": "DROP_STEP_3"},
+                    ]
+                },
+            }
+        )
+        case = CaseManifestV40.from_dict(data)
+        self.assertEqual(len(case.semi_path["points"]), 8)
+        invalid = json.loads(json.dumps(data))
+        invalid["semi_path"]["points"].insert(4, {"type": "ARRIVAL", "site_key": "P_PICK_2R", "state_id": "P_PICK_2R"})
+        with self.assertRaisesRegex(Exception, "two legal competition routes"):
+            CaseManifestV40.from_dict(invalid)
 
     def test_manual_planning_never_calls_leg_optimizer(self):
         project = ProjectV40.from_dict(json.loads((FIXTURES / "minimal_project.json").read_text(encoding="utf-8")))

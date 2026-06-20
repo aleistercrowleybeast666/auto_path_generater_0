@@ -7,6 +7,7 @@ business callbacks with V4 MANUAL / SEMI_AUTO / FULL_AUTO services.
 
 from __future__ import annotations
 
+import copy
 import math
 import sys
 from dataclasses import replace
@@ -35,10 +36,17 @@ from PySide6.QtWidgets import (
 
 from hjmb_pathgen.py_domain.enums import GenerationMode
 from hjmb_pathgen.py_domain.route_case import CaseManifestV40
+from hjmb_pathgen.py_domain.semi_path import (
+    ROUTE_A_SITE_SEQUENCE,
+    ROUTE_B_SITE_SEQUENCE,
+    route_family_from_site_sequence,
+)
 from hjmb_pathgen.py_io.codecs.bin_codec import load_bin
 from hjmb_pathgen.py_io.codecs.json_codec import load_case, save_case, save_project
 from hjmb_pathgen.py_io.layout.project_layout import ProjectLayout
 from hjmb_pathgen.py_services.leg_clear_service import clear_optimized_leg_result
+from hjmb_pathgen.py_services.case_draft_service import generate_case_draft
+from hjmb_pathgen.py_services.project_bootstrap_service import bootstrap_v4_workspace
 from hjmb_pathgen.py_services.mode_case_service import convert_full_auto_to_semi_auto
 from hjmb_pathgen.py_ui.ui_state import LoadedProjectState
 from hjmb_pathgen.py_workers.worker_process import WorkerJobHandle, start_worker_job
@@ -110,6 +118,12 @@ class V35ExactV4MainWindow(legacy.MainWindow):
         self._v4_poll_timer.setInterval(200)
         self._v4_poll_timer.timeout.connect(self._poll_worker)
 
+        # Do not reload a Case for every intermediate digit while the user is
+        # typing an ID such as 123.  valueChanged is emitted only after commit.
+        self.traj_id_spin.setRange(0, 359)
+        self.traj_id_spin.setKeyboardTracking(False)
+        self.traj_id_spin.setAccelerated(True)
+
         self._replace_mode_combo()
         self._rewire_toolbar()
         self._extend_fixed_site_tab()
@@ -161,11 +175,43 @@ class V35ExactV4MainWindow(legacy.MainWindow):
         self.updating_ui = False
 
     def _extend_fixed_site_tab(self) -> None:
+        # Global task strip: it belongs to the right panel rather than one tab,
+        # so progress and total time remain visible on every page.
+        panel = self.right_tabs.parentWidget()
+        panel_layout = panel.layout() if panel is not None else None
+        task_strip = QWidget()
+        task_layout = QHBoxLayout(task_strip)
+        task_layout.setContentsMargins(0, 0, 0, 0)
+        self.v4_task_label = QLabel("任务：空闲")
+        self.v4_task_label.setMinimumWidth(120)
+        self.v4_progress = QProgressBar()
+        self.v4_progress.setRange(0, 100)
+        self.v4_progress.setValue(0)
+        self.v4_progress.setTextVisible(True)
+        self.v4_total_time_label = QLabel("总时间：—")
+        self.v4_total_time_label.setMinimumWidth(190)
+        stop_button = QPushButton("立即停止")
+        stop_button.clicked.connect(self._cancel_worker)
+        task_layout.addWidget(self.v4_task_label)
+        task_layout.addWidget(self.v4_progress, 1)
+        task_layout.addWidget(self.v4_total_time_label)
+        task_layout.addWidget(stop_button)
+        if panel_layout is not None:
+            tab_index = panel_layout.indexOf(self.right_tabs)
+            panel_layout.insertWidget(max(0, tab_index), task_strip)
+
         self.right_tabs.setTabText(
             self.right_tabs.indexOf(self.fixed_site_tab),
             "固定8点 / 最优路段 / 批量",
         )
         root_layout = self.fixed_site_tab.layout()
+        for button in self.fixed_site_tab.findChildren(QPushButton):
+            if button.text() == "导入固定点 JSON":
+                button.setText("从V4项目重新加载")
+                button.setToolTip("重新读取project.json和当前模式Case，不再导入V3.5固定点文件")
+            elif button.text() == "导出固定点 JSON":
+                button.setText("保存固定点到V4项目")
+                button.setToolTip("保存公共姿态到project.json；半自动模式同时保存8个逻辑点到Case JSON")
 
         project_group = QGroupBox("V4 项目")
         project_layout = QVBoxLayout(project_group)
@@ -174,7 +220,7 @@ class V35ExactV4MainWindow(legacy.MainWindow):
         choose = QPushButton("打开项目")
         choose.clicked.connect(self._choose_project)
         save_project_button = QPushButton("保存公共配置")
-        save_project_button.clicked.connect(self._save_project_config)
+        save_project_button.clicked.connect(lambda: self._save_project_config())
         row.addWidget(QLabel("项目目录"))
         row.addWidget(self.v4_project_edit, 1)
         row.addWidget(choose)
@@ -188,9 +234,6 @@ class V35ExactV4MainWindow(legacy.MainWindow):
         batch_group = QGroupBox("最优路段 / 批量生成")
         batch_layout = QVBoxLayout(batch_group)
         row1 = QHBoxLayout()
-        self.v4_profile_combo = QComboBox()
-        for value in ("QUICK", "STANDARD", "FINAL"):
-            self.v4_profile_combo.addItem(value, value)
         self.v4_leg_combo = QComboBox()
         self.v4_leg_combo.setMinimumWidth(280)
         for text, callback in (
@@ -201,8 +244,6 @@ class V35ExactV4MainWindow(legacy.MainWindow):
             button = QPushButton(text)
             button.clicked.connect(callback)
             row1.addWidget(button)
-        row1.addWidget(QLabel("profile"))
-        row1.addWidget(self.v4_profile_combo)
         row1.addWidget(QLabel("leg"))
         row1.addWidget(self.v4_leg_combo, 1)
         batch_layout.addLayout(row1)
@@ -214,18 +255,12 @@ class V35ExactV4MainWindow(legacy.MainWindow):
             ("验证全部", self._validate_all),
             ("转为半自动编辑", self._convert_to_semi_auto),
             ("设为最终版本", self._export_final),
-            ("停止", self._cancel_worker),
         ):
             button = QPushButton(text)
             button.clicked.connect(callback)
             row2.addWidget(button)
         batch_layout.addLayout(row2)
 
-        self.v4_progress = QProgressBar()
-        self.v4_progress.setRange(0, 100)
-        self.v4_progress.setValue(0)
-        self.v4_progress.hide()
-        batch_layout.addWidget(self.v4_progress)
         self.v4_log = QPlainTextEdit()
         self.v4_log.setReadOnly(True)
         self.v4_log.setMaximumBlockCount(800)
@@ -243,15 +278,17 @@ class V35ExactV4MainWindow(legacy.MainWindow):
         self._v4_dirty = True
         self.plan_result = None
         self.plan_error = "当前编辑尚未生成V4轨迹"
+        if hasattr(self, "v4_total_time_label"):
+            self.v4_total_time_label.setText("总时间：STALE")
         self.update_status("已修改：仅标记 STALE，不会自动规划")
 
     def plan_now(self) -> None:
         if self._v4_booting:
             return
-        if self._v4_state is None:
-            self._warn("生成失败", "请先打开包含 project.json 的 V4 项目目录。")
+        if not self._ensure_v4_workspace("生成路径"):
             return
         try:
+            self._save_project_config(show_message=False)
             if self._generation_mode != GenerationMode.FULL_AUTO:
                 self._save_current_case_to_project()
         except Exception as exc:  # noqa: BLE001
@@ -264,7 +301,6 @@ class V35ExactV4MainWindow(legacy.MainWindow):
         }[self._generation_mode]
         params: dict[str, Any] = {
             "traj_id": int(self.traj_id_spin.value()),
-            "profile": str(self.v4_profile_combo.currentData() or "STANDARD"),
         }
         self._start_worker(job, params)
 
@@ -276,6 +312,7 @@ class V35ExactV4MainWindow(legacy.MainWindow):
         if hasattr(self, "path_mode_combo"):
             self._set_mode_combo(self._generation_mode)
             self._update_v4_mode_ui()
+        self._update_total_time_display()
 
     def path_mode_changed(self, _index: int) -> None:
         if self._v4_booting or self.updating_ui:
@@ -358,23 +395,22 @@ class V35ExactV4MainWindow(legacy.MainWindow):
         path = QFileDialog.getExistingDirectory(self, "新建V4项目目录", str(self._v4_project_root))
         if not path:
             return
-        target = Path(path)
-        if any(target.iterdir()):
-            self._warn("新建失败", "目标目录必须为空。")
+        target = Path(path).resolve(strict=False)
+        if (target / "project.json").exists():
+            if QMessageBox.question(
+                self,
+                "项目已存在",
+                "目标目录已经包含project.json。是否直接打开该V4项目？",
+            ) == QMessageBox.Yes:
+                self.load_v4_project(target, create_if_missing=False)
             return
-        if self._v4_state is None:
-            self._warn("新建失败", "请先打开一个V4项目作为公共配置模板。")
+        self._v4_project_root = target
+        if hasattr(self, "v4_project_edit"):
+            self.v4_project_edit.setText(str(target))
+        if not self._ensure_v4_workspace("新建项目", root=target):
             return
-        try:
-            layout = ProjectLayout.create(target, self._v4_state.project)
-            source_csv = self._v4_state.layout.traj_id_csv
-            if source_csv.exists():
-                import shutil
-
-                shutil.copy2(source_csv, layout.traj_id_csv)
-            self.load_v4_project(target)
-        except Exception as exc:  # noqa: BLE001
-            self._warn("新建失败", str(exc))
+        self._save_project_config(show_message=False)
+        self.update_status(f"已创建V4项目：{target}")
 
     def clear_project(self) -> None:
         if QMessageBox.question(
@@ -394,10 +430,10 @@ class V35ExactV4MainWindow(legacy.MainWindow):
         self._choose_project()
 
     def save_json(self) -> None:
-        if self._v4_state is None:
-            self._warn("保存失败", "请先打开V4项目。")
+        if not self._ensure_v4_workspace("保存Case"):
             return
         try:
+            self._save_project_config(show_message=False)
             path = self._save_current_case_to_project()
         except Exception as exc:  # noqa: BLE001
             self._warn("保存失败", str(exc))
@@ -444,10 +480,10 @@ class V35ExactV4MainWindow(legacy.MainWindow):
         self._load_case_into_legacy_view(case)
 
     def validate_current_project(self) -> None:
-        if self._v4_state is None:
-            self._warn("验证失败", "请先打开V4项目。")
+        if not self._ensure_v4_workspace("验证路径"):
             return
         try:
+            self._save_project_config(show_message=False)
             if self._generation_mode != GenerationMode.FULL_AUTO:
                 self._save_current_case_to_project()
         except Exception as exc:  # noqa: BLE001
@@ -465,13 +501,120 @@ class V35ExactV4MainWindow(legacy.MainWindow):
     # Project/case conversion helpers.
     # ------------------------------------------------------------------
     def _choose_project(self) -> None:
-        path = QFileDialog.getExistingDirectory(self, "打开V4项目", str(self._v4_project_root))
+        path = QFileDialog.getExistingDirectory(self, "打开或创建V4项目", str(self._v4_project_root))
         if path:
-            self.load_v4_project(path)
+            self.load_v4_project(path, create_if_missing=True)
 
-    def load_v4_project(self, root: str | Path) -> bool:
+    def _candidate_traj_csv(self, target_root: Path) -> Path | None:
+        candidates = (
+            target_root / "traj_id.csv",
+            Path(__file__).resolve().parents[3] / "traj_id.csv",
+            Path.cwd() / "traj_id.csv",
+        )
+        for candidate in candidates:
+            if candidate.exists() and candidate.is_file():
+                return candidate
+        return None
+
+    def _bootstrap_arguments(self) -> dict[str, Any]:
+        common_sites = {}
+        for index, key in enumerate(LOGICAL_SITE_KEYS):
+            site = self.project.fixed_sites[index]
+            common_sites[key] = {
+                "configured": True,
+                "x_mm": int(round(site.x_mm)),
+                "y_mm": int(round(site.y_mm)),
+                "yaw_ddeg": int(site.yaw_ddeg),
+            }
+        planner = self.project.planner
+        vehicle_profile = self.project.vehicle_profile
+        return {
+            "project_id": self._v4_project_root.name or "HJMB_V40_PROJECT",
+            "common_sites": common_sites,
+            "vehicle": {
+                "wheel": {
+                    "radius_mm": float(vehicle_profile.wheel_radius_mm),
+                    "rotation_radius_mm": float(vehicle_profile.rotation_radius_mm),
+                    "plan_limit_rpm": int(vehicle_profile.wheel_plan_limit_rpm),
+                    "hard_limit_rpm": int(vehicle_profile.wheel_hard_limit_rpm),
+                },
+                "footprint": {},
+            },
+            "dynamics": {
+                "max_speed_mmps": int(planner.max_speed_mmps),
+                "linear_accel_mmps2": int(planner.linear_accel_mmps2),
+                "braking_accel_mmps2": int(planner.linear_accel_mmps2),
+                "lateral_accel_mmps2": int(planner.lateral_accel_mmps2),
+                "max_wz_ddegps": int(round(math.degrees(planner.max_wz_radps) * 10.0)),
+                "angular_accel_moving_ddegps2": int(round(math.degrees(planner.angular_accel_moving_radps2) * 10.0)),
+                "angular_accel_rotate_ddegps2": int(round(math.degrees(planner.angular_accel_rotate_radps2) * 10.0)),
+                "dynamic_margin_ratio": 0.1,
+            },
+            "start_check": {
+                "position_tolerance_mm": int(self.project.start_check.position_tolerance_mm),
+                "yaw_tolerance_ddeg": int(self.project.start_check.yaw_tolerance_ddeg),
+                "stable_time_ms": int(self.project.start_check.stable_time_ms),
+            },
+            "arrival_check": {
+                "position_tolerance_mm": int(self.project.arrival_check.position_tolerance_mm),
+                "yaw_tolerance_ddeg": int(self.project.arrival_check.yaw_tolerance_ddeg),
+                "speed_tolerance_mmps": int(self.project.arrival_check.speed_tolerance_mmps),
+                "wz_tolerance_ddegps": int(self.project.arrival_check.wz_tolerance_ddegps),
+                "stable_time_ms": int(self.project.arrival_check.stable_time_ms),
+            },
+            "action_durations_ms": dict(self.project.mechanism_profile.action_duration_ms),
+        }
+
+    def _ensure_v4_workspace(self, reason: str, *, root: Path | None = None) -> bool:
+        if self._v4_state is not None:
+            return True
+        draft_project = copy.deepcopy(self.project)
+        target = (root or Path(self.v4_project_edit.text().strip() or self._v4_project_root)).resolve(strict=False)
+        self._v4_project_root = target
         try:
-            state = LoadedProjectState.load(root)
+            result = bootstrap_v4_workspace(
+                target,
+                **self._bootstrap_arguments(),
+                source_traj_csv=self._candidate_traj_csv(target),
+            )
+            state = LoadedProjectState.load(result.layout.root)
+        except Exception as exc:  # noqa: BLE001
+            self._warn(f"{reason}失败", f"无法创建或加载V4工作区：\n{exc}")
+            return False
+        self._v4_state = state
+        self._v4_project_root = state.layout.root
+        self.v4_project_edit.setText(str(state.layout.root))
+        for warning in result.warnings:
+            self._append_log(f"提示：{warning}")
+        self._refresh_leg_combo()
+        if result.created_project:
+            # Creating a workspace must not discard points/actions already edited before
+            # project.json existed.  Keep the editor draft and let the following save or
+            # planning command persist it as V4.
+            self.project = draft_project
+            self._v4_dirty = True
+            self.refresh_all(selected_point=0 if self.project.points else None)
+        else:
+            self._apply_project_common_sites()
+            self._load_current_mode_case()
+        self.v4_project_status.setText(
+            f"{state.layout.status().status.value} | project.json已就绪"
+        )
+        if result.created_project:
+            self._append_log(f"已自动创建 {state.layout.project_json}")
+        if result.created_route_table:
+            self._append_log(f"已自动生成 {state.layout.route_case_table_json}")
+        return True
+
+    def load_v4_project(self, root: str | Path, *, create_if_missing: bool = False) -> bool:
+        target = Path(root).resolve(strict=False)
+        if not (target / "project.json").exists() and create_if_missing:
+            self._v4_state = None
+            self._v4_project_root = target
+            self.v4_project_edit.setText(str(target))
+            return self._ensure_v4_workspace("打开项目", root=target)
+        try:
+            state = LoadedProjectState.load(target)
         except Exception as exc:  # noqa: BLE001
             self._warn("打开项目失败", str(exc))
             return False
@@ -490,12 +633,13 @@ class V35ExactV4MainWindow(legacy.MainWindow):
             self._append_log(f"警告：{warning}")
         return True
 
-    def _save_project_config(self) -> None:
-        if self._v4_state is None:
-            self._warn("保存失败", "请先打开V4项目。")
-            return
-        sites = {key: dict(value) for key, value in self._v4_state.project.sites.items()}
-        for index, key in enumerate(LOGICAL_SITE_KEYS[:5]):
+    def _save_project_config(self, *, show_message: bool = True) -> Path | None:
+        if not self._ensure_v4_workspace("保存公共配置"):
+            return None
+        assert self._v4_state is not None
+        base = self._v4_state.project
+        sites = {key: dict(value) for key, value in base.sites.items()}
+        for index, key in enumerate(LOGICAL_SITE_KEYS):
             site = self.project.fixed_sites[index]
             sites[key] = {
                 "configured": True,
@@ -503,13 +647,91 @@ class V35ExactV4MainWindow(legacy.MainWindow):
                 "y_mm": int(round(site.y_mm)),
                 "yaw_ddeg": int(site.yaw_ddeg),
             }
-        project = replace(self._v4_state.project, sites=sites)
+        wheel = {
+            **dict(base.vehicle.get("wheel", {})),
+            "radius_mm": float(self.project.vehicle_profile.wheel_radius_mm),
+            "rotation_radius_mm": float(self.project.vehicle_profile.rotation_radius_mm),
+            "plan_limit_rpm": int(self.project.vehicle_profile.wheel_plan_limit_rpm),
+            "hard_limit_rpm": int(self.project.vehicle_profile.wheel_hard_limit_rpm),
+        }
+        vehicle = {**dict(base.vehicle), "wheel": wheel}
+        planner = self.project.planner
+        dynamics = {
+            **dict(base.dynamics),
+            "max_speed_mmps": int(planner.max_speed_mmps),
+            "linear_accel_mmps2": int(planner.linear_accel_mmps2),
+            "braking_accel_mmps2": int(planner.linear_accel_mmps2),
+            "lateral_accel_mmps2": int(planner.lateral_accel_mmps2),
+            "max_wz_ddegps": int(round(math.degrees(planner.max_wz_radps) * 10.0)),
+            "angular_accel_moving_ddegps2": int(round(math.degrees(planner.angular_accel_moving_radps2) * 10.0)),
+            "angular_accel_rotate_ddegps2": int(round(math.degrees(planner.angular_accel_rotate_radps2) * 10.0)),
+        }
+        start_check = {
+            "position_tolerance_mm": int(self.project.start_check.position_tolerance_mm),
+            "yaw_tolerance_ddeg": int(self.project.start_check.yaw_tolerance_ddeg),
+            "stable_time_ms": int(self.project.start_check.stable_time_ms),
+        }
+        arrival_check = {
+            "position_tolerance_mm": int(self.project.arrival_check.position_tolerance_mm),
+            "yaw_tolerance_ddeg": int(self.project.arrival_check.yaw_tolerance_ddeg),
+            "speed_tolerance_mmps": int(self.project.arrival_check.speed_tolerance_mmps),
+            "wz_tolerance_ddegps": int(self.project.arrival_check.wz_tolerance_ddegps),
+            "stable_time_ms": int(self.project.arrival_check.stable_time_ms),
+        }
+        action_profiles = {key: dict(value) for key, value in base.action_profiles.items()}
+        for key, duration in self.project.mechanism_profile.action_duration_ms.items():
+            if key in action_profiles:
+                action_profiles[key]["estimated_time_ms"] = int(duration)
+                action_profiles[key]["timeout_ms"] = max(
+                    int(action_profiles[key].get("timeout_ms", 1000)),
+                    int(duration) + 2000,
+                )
+        project = replace(
+            base,
+            sites=sites,
+            vehicle=vehicle,
+            dynamics=dynamics,
+            start_check=start_check,
+            arrival_check=arrival_check,
+            action_profiles=action_profiles,
+        )
         save_project(self._v4_state.layout.project_json, project)
         self._v4_state.project = project
-        self._append_log("project.json公共姿态已保存；没有自动规划")
+        self._append_log("project.json公共姿态与规划参数已保存；没有自动规划")
+        if show_message:
+            self.update_status(f"已保存V4项目配置：{self._v4_state.layout.project_json}")
+        return self._v4_state.layout.project_json
+
+    def import_fixed_sites(self) -> None:
+        if self._v4_state is None:
+            self._choose_project()
+            return
+        self.load_v4_project(self._v4_state.layout.root, create_if_missing=False)
+        self.update_status("已从project.json和当前模式Case重新加载")
+
+    def export_fixed_sites(self) -> None:
+        if not self._ensure_v4_workspace("保存固定点"):
+            return
+        project_path = self._save_project_config(show_message=False)
+        case_path: Path | None = None
+        if self._generation_mode == GenerationMode.SEMI_AUTO:
+            try:
+                case_path = self._save_current_case_to_project()
+            except Exception as exc:  # noqa: BLE001
+                self._warn("保存8点失败", str(exc))
+                return
+        message = f"公共配置已保存到：\n{project_path}"
+        if case_path is not None:
+            message += f"\n\n当前8个逻辑点已保存到：\n{case_path}"
+        else:
+            message += "\n\n8个固定点均已写入project.json；yaw=0xFFFF会原样保存，表示不约束到点方向。"
+        QMessageBox.information(self, "V4固定点已保存", message)
 
     def _load_current_mode_case(self) -> None:
         if self._v4_state is None:
+            if self._generation_mode == GenerationMode.SEMI_AUTO:
+                self._prepare_empty_mode_view()
+                return
             self._update_v4_mode_ui()
             return
         case = self._v4_state.current_case(int(self.traj_id_spin.value()), self._generation_mode)
@@ -527,23 +749,23 @@ class V35ExactV4MainWindow(legacy.MainWindow):
                     EditPoint(point_id=0, type=POINT_TYPE_START, x_mm=0, y_mm=0, yaw_ddeg=0, exact_pass=True),
                     EditPoint(point_id=1, type=POINT_TYPE_ARRIVAL, x_mm=0, y_mm=0, yaw_ddeg=0, exact_pass=True),
                 ]
-                self.project.actions = []
             elif self._generation_mode == GenerationMode.SEMI_AUTO:
-                full = self._v4_state.current_case(int(self.traj_id_spin.value()), GenerationMode.FULL_AUTO)
-                if full is not None:
-                    self._load_case_into_legacy_view(full, display_mode=GenerationMode.SEMI_AUTO)
-                    self._v4_dirty = True
-                    return
+                # Semi-auto is user-authored: start with a genuinely empty
+                # execution list. The eight configured anchors remain in the
+                # fixed-site table and are added explicitly in the desired
+                # order, including P_START.
                 self.project.path_mode = PATH_MODE_FIXED_8
-                self.project.points = self._canonical_fixed_points()
-                self.project.actions = []
+                self.project.points = []
             else:
+                # FULL_AUTO is read-only and is shown only after an actual Case
+                # has been generated.  An empty full-auto view must not resemble
+                # a bogus route through all eight fixed points.
                 self.project.path_mode = PATH_MODE_FIXED_8
-                self.project.points = self._canonical_fixed_points()
-                self.project.actions = []
+                self.project.points = []
+            self.project.actions = []
             self.plan_result = None
             self._v4_dirty = False
-            self.refresh_all(selected_point=0)
+            self.refresh_all(selected_point=0 if self.project.points else None)
             self.update_status(f"{MODE_NAMES[self._generation_mode]}：当前ID尚无Case")
         finally:
             self._v4_loading_case = False
@@ -595,23 +817,12 @@ class V35ExactV4MainWindow(legacy.MainWindow):
                                 else int(item.get("yaw_ddeg", 0))
                             ),
                             max_speed_mmps=int(item.get("max_speed_mmps", 0) or 0),
+                            corner_trim_mm=float(item.get("corner_trim_mm", 200.0 if ptype == POINT_TYPE_WAYPOINT else 0.0)),
                             exact_pass=bool(item.get("exact_pass", ptype != POINT_TYPE_WAYPOINT)),
                         )
                     )
             else:
                 self.project.path_mode = PATH_MODE_FIXED_8
-                pose_by_id = {
-                    str(item["point_id"]): dict(item["pose"])
-                    for item in case.logical_points
-                }
-                for index, key in enumerate(LOGICAL_SITE_KEYS):
-                    pose = pose_by_id.get(key)
-                    if pose is None:
-                        continue
-                    site = self.project.fixed_sites[index]
-                    site.x_mm = float(pose["x_mm"])
-                    site.y_mm = float(pose["y_mm"])
-                    site.yaw_ddeg = int(pose["yaw_ddeg"])
                 self.project.points = self._route_points_from_case(case)
             self.project.actions = self._legacy_actions_from_case(case)
             self.plan_result = self._load_plan_result(case)
@@ -623,53 +834,94 @@ class V35ExactV4MainWindow(legacy.MainWindow):
 
     def _route_points_from_case(self, case: CaseManifestV40) -> list[EditPoint]:
         key_to_site = {key: index for index, key in enumerate(LOGICAL_SITE_KEYS)}
-        order: list[str] = ["P_START"]
-        for key in case.selected_plan.get("pickup_arrival_state_order", []):
-            key = str(key)
-            if key in key_to_site and key not in order:
-                order.append(key)
-        for step in case.selected_plan.get("unload_sequence", []):
-            ranks = [int(value) for value in step.get("target_ranks", [])]
-            if ranks:
-                key = f"P_DROP_{ranks[0]}"
-                if key in key_to_site and key not in order:
-                    order.append(key)
-        for key in LOGICAL_SITE_KEYS:
-            if key not in order:
-                order.append(key)
         points: list[EditPoint] = []
+
+        if case.generation_mode == GenerationMode.SEMI_AUTO and case.semi_path is not None:
+            for item in case.semi_path.get("points", []):
+                ptype = str(item["type"])
+                if ptype in (POINT_TYPE_START, POINT_TYPE_ARRIVAL):
+                    key = str(item["site_key"])
+                    site_id = key_to_site[key]
+                    site = self.project.fixed_sites[site_id]
+                    point = EditPoint(
+                        point_id=len(points),
+                        type=ptype,
+                        site_id=site_id,
+                        x_mm=site.x_mm,
+                        y_mm=site.y_mm,
+                        yaw_ddeg=site.yaw_ddeg,
+                        exact_pass=True,
+                    )
+                else:
+                    point = EditPoint(
+                        point_id=len(points),
+                        type=POINT_TYPE_WAYPOINT,
+                        site_id=SITE_ID_FREE,
+                        x_mm=float(item["x_mm"]),
+                        y_mm=float(item["y_mm"]),
+                        yaw_ddeg=YAW_UNSPECIFIED_DDEG,
+                        max_speed_mmps=int(item.get("max_speed_mmps", 0) or 0),
+                        corner_trim_mm=float(item.get("corner_trim_mm", 200.0)),
+                        exact_pass=bool(item.get("exact_pass", False)),
+                    )
+                points.append(point)
+            return points
+
+        # FULL_AUTO: show only the selected legal route.  Never append the
+        # unused 2L/2R branch or the remaining fixed anchors.
+        route_family = str(case.selected_plan.get("route_family", ""))
+        if route_family == "PICK_1_TO_3":
+            order = ROUTE_A_SITE_SEQUENCE
+        elif route_family == "PICK_3_TO_1":
+            order = ROUTE_B_SITE_SEQUENCE
+        else:
+            order = ("P_START",)
+        pose_by_id = {
+            str(item.get("point_id")): dict(item.get("pose", {}))
+            for item in case.logical_points
+        }
         for key in order:
-            index = key_to_site[key]
-            site = self.project.fixed_sites[index]
+            site_id = key_to_site[key]
+            pose = pose_by_id.get(key) or {
+                "x_mm": self.project.fixed_sites[site_id].x_mm,
+                "y_mm": self.project.fixed_sites[site_id].y_mm,
+                "yaw_ddeg": self.project.fixed_sites[site_id].yaw_ddeg,
+            }
             points.append(
                 EditPoint(
                     point_id=len(points),
                     type=POINT_TYPE_START if not points else POINT_TYPE_ARRIVAL,
-                    site_id=index,
-                    x_mm=site.x_mm,
-                    y_mm=site.y_mm,
-                    yaw_ddeg=site.yaw_ddeg,
+                    site_id=site_id,
+                    x_mm=float(pose["x_mm"]),
+                    y_mm=float(pose["y_mm"]),
+                    yaw_ddeg=int(pose.get("yaw_ddeg", YAW_UNSPECIFIED_DDEG)),
                     exact_pass=True,
                 )
             )
-        for item in case.auxiliary_points:
-            points.insert(
-                max(1, len(points) - 1),
-                EditPoint(
-                    point_id=0,
-                    type=POINT_TYPE_WAYPOINT,
-                    site_id=SITE_ID_FREE,
-                    x_mm=float(item["x_mm"]),
-                    y_mm=float(item["y_mm"]),
-                    yaw_ddeg=YAW_UNSPECIFIED_DDEG,
-                    exact_pass=str(item.get("policy", "LOCKED_PASS")) == "LOCKED_PASS",
-                ),
-            )
-        for index, point in enumerate(points):
-            point.point_id = index
         return points
 
     def _legacy_actions_from_case(self, case: CaseManifestV40) -> list[MechanicalAction]:
+        state_to_point: dict[str, int] = {}
+        if case.generation_mode == GenerationMode.SEMI_AUTO and case.semi_path is not None:
+            for index, item in enumerate(case.semi_path.get("points", [])):
+                if str(item.get("type")) == POINT_TYPE_ARRIVAL:
+                    state_to_point[str(item.get("state_id") or item.get("site_key"))] = index
+        else:
+            for index, point in enumerate(self.project.points):
+                if point.type != POINT_TYPE_ARRIVAL:
+                    continue
+                if 0 <= point.site_id < len(LOGICAL_SITE_KEYS):
+                    state_to_point[LOGICAL_SITE_KEYS[point.site_id]] = index
+            for step in case.selected_plan.get("unload_sequence", []):
+                state_id = f"DROP_STEP_{int(step.get('step_index', 0))}"
+                ranks = [int(value) for value in step.get("target_ranks", [])]
+                if ranks:
+                    key = f"P_DROP_{ranks[0]}"
+                    for index, point in enumerate(self.project.points):
+                        if point.type == POINT_TYPE_ARRIVAL and 0 <= point.site_id < len(LOGICAL_SITE_KEYS) and LOGICAL_SITE_KEYS[point.site_id] == key:
+                            state_to_point[state_id] = index
+                            break
+
         result: list[MechanicalAction] = []
         for index, item in enumerate(case.actions.get("source", [])):
             action_raw = item.get("action", "NONE")
@@ -678,6 +930,8 @@ class V35ExactV4MainWindow(legacy.MainWindow):
             else:
                 action_code = int(action_raw)
             arrival_point_id = item.get("arrival_point_index", item.get("arrival_point_id"))
+            if arrival_point_id is None and item.get("arrival_state_id") is not None:
+                arrival_point_id = state_to_point.get(str(item["arrival_state_id"]))
             result.append(
                 MechanicalAction(
                     action_seq=index,
@@ -727,13 +981,17 @@ class V35ExactV4MainWindow(legacy.MainWindow):
                 item["exact_pass"] = True
             else:
                 item["exact_pass"] = bool(point.exact_pass)
+                item["corner_trim_mm"] = float(point.corner_trim_mm)
                 if point.max_speed_mmps > 0:
                     item["max_speed_mmps"] = int(point.max_speed_mmps)
             points.append(item)
         existing = self._v4_state.current_case(traj_id, GenerationMode.MANUAL) if self._v4_state else None
         data = existing.to_dict() if existing is not None else self._empty_manual_case(traj_id)
         data["manual_path"] = {"points": points}
+        data["semi_path"] = None
         data["logical_points"] = []
+        data["auxiliary_points"] = []
+        data["leg_refs"] = []
         data["actions"] = {"source": self._action_source_from_view(), "compiled": []}
         data["review"] = {
             **dict(data.get("review", {})),
@@ -747,49 +1005,99 @@ class V35ExactV4MainWindow(legacy.MainWindow):
 
     def _semi_case_from_view(self, traj_id: int) -> CaseManifestV40:
         assert self._v4_state is not None
-        case = self._v4_state.current_case(traj_id, GenerationMode.SEMI_AUTO)
-        if case is None:
-            full = self._v4_state.current_case(traj_id, GenerationMode.FULL_AUTO)
-            if full is None:
-                raise RuntimeError("半自动需要任务语义模板。请先生成该ID的FULL_AUTO，再转为半自动。")
-            case = convert_full_auto_to_semi_auto(self._v4_state.layout, traj_id)
-            self._v4_state.semi_auto_cases[traj_id] = case
-        pose_by_key = {
-            key: {
-                "x_mm": int(round(self.project.fixed_sites[index].x_mm)),
-                "y_mm": int(round(self.project.fixed_sites[index].y_mm)),
-                "yaw_ddeg": int(self.project.fixed_sites[index].yaw_ddeg),
-            }
-            for index, key in enumerate(LOGICAL_SITE_KEYS)
-        }
-        logical_points = []
-        for item in case.logical_points:
-            updated = dict(item)
-            key = str(item["point_id"])
-            if key in pose_by_key:
-                updated["pose"] = pose_by_key[key]
-            logical_points.append(updated)
-        auxiliary = [
+        semi_points: list[dict[str, Any]] = []
+        fixed_sequence: list[str] = []
+        for point in self.project.points:
+            if point.type in (POINT_TYPE_START, POINT_TYPE_ARRIVAL):
+                if not 0 <= point.site_id < len(LOGICAL_SITE_KEYS):
+                    raise ValueError("半自动模式的START/ARRIVAL必须从8个固定点中选择")
+                site_key = LOGICAL_SITE_KEYS[point.site_id]
+                fixed_sequence.append(site_key)
+                semi_points.append(
+                    {
+                        "type": point.type,
+                        "site_key": site_key,
+                        "state_id": site_key,
+                    }
+                )
+            elif point.type == POINT_TYPE_WAYPOINT:
+                item: dict[str, Any] = {
+                    "type": POINT_TYPE_WAYPOINT,
+                    "x_mm": int(round(point.x_mm)),
+                    "y_mm": int(round(point.y_mm)),
+                    "exact_pass": bool(point.exact_pass),
+                    "corner_trim_mm": float(point.corner_trim_mm),
+                }
+                if point.max_speed_mmps > 0:
+                    item["max_speed_mmps"] = int(point.max_speed_mmps)
+                semi_points.append(item)
+            else:
+                raise ValueError(f"半自动模式不支持点类型：{point.type}")
+        route_family = route_family_from_site_sequence(tuple(fixed_sequence))
+
+        # Drop STOP actions from a generated full-auto Case use DROP_STEP_n.
+        # Give matching fixed drop rows those stable IDs while user-created
+        # point-index actions continue to work unchanged.
+        route_name = route_family.name
+        full = self._v4_state.current_case(traj_id, GenerationMode.FULL_AUTO)
+        if full is None:
+            full = generate_case_draft(self._v4_state.layout, traj_id).case
+            self._v4_state.full_auto_cases[traj_id] = full
+        candidate = next(
+            (
+                dict(item)
+                for item in full.selected_plan.get("candidates", [])
+                if str(item.get("route_family")) == route_name
+            ),
+            None,
+        )
+        if candidate is None:
+            candidate = dict(full.selected_plan)
+        candidate["route_family"] = route_name
+        candidate["yaw_direction"] = "SHORTEST"
+        candidate["locked_by_user"] = True
+        candidate["selection_state"] = "USER_SEMI_AUTO"
+        candidate["drop_targets"] = list(full.selected_plan.get("drop_targets", []))
+        drop_state_by_rank: dict[int, str] = {}
+        for step in candidate.get("unload_sequence", []):
+            state_id = f"DROP_STEP_{int(step.get('step_index', 0))}"
+            for rank in step.get("target_ranks", []):
+                drop_state_by_rank[int(rank)] = state_id
+        for item in semi_points:
+            key = str(item.get("site_key", ""))
+            if key.startswith("P_DROP_"):
+                item["state_id"] = drop_state_by_rank.get(int(key.rsplit("_", 1)[1]), key)
+
+        existing = self._v4_state.current_case(traj_id, GenerationMode.SEMI_AUTO)
+        base = existing.to_dict() if existing is not None else full.to_dict()
+        base.update(
             {
-                "x_mm": int(round(point.x_mm)),
-                "y_mm": int(round(point.y_mm)),
-                "policy": "LOCKED_PASS" if point.exact_pass else "INITIAL_GUESS",
+                "generation_mode": GenerationMode.SEMI_AUTO.value,
+                "selected_plan": candidate,
+                "manual_path": None,
+                "semi_path": {"points": semi_points},
+                "logical_points": [],
+                "auxiliary_points": [],
+                "arrival_states": [],
+                "leg_refs": [],
+                "actions": {"source": self._action_source_from_view(), "compiled": []},
+                "derived_from": {
+                    "generation_mode": GenerationMode.FULL_AUTO.value,
+                    "traj_id": traj_id,
+                    "case_hash": str(full.hashes.get("case_hash", "")),
+                },
+                "review": {
+                    **dict(base.get("review", {})),
+                    "state": "STALE",
+                    "approved": False,
+                    "detached_from_library": True,
+                    "manual_override": True,
+                    "override_reason": "user-authored ordered semi-auto path",
+                    "stale_reason": "半自动路径已编辑，等待显式生成",
+                },
             }
-            for point in self.project.points
-            if point.type == POINT_TYPE_WAYPOINT and point.site_id == SITE_ID_FREE
-        ]
-        data = case.to_dict()
-        data["logical_points"] = logical_points
-        data["auxiliary_points"] = auxiliary
-        data["actions"] = {"source": self._action_source_from_view(), "compiled": []}
-        data["review"] = {
-            **dict(data.get("review", {})),
-            "state": "STALE",
-            "approved": False,
-            "manual_override": True,
-            "stale_reason": "V3.5基准GUI半自动编辑",
-        }
-        return CaseManifestV40.from_dict(data)
+        )
+        return CaseManifestV40.from_dict(base)
 
     def _action_source_from_view(self) -> list[dict[str, Any]]:
         result: list[dict[str, Any]] = []
@@ -866,7 +1174,7 @@ class V35ExactV4MainWindow(legacy.MainWindow):
     def _apply_project_common_sites(self) -> None:
         if self._v4_state is None:
             return
-        for index, key in enumerate(LOGICAL_SITE_KEYS[:5]):
+        for index, key in enumerate(LOGICAL_SITE_KEYS):
             raw = self._v4_state.project.sites[key]
             site = self.project.fixed_sites[index]
             site.x_mm = float(raw["x_mm"])
@@ -877,8 +1185,7 @@ class V35ExactV4MainWindow(legacy.MainWindow):
     # Worker and batch controls.
     # ------------------------------------------------------------------
     def _start_worker(self, job: str, params: dict[str, Any]) -> None:
-        if self._v4_state is None:
-            self._warn("任务失败", "请先打开V4项目。")
+        if not self._ensure_v4_workspace("启动任务"):
             return
         if self._v4_worker is not None and self._v4_worker.is_alive():
             self._warn("任务繁忙", "已有worker正在运行。")
@@ -889,7 +1196,7 @@ class V35ExactV4MainWindow(legacy.MainWindow):
             self._warn("启动失败", str(exc))
             return
         self.v4_progress.setValue(0)
-        self.v4_progress.show()
+        self.v4_task_label.setText(f"任务：{job}")
         self._v4_poll_timer.start()
         self._append_log(f"启动任务 {job}: {params}")
 
@@ -901,25 +1208,38 @@ class V35ExactV4MainWindow(legacy.MainWindow):
             if message.kind == "progress":
                 if "percent" in payload:
                     self.v4_progress.setValue(max(0, min(100, int(payload["percent"]))))
+                stage = str(payload.get("stage", "PROGRESS"))
+                self.v4_task_label.setText(f"任务：{stage}")
                 self._append_log(f"[{payload.get('stage', 'PROGRESS')}] {payload.get('message', '')}")
             elif message.kind == "result":
+                self.v4_progress.setValue(100)
+                self.v4_task_label.setText("任务：完成")
                 self._append_log(f"任务完成: {payload}")
             elif message.kind == "error":
+                self.v4_task_label.setText("任务：失败")
                 self._append_log(f"任务失败: {payload.get('error', payload)}")
             elif message.kind == "cancelled":
+                self.v4_task_label.setText("任务：已停止")
                 self._append_log("任务已取消")
         if self._v4_worker.is_alive():
             return
         self._v4_worker.join(0.1)
         self._v4_worker = None
         self._v4_poll_timer.stop()
-        self.v4_progress.hide()
         self._reload_v4_state()
 
     def _cancel_worker(self) -> None:
         if self._v4_worker is not None and self._v4_worker.is_alive():
-            self._v4_worker.cancel()
-            self._append_log("已请求停止worker")
+            worker = self._v4_worker
+            worker.cancel()
+            worker.join(0.05)
+            self._v4_worker = None
+            self._v4_poll_timer.stop()
+            self.v4_task_label.setText("任务：已停止")
+            self._append_log("已立即终止worker")
+            self._reload_v4_state()
+        else:
+            self.v4_task_label.setText("任务：空闲")
 
     def _reload_v4_state(self) -> None:
         if self._v4_state is None:
@@ -930,13 +1250,14 @@ class V35ExactV4MainWindow(legacy.MainWindow):
             self._apply_project_common_sites()
             self._refresh_leg_combo()
             self._load_current_mode_case()
+            self._update_total_time_display()
         except Exception as exc:  # noqa: BLE001
             self._append_log(f"任务后重新加载失败: {exc}")
 
     def _optimize_missing(self) -> None:
         self._start_worker(
             "optimize-missing-legs",
-            {"profile": str(self.v4_profile_combo.currentData() or "STANDARD")},
+            {"profile": "STANDARD"},
         )
 
     def _reoptimize_selected_leg(self) -> None:
@@ -946,7 +1267,7 @@ class V35ExactV4MainWindow(legacy.MainWindow):
             return
         self._start_worker(
             "reoptimize-current-leg",
-            {"leg_id": leg_id, "profile": str(self.v4_profile_combo.currentData() or "STANDARD")},
+            {"leg_id": leg_id, "profile": "STANDARD"},
         )
 
     def _clear_selected_leg(self) -> None:
@@ -975,7 +1296,10 @@ class V35ExactV4MainWindow(legacy.MainWindow):
         if self._generation_mode != GenerationMode.FULL_AUTO:
             self._warn("批量生成", "生成全部360只适用于全自动模式。")
             return
-        self._start_worker("generate-full-auto-all", {})
+        self._start_worker(
+            "generate-full-auto-all",
+            {"profile": "STANDARD"},
+        )
 
     def _validate_all(self) -> None:
         self._start_worker("validate-all", {})
@@ -1009,6 +1333,7 @@ class V35ExactV4MainWindow(legacy.MainWindow):
             {
                 "traj_id": int(self.traj_id_spin.value()),
                 "generation_mode": self._generation_mode.value,
+                "profile": "default",
                 "approve": True,
             },
         )
@@ -1090,6 +1415,36 @@ class V35ExactV4MainWindow(legacy.MainWindow):
     # ------------------------------------------------------------------
     # Small UI helpers.
     # ------------------------------------------------------------------
+    def _update_total_time_display(self) -> None:
+        if not hasattr(self, "v4_total_time_label"):
+            return
+        motion_ms: int | None = None
+        total_ms: int | None = None
+        if self.plan_result is not None:
+            motion_ms = int(self.plan_result.summary.formal_time_ms)
+            total_ms = int(self.plan_result.summary.estimated_total_time_ms)
+        elif self._v4_state is not None:
+            case = self._v4_state.current_case(
+                int(self.traj_id_spin.value()), self._generation_mode
+            )
+            if case is not None:
+                raw_motion = case.estimates.get("planned_motion_time_ms")
+                raw_total = case.estimates.get("planned_total_estimate_ms")
+                if isinstance(raw_motion, (int, float)):
+                    motion_ms = int(raw_motion)
+                if isinstance(raw_total, (int, float)):
+                    total_ms = int(raw_total)
+        if motion_ms is None and total_ms is None:
+            self.v4_total_time_label.setText("总时间：—")
+        elif motion_ms is None:
+            self.v4_total_time_label.setText(f"总时间：{total_ms / 1000.0:.2f} s")
+        elif total_ms is None or total_ms == motion_ms:
+            self.v4_total_time_label.setText(f"总时间：{motion_ms / 1000.0:.2f} s")
+        else:
+            self.v4_total_time_label.setText(
+                f"总时间：{total_ms / 1000.0:.2f} s（底盘 {motion_ms / 1000.0:.2f} s）"
+            )
+
     def _set_mode_combo(self, mode: GenerationMode) -> None:
         if not hasattr(self, "path_mode_combo"):
             return

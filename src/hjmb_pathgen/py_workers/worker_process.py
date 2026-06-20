@@ -14,7 +14,7 @@ from hjmb_pathgen.py_domain.leg_optimization import LegOptimizationProfileName
 from hjmb_pathgen.py_io.codecs.json_codec import load_case, load_leg_library, load_project
 
 from hjmb_pathgen.py_services.mode_case_service import generate_semi_auto
-from hjmb_pathgen.py_services.mode_output_service import export_final_bin, write_manual_outputs
+from hjmb_pathgen.py_services.mode_output_service import export_final_bin, write_manual_outputs, write_semi_auto_outputs
 from hjmb_pathgen.py_services.case_compiler import CaseCompileRequest
 from hjmb_pathgen.py_services.output_service import CaseOutputOptions, write_case_outputs
 from hjmb_pathgen.py_services.phase7_generation_service import (
@@ -42,6 +42,16 @@ class WorkerJobHandle:
 
     def cancel(self) -> None:
         self._cancel_event.set()
+        # Long numerical optimizers cannot always return to Python frequently
+        # enough for cooperative cancellation.  Formal writes are atomic, so a
+        # forced process stop is safer and gives the UI the immediate response
+        # expected by the operator.
+        if self._process.is_alive():
+            self._process.terminate()
+            self._process.join(0.20)
+        if self._process.is_alive() and hasattr(self._process, "kill"):
+            self._process.kill()
+            self._process.join(0.20)
 
     def is_alive(self) -> bool:
         return self._process.is_alive()
@@ -51,7 +61,7 @@ class WorkerJobHandle:
         while True:
             try:
                 item = self._messages.get_nowait()
-            except queue.Empty:
+            except (queue.Empty, EOFError, OSError):
                 break
             messages.append(WorkerMessage(kind=str(item.get("kind", "")), payload=dict(item.get("payload", {}))))
         return messages
@@ -124,7 +134,7 @@ def _run_job(
         emit("OPTIMIZING", "collecting and optimizing current Case dependencies", percent=1)
         optimization = optimize_missing_legs(
             layout,
-            profile_name=LegOptimizationProfileName.STANDARD,
+            profile_name=_leg_profile(params),
             seed=int(params.get("seed", 0)),
             traj_id=int(params["traj_id"]),
             cancel_check=cancel_event.is_set,
@@ -157,7 +167,7 @@ def _run_job(
         emit("OPTIMIZING", "optimizing all missing/stale unique legs", percent=1)
         optimization = optimize_missing_legs(
             layout,
-            profile_name=LegOptimizationProfileName.STANDARD,
+            profile_name=_leg_profile(params),
             seed=int(params.get("seed", 0)),
             cancel_check=cancel_event.is_set,
             progress_callback=lambda item: emit(
@@ -193,15 +203,11 @@ def _run_job(
         return generate_semi_auto(
             layout,
             int(params["traj_id"]),
-            profile_name=LegOptimizationProfileName(
-                str(params.get("profile", LegOptimizationProfileName.STANDARD.value))
-            ),
-            seed=int(params.get("seed", 0)),
             cancel_check=cancel_event.is_set,
             progress_callback=lambda item: emit(
-                "OPTIMIZING",
-                "optimizing semi-auto anchor legs",
-                **item,
+                str(item.get("stage", "PLANNING")),
+                str(item.get("message", "planning ordered semi-auto path")),
+                **{key: value for key, value in item.items() if key not in {"stage", "message"}},
             ),
         ).to_dict()
     if job == "generate-manual":
@@ -218,7 +224,7 @@ def _run_job(
         emit("OPTIMIZING", "optimizing missing directed legs")
         return optimize_missing_legs(
             layout,
-            profile_name=LegOptimizationProfileName(str(params.get("profile", LegOptimizationProfileName.STANDARD.value))),
+            profile_name=_leg_profile(params),
             seed=int(params.get("seed", 0)),
             include_stale=bool(params.get("include_stale", True)),
             max_count=params.get("max_count"),
@@ -230,9 +236,7 @@ def _run_job(
         return optimize_leg_by_id(
             layout,
             str(params["leg_id"]),
-            profile_name=LegOptimizationProfileName(
-                str(params.get("profile", LegOptimizationProfileName.STANDARD.value))
-            ),
+            profile_name=_leg_profile(params),
             seed=int(params.get("seed", 0)),
             force=job == "reoptimize-current-leg",
         )
@@ -255,23 +259,16 @@ def _run_job(
             ).to_dict()
         if mode == GenerationMode.FULL_AUTO:
             return validate_one(layout, traj_id)
-        return write_case_outputs(
-            layout,
-            CaseCompileRequest(
-                case=case,
-                leg_library=load_leg_library(layout.leg_library_json),
-                project=load_project(layout.project_json),
-            ),
-            CaseOutputOptions(
+        if mode == GenerationMode.SEMI_AUTO:
+            return write_semi_auto_outputs(
+                layout,
+                case,
                 write_case_json=False,
                 write_bin=False,
-                write_portable=False,
                 write_report=False,
                 dry_run=True,
-                require_approval=False,
-                generation_mode=mode,
-            ),
-        ).to_dict()
+            ).to_dict()
+        raise ValueError(f"unsupported validation mode: {mode.value}")
     if job == "export-final":
         _raise_if_cancelled(cancel_event)
         return export_final_bin(
@@ -288,3 +285,15 @@ def _run_job(
 def _raise_if_cancelled(cancel_event: mp.Event) -> None:
     if cancel_event.is_set():
         raise RuntimeError("CANCELLED")
+
+
+def _leg_profile(params: dict[str, Any]) -> LegOptimizationProfileName:
+    """Normalize old UI labels while keeping one production optimization mode."""
+
+    raw = str(params.get("profile", LegOptimizationProfileName.STANDARD.value)).upper()
+    aliases = {
+        "QUICK": LegOptimizationProfileName.QUICK_PREVIEW.value,
+        "DEFAULT": LegOptimizationProfileName.STANDARD.value,
+        "OPTIMAL": LegOptimizationProfileName.STANDARD.value,
+    }
+    return LegOptimizationProfileName(aliases.get(raw, raw))

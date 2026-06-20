@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from hjmb_pathgen.py_domain.compiled import CompiledTrajectoryV40
-from hjmb_pathgen.py_domain.enums import ActionCode, ActionMode, FinishMode, NodeFlag, RouteFamily, SegmentFlag
+from hjmb_pathgen.py_domain.enums import ActionCode, ActionMode, FinishMode, HeaderFlag, NodeFlag, RouteFamily, SegmentFlag
 from hjmb_pathgen.py_domain.errors import BinaryLayoutError
 
 
@@ -268,7 +268,11 @@ def _validate_actions(trajectory: CompiledTrajectoryV40) -> None:
                 _fail(f"actions[{index}].stable_time_ms", "KINEMATIC stable_time_ms must be positive", actual=action.stable_time_ms, expected=">0")
             if not any(limits[:4]):
                 _fail(f"actions[{index}]", "KINEMATIC needs at least one motion limit", actual=limits[:4], expected="any nonzero limit")
-    if header.route_family == int(RouteFamily.MANUAL):
+    # Working MANUAL/SEMI_AUTO trajectories may deliberately omit mechanical
+    # actions while the chassis path is being tested.  MANUAL_OVERRIDE marks
+    # those non-final work products.  Formal export performs the stricter final
+    # DROP check in mode_output_service._require_final_drop().
+    if header.route_family == int(RouteFamily.MANUAL) or (header.flags & int(HeaderFlag.MANUAL_OVERRIDE)):
         return
     if not trajectory.actions:
         _fail("actions", "formal FULL_AUTO output requires a final DROP STOP_AND_WAIT action")

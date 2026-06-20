@@ -107,7 +107,7 @@ def optimize_current_case_leg(
         project,
         profile_name=profile_name,
         seed=seed,
-        yaw_policy=_case_yaw_policy(case),
+        yaw_policy=_case_yaw_policy(case, transition),
         warm_start_leg=warm_start,
     )
     if result.success and result.leg is not None:
@@ -225,7 +225,14 @@ def _topology_profile_object(project: ProjectV40, profile_id: str) -> dict[str, 
     return {}
 
 
-def _case_yaw_policy(case: CaseManifestV40) -> YawPolicy:
+def _case_yaw_policy(case: CaseManifestV40, transition: TransitionRequirement | None = None) -> YawPolicy:
+    # Only the drop-to-drop sweep benefits from the selected one-way yaw policy.
+    # Pickup and transfer legs use the time-minimising shortest rotation.
+    if transition is not None and not (
+        transition.from_state_id.startswith("DROP_STEP_")
+        and transition.to_state_id.startswith("DROP_STEP_")
+    ):
+        return YawPolicy.SHORTEST
     try:
         return YawPolicy(str(case.selected_plan.get("yaw_direction", YawPolicy.SHORTEST.value)))
     except ValueError:

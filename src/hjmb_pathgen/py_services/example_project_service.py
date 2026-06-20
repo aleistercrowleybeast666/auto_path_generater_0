@@ -14,6 +14,7 @@ from hjmb_pathgen.py_io.codecs.json_codec import save_leg_library
 from hjmb_pathgen.py_domain.enums import LegState, NodeFlag
 from hjmb_pathgen.py_domain.leg import LegLibraryV40, LegV40
 from hjmb_pathgen.py_domain.project import ProjectV40
+from hjmb_pathgen.py_domain.protocol import YAW_UNSPECIFIED_DDEG
 from hjmb_pathgen.py_domain.protocol import DIR_BIN, DIR_CASES, DIR_PORTABLE
 from hjmb_pathgen.py_planning.optimization.leg_optimizer import PLANNER_ALGORITHM_VERSION
 from hjmb_pathgen.py_services.phase7_generation_service import collect_unique_legs, generate_all
@@ -113,6 +114,9 @@ def _base_project_dict() -> dict[str, Any]:
             "P_PICK_2L": {"configured": True, "x_mm": 200, "y_mm": 0, "yaw_ddeg": 0},
             "P_PICK_2R": {"configured": True, "x_mm": 300, "y_mm": 0, "yaw_ddeg": 0},
             "P_PICK_3": {"configured": True, "x_mm": 400, "y_mm": 0, "yaw_ddeg": 0},
+            "P_DROP_1": {"configured": True, "x_mm": -1600, "y_mm": -700, "yaw_ddeg": YAW_UNSPECIFIED_DDEG},
+            "P_DROP_2": {"configured": True, "x_mm": -1300, "y_mm": -700, "yaw_ddeg": YAW_UNSPECIFIED_DDEG},
+            "P_DROP_3": {"configured": True, "x_mm": -1000, "y_mm": -700, "yaw_ddeg": YAW_UNSPECIFIED_DDEG},
         },
         "field_objects": {
             "cylinders": [

@@ -339,14 +339,30 @@ def _interpolate_sample(left: GeometrySample, right: GeometrySample, ratio: floa
 def _local_z_caps(samples: tuple[GeometrySample, ...], limits: TimeParameterizationLimits) -> tuple[list[float], dict[str, int]]:
     z_caps: list[float] = []
     limiting: dict[str, int] = {}
-    for sample in samples:
+    for index, sample in enumerate(samples):
         caps: list[tuple[str, float]] = [("max_speed", limits.max_speed_mmps)]
         if sample.max_speed_mmps is not None:
             caps.append(("point_max_speed", sample.max_speed_mmps))
-        if abs(sample.curvature_1_per_mm) > EPSILON:
-            caps.append(("lateral_accel", math.sqrt(limits.lateral_accel_mmps2 / abs(sample.curvature_1_per_mm))))
+        # Integration checks each interval using the maximum endpoint curvature
+        # and the average endpoint z.  Use the same local neighborhood here so
+        # a high-speed straight sample adjacent to a curved sample cannot make
+        # the interval exceed the lateral acceleration limit.
+        neighborhood = samples[max(0, index - 1): min(len(samples), index + 2)]
+        effective_curvature = max(abs(item.curvature_1_per_mm) for item in neighborhood)
+        if effective_curvature > EPSILON:
+            caps.append(("lateral_accel", math.sqrt(limits.lateral_accel_mmps2 / effective_curvature)))
         if abs(sample.yaw_ddeg_per_mm) > EPSILON:
             caps.append(("yaw_rate", limits.max_wz_ddegps / abs(sample.yaw_ddeg_per_mm)))
+        # Even with zero tangential acceleration, beta contains q_prime*v^2.
+        # Treat that term as a local speed cap before reachable/controllable
+        # propagation.  Without this cap, evaluating acceleration at an
+        # unrealistically high initial z can collapse a feasible stop interval
+        # to zero and the monotone solver can never recover it.
+        if abs(sample.yaw_ddeg_per_mm2) > EPSILON:
+            caps.append((
+                "yaw_accel_profile",
+                math.sqrt(limits.angular_accel_moving_ddegps2 / abs(sample.yaw_ddeg_per_mm2)),
+            ))
         wheel_coeff = _wheel_rpm_per_mmps(sample, limits)
         if wheel_coeff > EPSILON:
             caps.append(("wheel_rpm", limits.wheel_plan_limit_rpm / wheel_coeff))
@@ -376,7 +392,15 @@ def _propagate_z(
         changed = False
         for index in range(len(samples) - 1):
             ds = samples[index + 1].s_mm - samples[index].s_mm
-            a_pos, _a_neg = _interval_accel_caps(samples[index], samples[index + 1], max(z[index], z[index + 1]), limits)
+            # Reachability is governed by the already reachable left state,
+            # not by the still-unproven high speed at the right state.
+            a_pos, _a_neg = _interval_accel_caps(
+                samples[index],
+                samples[index + 1],
+                max(z[index], z[index + 1]),
+                z[index],
+                limits,
+            )
             reachable = z[index] + 2.0 * a_pos * ds
             new_value = min(z[index + 1], z_caps[index + 1], reachable)
             if new_value < z[index + 1] - 1.0e-6:
@@ -384,7 +408,15 @@ def _propagate_z(
                 changed = True
         for index in range(len(samples) - 2, -1, -1):
             ds = samples[index + 1].s_mm - samples[index].s_mm
-            _a_pos, a_neg = _interval_accel_caps(samples[index], samples[index + 1], max(z[index], z[index + 1]), limits)
+            # Controllability is symmetric: use the known right state while
+            # propagating the braking envelope backward.
+            _a_pos, a_neg = _interval_accel_caps(
+                samples[index],
+                samples[index + 1],
+                max(z[index], z[index + 1]),
+                z[index + 1],
+                limits,
+            )
             controllable = z[index + 1] + 2.0 * a_neg * ds
             new_value = min(z[index], z_caps[index], controllable)
             if new_value < z[index] - 1.0e-6:
@@ -402,16 +434,21 @@ def _propagate_z(
 def _interval_accel_caps(
     left: GeometrySample,
     right: GeometrySample,
-    z_estimate: float,
+    z_lateral_estimate: float,
+    z_beta_estimate: float,
     limits: TimeParameterizationLimits,
 ) -> tuple[float, float]:
     mid_curvature = max(abs(left.curvature_1_per_mm), abs(right.curvature_1_per_mm))
-    lateral = mid_curvature * max(0.0, z_estimate)
+    # Total acceleration must be conservative over the whole interval, hence
+    # the larger endpoint speed estimate.  The q_prime beta residual instead
+    # uses the already reachable/controllable boundary state; using the
+    # unproven opposite endpoint can falsely collapse a feasible stop interval.
+    lateral = mid_curvature * max(0.0, z_lateral_estimate)
     remaining_total = max(0.0, limits.linear_accel_mmps2 * limits.linear_accel_mmps2 - lateral * lateral)
     total_accel_cap = math.sqrt(remaining_total)
     q = max(abs(left.yaw_ddeg_per_mm), abs(right.yaw_ddeg_per_mm))
     q_prime = max(abs(left.yaw_ddeg_per_mm2), abs(right.yaw_ddeg_per_mm2))
-    beta_residual = max(0.0, limits.angular_accel_moving_ddegps2 - q_prime * max(0.0, z_estimate))
+    beta_residual = max(0.0, limits.angular_accel_moving_ddegps2 - q_prime * max(0.0, z_beta_estimate))
     beta_accel_cap = beta_residual / q if q > EPSILON else limits.angular_accel_moving_ddegps2
     accel = min(limits.linear_accel_mmps2, total_accel_cap, beta_accel_cap)
     braking = min(limits.braking_accel_mmps2, total_accel_cap, beta_accel_cap)

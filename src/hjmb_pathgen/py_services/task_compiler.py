@@ -10,6 +10,7 @@ from hjmb_pathgen.py_io.codecs.canonical_json import canonical_json_crc32_hex
 from hjmb_pathgen.py_domain.enums import GenerationMode, RouteFamily, StorageMode, UnloadMask, YawPolicy
 from hjmb_pathgen.py_domain.errors import CompileError
 from hjmb_pathgen.py_domain.project import ProjectV40
+from hjmb_pathgen.py_domain.protocol import YAW_UNSPECIFIED_DDEG
 from hjmb_pathgen.py_domain.route_case import CaseManifestV40, RouteCaseRowV40
 from hjmb_pathgen.py_domain.task_mapping import DropTarget, drop_targets_from_label_positions
 from hjmb_pathgen.py_domain.task_plan import CandidatePlan, TransitionRequirement, UnloadStep
@@ -90,9 +91,18 @@ def build_case_draft(
     if not candidate_set.candidates:
         raise CompileError(f"P{row.traj_id:04d} has no legal Phase 3 candidate: {candidate_set.unavailable_reasons}")
     selected = _select_candidate(candidate_set.candidates, existing_case, preferred_candidate_id, lock_selected)
-    arrival_states = _arrival_states(project, selected)
-    logical_points = _logical_points(project, candidate_set.drop_targets, selected)
+    raw_start_state = _start_state_from_project(project)
+    raw_arrival_states = _arrival_states(project, selected)
+    start_state, arrival_states = _resolve_unconstrained_route_yaws(raw_start_state, raw_arrival_states)
+    logical_points = _logical_points(
+        project,
+        candidate_set.drop_targets,
+        selected,
+        resolved_start_state=start_state,
+        resolved_arrival_states=arrival_states,
+    )
     selected_plan = _selected_plan_dict(candidate_set, selected)
+    selected_plan["unconstrained_yaw_policy"] = "KEEP_PREVIOUS_OR_NEXT_EXPLICIT"
     source_mapping = _source_mapping_dict(row, candidate_set.drop_targets)
     hashes = _case_hashes(row, project, selected, selected_plan, source_mapping)
     case = CaseManifestV40(
@@ -132,7 +142,7 @@ def build_case_draft(
 
 
 def transition_requirements_for_case(case: CaseManifestV40, project: ProjectV40) -> tuple[TransitionRequirement, ...]:
-    states = [_start_state(project), *case.arrival_states]
+    states = [_start_state_for_case(case, project), *case.arrival_states]
     route_family = str(case.selected_plan.get("route_family", ""))
     topology_profile = _topology_profile(project, route_family)
     dependency_hashes = _transition_dependency_hashes(project)
@@ -445,9 +455,22 @@ def _logical_points(
     project: ProjectV40,
     drop_targets: tuple[DropTarget, ...],
     selected: CandidatePlan,
+    *,
+    resolved_start_state: dict[str, Any] | None = None,
+    resolved_arrival_states: tuple[dict[str, Any], ...] = (),
 ) -> tuple[dict[str, Any], ...]:
+    resolved_pose_by_id = {
+        str(item.get("state_id", "")): dict(item.get("pose", {}))
+        for item in resolved_arrival_states
+    }
+    if resolved_start_state is not None:
+        resolved_pose_by_id["P_START"] = dict(resolved_start_state.get("pose", {}))
     points = [
-        {"point_id": site_key, "type": "TASK_ANCHOR", "pose": _project_site_pose(project, site_key)}
+        {
+            "point_id": site_key,
+            "type": "TASK_ANCHOR",
+            "pose": dict(resolved_pose_by_id.get(site_key, _project_site_pose(project, site_key))),
+        }
         for site_key in ("P_START", "P_PICK_1", "P_PICK_2L", "P_PICK_2R", "P_PICK_3")
     ]
     step_by_rank = {
@@ -607,8 +630,45 @@ def _project_task_config_hash(project: ProjectV40) -> str:
     )
 
 
-def _start_state(project: ProjectV40) -> dict[str, Any]:
+def _start_state_from_project(project: ProjectV40) -> dict[str, Any]:
     return {"state_id": "P_START", "type": "START", "pose": _project_site_pose(project, "P_START")}
+
+
+def _start_state_for_case(case: CaseManifestV40, project: ProjectV40) -> dict[str, Any]:
+    for point in case.logical_points:
+        if str(point.get("point_id", "")) == "P_START":
+            pose = point.get("pose")
+            if isinstance(pose, dict):
+                return {"state_id": "P_START", "type": "START", "pose": dict(pose)}
+    return _start_state_from_project(project)
+
+
+def _resolve_unconstrained_route_yaws(
+    start_state: dict[str, Any],
+    arrival_states: tuple[dict[str, Any], ...],
+) -> tuple[dict[str, Any], tuple[dict[str, Any], ...]]:
+    """Resolve project yaw 0xFFFF only for planning; source JSON stays untouched.
+
+    An unconstrained arrival inherits the preceding resolved yaw, which is the
+    minimum-rotation solution.  When P_START itself is unconstrained, it uses
+    the first later explicit yaw (or zero when the whole route is free).
+    """
+
+    states = [
+        {**start_state, "pose": dict(start_state.get("pose", {}))},
+        *({**item, "pose": dict(item.get("pose", {}))} for item in arrival_states),
+    ]
+    raw_yaws = [int(item["pose"].get("yaw_ddeg", 0)) for item in states]
+    first_explicit = next((value for value in raw_yaws if value != YAW_UNSPECIFIED_DDEG), 0)
+    current = first_explicit
+    for item, raw_yaw in zip(states, raw_yaws, strict=True):
+        if raw_yaw != YAW_UNSPECIFIED_DDEG:
+            current = raw_yaw
+        item["pose"]["yaw_ddeg"] = int(current)
+        if raw_yaw == YAW_UNSPECIFIED_DDEG:
+            item["pose"]["yaw_source"] = "UNCONSTRAINED_0XFFFF"
+    return states[0], tuple(states[1:])
+
 
 def _topology_profile(project: ProjectV40, route_family: str) -> str:
     profile = project.topology_profiles.get(route_family, {})

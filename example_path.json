@@ -1,88 +1,116 @@
 {
-  "format": "HJMB_PATH_EDITOR_JSON_V35",
-  "traj_id": 0,
-  "path_mode": "FREE",
-  "field": {
-    "width_mm": 4000,
-    "height_mm": 2000
-  },
-  "planner": {
-    "max_speed_mmps": 1200,
-    "nominal_spacing_mm": 25,
-    "max_spacing_mm": 50,
-    "linear_accel_mmps2": 1200,
-    "lateral_accel_mmps2": 1200,
-    "max_wz_radps": 4.0,
-    "angular_accel_moving_radps2": 2.0,
-    "angular_accel_rotate_radps2": 5.0,
-    "yaw_rotation_policy": "SHORTEST",
-    "max_ref_lead_mm": 50,
-    "max_iterations": 40,
-    "speed_convergence_mmps": 0.5
-  },
-  "start_check": {
-    "position_tolerance_mm": 30,
-    "yaw_tolerance_ddeg": 50,
-    "stable_time_ms": 100
-  },
+  "actions": [
+    {
+      "action": "PICK",
+      "action_seq": 0,
+      "arrival_point_id": 2,
+      "mode": "STOP_AND_WAIT",
+      "post_wait_ms": 0,
+      "timeout_ms": 3000
+    },
+    {
+      "action": "DROP_1",
+      "action_seq": 1,
+      "limits": {
+        "accel_limit_mmps2": 300,
+        "beta_limit_ddegps2": 500,
+        "speed_limit_mmps": 800,
+        "stable_time_ms": 100,
+        "wz_limit_ddegps": 300
+      },
+      "mode": "KINEMATIC",
+      "post_wait_ms": 200,
+      "timeout_ms": 2000
+    }
+  ],
   "arrival_check": {
     "position_tolerance_mm": 20,
-    "yaw_tolerance_ddeg": 30,
     "speed_tolerance_mmps": 60,
+    "stable_time_ms": 100,
     "wz_tolerance_ddegps": 50,
-    "stable_time_ms": 100
+    "yaw_tolerance_ddeg": 30
   },
-  "fixed_sites": [
-    {"site_id": 0, "site_key": "P_START", "x_mm": 0, "y_mm": 0, "yaw_ddeg": 0},
-    {"site_id": 1, "site_key": "P_PICK_1", "x_mm": 600, "y_mm": 200, "yaw_ddeg": 0},
-    {"site_id": 2, "site_key": "P_PICK_2L", "x_mm": 1000, "y_mm": 0, "yaw_ddeg": 0},
-    {"site_id": 3, "site_key": "P_PICK_2R", "x_mm": 600, "y_mm": -200, "yaw_ddeg": 0},
-    {"site_id": 4, "site_key": "P_PICK_3", "x_mm": 1200, "y_mm": 400, "yaw_ddeg": 0},
-    {"site_id": 5, "site_key": "P_DROP_1", "x_mm": -600, "y_mm": 300, "yaw_ddeg": 1800},
-    {"site_id": 6, "site_key": "P_DROP_2", "x_mm": -900, "y_mm": 0, "yaw_ddeg": 1800},
-    {"site_id": 7, "site_key": "P_DROP_3", "x_mm": -600, "y_mm": -300, "yaw_ddeg": 1800}
-  ],
-  "route_meta": {
-    "pickup_order": [],
-    "drop_order": [],
-    "sweep_direction": "LEFT_TO_RIGHT"
-  },
-  "start_region": {
-    "enabled": false,
-    "polygon_mm": []
-  },
-  "overlay": {
-    "selected_analysis_mode": "normal",
-    "scale_mode": "planner",
-    "speed_threshold_mmps": 1500,
-    "accel_threshold_mmps2": 800,
-    "beta_threshold_radps2": 1.5
-  },
+  "collision_check_enabled": false,
   "controller_preview": {
     "kp_x": 1.0,
     "kp_y": 1.0,
     "kp_yaw": 1.0
   },
-  "vehicle_profile": {
-    "wheel_radius_mm": 76.0,
-    "rotation_radius_mm": 260.0,
-    "wheel_plan_limit_rpm": 420,
-    "wheel_hard_limit_rpm": 450,
-    "mecanum_convention": "X_FL_FR_RL_RR",
-    "geometry_note": "示例初值，导出前请按实车核对"
+  "field": {
+    "height_mm": 2000,
+    "width_mm": 4000
   },
+  "fixed_sites": [
+    {
+      "site_id": 0,
+      "site_key": "P_START",
+      "x_mm": 0,
+      "y_mm": 0,
+      "yaw_ddeg": 0
+    },
+    {
+      "site_id": 1,
+      "site_key": "P_PICK_1",
+      "x_mm": 600,
+      "y_mm": 200,
+      "yaw_ddeg": 0
+    },
+    {
+      "site_id": 2,
+      "site_key": "P_PICK_2L",
+      "x_mm": 1000,
+      "y_mm": 0,
+      "yaw_ddeg": 0
+    },
+    {
+      "site_id": 3,
+      "site_key": "P_PICK_2R",
+      "x_mm": 600,
+      "y_mm": -200,
+      "yaw_ddeg": 0
+    },
+    {
+      "site_id": 4,
+      "site_key": "P_PICK_3",
+      "x_mm": 1200,
+      "y_mm": 400,
+      "yaw_ddeg": 0
+    },
+    {
+      "site_id": 5,
+      "site_key": "P_DROP_1",
+      "x_mm": -600,
+      "y_mm": 300,
+      "yaw_ddeg": 1800
+    },
+    {
+      "site_id": 6,
+      "site_key": "P_DROP_2",
+      "x_mm": -900,
+      "y_mm": 0,
+      "yaw_ddeg": 1800
+    },
+    {
+      "site_id": 7,
+      "site_key": "P_DROP_3",
+      "x_mm": -600,
+      "y_mm": -300,
+      "yaw_ddeg": 1800
+    }
+  ],
+  "format": "HJMB_PATH_EDITOR_JSON_V35",
   "mechanism_profile": {
     "action_duration_ms": {
+      "DROP_1": 700,
+      "DROP_12": 700,
+      "DROP_2": 700,
+      "DROP_23": 700,
+      "DROP_3": 700,
+      "PICK": 1200,
       "PREP_PICK_1": 500,
       "PREP_PICK_2L": 500,
       "PREP_PICK_2R": 500,
       "PREP_PICK_3": 500,
-      "PICK": 1200,
-      "DROP_1": 700,
-      "DROP_2": 700,
-      "DROP_3": 700,
-      "DROP_12": 700,
-      "DROP_23": 700,
       "PREP_STORE_1": 400,
       "PREP_STORE_2": 400,
       "PREP_STORE_3": 400,
@@ -90,67 +118,87 @@
     },
     "drop_safety_margin_ms": 300
   },
-  "collision_check_enabled": false,
-  "reachability_check_enabled": false,
+  "overlay": {
+    "accel_threshold_mmps2": 800,
+    "beta_threshold_radps2": 1.5,
+    "scale_mode": "planner",
+    "selected_analysis_mode": "normal",
+    "speed_threshold_mmps": 1500
+  },
+  "path_mode": "FREE",
+  "planner": {
+    "angular_accel_moving_radps2": 2.0,
+    "angular_accel_rotate_radps2": 5.0,
+    "lateral_accel_mmps2": 1200,
+    "linear_accel_mmps2": 1200,
+    "max_iterations": 40,
+    "max_ref_lead_mm": 50,
+    "max_spacing_mm": 50,
+    "max_speed_mmps": 1200,
+    "max_wz_radps": 4.0,
+    "nominal_spacing_mm": 25,
+    "speed_convergence_mmps": 0.5,
+    "yaw_rotation_policy": "SHORTEST"
+  },
   "points": [
     {
       "point_id": 0,
-      "type": "START",
       "site_id": 255,
+      "type": "START",
       "x_mm": 0,
       "y_mm": 0,
       "yaw_ddeg": 0
     },
     {
+      "corner_trim_mm": 180,
+      "exact_pass": false,
+      "max_speed_mmps": 0,
       "point_id": 1,
-      "type": "WAYPOINT",
       "site_id": 255,
+      "type": "WAYPOINT",
       "x_mm": 800,
       "y_mm": 250,
-      "yaw_ddeg": 255,
-      "max_speed_mmps": 0,
-      "corner_trim_mm": 180,
-      "exact_pass": false
+      "yaw_ddeg": 65535
     },
     {
       "point_id": 2,
-      "type": "ARRIVAL",
       "site_id": 255,
+      "type": "ARRIVAL",
       "x_mm": 1600,
       "y_mm": 500,
       "yaw_ddeg": 900
     },
     {
       "point_id": 3,
-      "type": "ARRIVAL",
       "site_id": 255,
+      "type": "ARRIVAL",
       "x_mm": 200,
       "y_mm": 0,
       "yaw_ddeg": 1800
     }
   ],
-  "actions": [
-    {
-      "action_seq": 0,
-      "action": "PICK",
-      "mode": "STOP_AND_WAIT",
-      "timeout_ms": 3000,
-      "post_wait_ms": 0,
-      "arrival_point_id": 2
-    },
-    {
-      "action_seq": 1,
-      "action": "DROP_1",
-      "mode": "KINEMATIC",
-      "timeout_ms": 2000,
-      "post_wait_ms": 200,
-      "limits": {
-        "accel_limit_mmps2": 300,
-        "beta_limit_ddegps2": 500,
-        "wz_limit_ddegps": 300,
-        "speed_limit_mmps": 800,
-        "stable_time_ms": 100
-      }
-    }
-  ]
+  "reachability_check_enabled": false,
+  "route_meta": {
+    "drop_order": [],
+    "pickup_order": [],
+    "sweep_direction": "LEFT_TO_RIGHT"
+  },
+  "start_check": {
+    "position_tolerance_mm": 30,
+    "stable_time_ms": 100,
+    "yaw_tolerance_ddeg": 50
+  },
+  "start_region": {
+    "enabled": false,
+    "polygon_mm": []
+  },
+  "traj_id": 0,
+  "vehicle_profile": {
+    "geometry_note": "示例初值，导出前请按实车核对",
+    "mecanum_convention": "X_FL_FR_RL_RR",
+    "rotation_radius_mm": 260.0,
+    "wheel_hard_limit_rpm": 450,
+    "wheel_plan_limit_rpm": 420,
+    "wheel_radius_mm": 76.0
+  }
 }

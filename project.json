@@ -1,96 +1,96 @@
 {
   "action_profiles": {
     "DROP_1": {
-      "estimated_time_ms": 20,
+      "estimated_time_ms": 700,
       "mode": "STOP_AND_WAIT",
       "post_wait_ms": 0,
-      "timeout_ms": 1000
+      "timeout_ms": 2700
     },
     "DROP_12": {
-      "estimated_time_ms": 20,
+      "estimated_time_ms": 700,
       "mode": "STOP_AND_WAIT",
       "post_wait_ms": 0,
-      "timeout_ms": 1000
+      "timeout_ms": 2700
     },
     "DROP_2": {
-      "estimated_time_ms": 20,
+      "estimated_time_ms": 700,
       "mode": "STOP_AND_WAIT",
       "post_wait_ms": 0,
-      "timeout_ms": 1000
+      "timeout_ms": 2700
     },
     "DROP_23": {
-      "estimated_time_ms": 20,
+      "estimated_time_ms": 700,
       "mode": "STOP_AND_WAIT",
       "post_wait_ms": 0,
-      "timeout_ms": 1000
+      "timeout_ms": 2700
     },
     "DROP_3": {
-      "estimated_time_ms": 20,
+      "estimated_time_ms": 700,
       "mode": "STOP_AND_WAIT",
       "post_wait_ms": 0,
-      "timeout_ms": 1000
+      "timeout_ms": 2700
     },
     "PICK": {
-      "estimated_time_ms": 15,
+      "estimated_time_ms": 1200,
       "mode": "STOP_AND_WAIT",
       "post_wait_ms": 0,
-      "timeout_ms": 1000
+      "timeout_ms": 3200
     },
     "PREP_PICK_1": {
-      "estimated_time_ms": 5,
-      "mode": "STOP_AND_WAIT",
+      "estimated_time_ms": 500,
+      "mode": "ASYNC",
       "post_wait_ms": 0,
-      "timeout_ms": 1000
+      "timeout_ms": 2500
     },
     "PREP_PICK_2L": {
-      "estimated_time_ms": 5,
-      "mode": "STOP_AND_WAIT",
+      "estimated_time_ms": 500,
+      "mode": "ASYNC",
       "post_wait_ms": 0,
-      "timeout_ms": 1000
+      "timeout_ms": 2500
     },
     "PREP_PICK_2R": {
-      "estimated_time_ms": 5,
-      "mode": "STOP_AND_WAIT",
+      "estimated_time_ms": 500,
+      "mode": "ASYNC",
       "post_wait_ms": 0,
-      "timeout_ms": 1000
+      "timeout_ms": 2500
     },
     "PREP_PICK_3": {
-      "estimated_time_ms": 5,
-      "mode": "STOP_AND_WAIT",
+      "estimated_time_ms": 500,
+      "mode": "ASYNC",
       "post_wait_ms": 0,
-      "timeout_ms": 1000
+      "timeout_ms": 2500
     },
     "PREP_STORE_1": {
-      "estimated_time_ms": 5,
-      "mode": "STOP_AND_WAIT",
+      "estimated_time_ms": 400,
+      "mode": "ASYNC",
       "post_wait_ms": 0,
-      "timeout_ms": 1000
+      "timeout_ms": 2400
     },
     "PREP_STORE_2": {
-      "estimated_time_ms": 5,
-      "mode": "STOP_AND_WAIT",
+      "estimated_time_ms": 400,
+      "mode": "ASYNC",
       "post_wait_ms": 0,
-      "timeout_ms": 1000
+      "timeout_ms": 2400
     },
     "PREP_STORE_3": {
-      "estimated_time_ms": 5,
-      "mode": "STOP_AND_WAIT",
+      "estimated_time_ms": 400,
+      "mode": "ASYNC",
       "post_wait_ms": 0,
-      "timeout_ms": 1000
+      "timeout_ms": 2400
     },
     "STORE": {
-      "estimated_time_ms": 15,
+      "estimated_time_ms": 1500,
       "mode": "STOP_AND_WAIT",
       "post_wait_ms": 0,
-      "timeout_ms": 1000
+      "timeout_ms": 3500
     }
   },
   "arrival_check": {
     "position_tolerance_mm": 20,
-    "speed_tolerance_mmps": 10,
+    "speed_tolerance_mmps": 60,
     "stable_time_ms": 100,
-    "wz_tolerance_ddegps": 10,
-    "yaw_tolerance_ddeg": 50
+    "wz_tolerance_ddegps": 50,
+    "yaw_tolerance_ddeg": 30
   },
   "coordinate_system": {
     "origin": "FIELD_CENTER",
@@ -98,28 +98,28 @@
     "yaw_zero": "ROBOT_FRONT_TO_PICK_AREA"
   },
   "dynamics": {
-    "angular_accel_moving_ddegps2": 1000,
-    "angular_accel_rotate_ddegps2": 1500,
-    "braking_accel_mmps2": 800,
+    "angular_accel_moving_ddegps2": 1146,
+    "angular_accel_rotate_ddegps2": 2865,
+    "braking_accel_mmps2": 1200,
     "dynamic_margin_ratio": 0.1,
-    "lateral_accel_mmps2": 800,
-    "linear_accel_mmps2": 800,
-    "max_speed_mmps": 1000,
-    "max_wz_ddegps": 900
+    "lateral_accel_mmps2": 1200,
+    "linear_accel_mmps2": 1200,
+    "max_speed_mmps": 2000,
+    "max_wz_ddegps": 2292
   },
   "field_objects": {
     "cylinders": [
       {
-        "center_x_mm": -1200,
-        "center_y_mm": 350,
+        "center_x_mm": 1000,
+        "center_y_mm": 0,
         "configured": true,
         "enabled": true,
         "obstacle_id": "CYLINDER_1",
         "radius_mm": 51
       },
       {
-        "center_x_mm": -1200,
-        "center_y_mm": -350,
+        "center_x_mm": -1000,
+        "center_y_mm": 0,
         "configured": true,
         "enabled": true,
         "obstacle_id": "CYLINDER_2",
@@ -128,58 +128,58 @@
     ],
     "drop_boxes": [
       {
-        "center_x_mm": -1600,
-        "center_y_mm": -700,
+        "center_x_mm": -1500,
+        "center_y_mm": 800,
         "configured": true,
         "enabled": true,
-        "length_mm": 140,
+        "length_mm": 280,
         "obstacle_id": "DROP_BOX_4",
         "physical_drop_site": "F_DROP_4",
-        "width_mm": 120,
+        "width_mm": 200,
         "yaw_ddeg": 0
       },
       {
-        "center_x_mm": -1450,
-        "center_y_mm": -700,
+        "center_x_mm": -1700,
+        "center_y_mm": 400,
         "configured": true,
         "enabled": true,
-        "length_mm": 140,
+        "length_mm": 200,
         "obstacle_id": "DROP_BOX_5",
         "physical_drop_site": "F_DROP_5",
-        "width_mm": 120,
+        "width_mm": 280,
         "yaw_ddeg": 0
       },
       {
-        "center_x_mm": -1300,
-        "center_y_mm": -700,
+        "center_x_mm": -1700,
+        "center_y_mm": 0,
         "configured": true,
         "enabled": true,
-        "length_mm": 140,
+        "length_mm": 200,
         "obstacle_id": "DROP_BOX_6",
         "physical_drop_site": "F_DROP_6",
-        "width_mm": 120,
+        "width_mm": 280,
         "yaw_ddeg": 0
       },
       {
-        "center_x_mm": -1150,
-        "center_y_mm": -700,
+        "center_x_mm": -1700,
+        "center_y_mm": -400,
         "configured": true,
         "enabled": true,
-        "length_mm": 140,
+        "length_mm": 200,
         "obstacle_id": "DROP_BOX_7",
         "physical_drop_site": "F_DROP_7",
-        "width_mm": 120,
+        "width_mm": 280,
         "yaw_ddeg": 0
       },
       {
-        "center_x_mm": -1000,
-        "center_y_mm": -700,
+        "center_x_mm": -1500,
+        "center_y_mm": -800,
         "configured": true,
         "enabled": true,
-        "length_mm": 140,
+        "length_mm": 280,
         "obstacle_id": "DROP_BOX_8",
         "physical_drop_site": "F_DROP_8",
-        "width_mm": 120,
+        "width_mm": 200,
         "yaw_ddeg": 0
       }
     ],
@@ -193,36 +193,36 @@
     },
     "pickup_boxes": [
       {
-        "center_x_mm": 1500,
-        "center_y_mm": 700,
+        "center_x_mm": 1800,
+        "center_y_mm": 500,
         "configured": true,
         "enabled": true,
-        "length_mm": 140,
+        "length_mm": 210,
         "obstacle_id": "PICKUP_BOX_1",
         "physical_pick_site": "PICK_1",
-        "width_mm": 120,
+        "width_mm": 300,
         "yaw_ddeg": 0
       },
       {
-        "center_x_mm": 1650,
-        "center_y_mm": 700,
+        "center_x_mm": 1500,
+        "center_y_mm": 0,
         "configured": true,
         "enabled": true,
-        "length_mm": 140,
+        "length_mm": 210,
         "obstacle_id": "PICKUP_BOX_2",
         "physical_pick_site": "PICK_2",
-        "width_mm": 120,
+        "width_mm": 300,
         "yaw_ddeg": 0
       },
       {
         "center_x_mm": 1800,
-        "center_y_mm": 700,
+        "center_y_mm": -500,
         "configured": true,
         "enabled": true,
-        "length_mm": 140,
+        "length_mm": 210,
         "obstacle_id": "PICKUP_BOX_3",
         "physical_pick_site": "PICK_3",
-        "width_mm": 120,
+        "width_mm": 300,
         "yaw_ddeg": 0
       }
     ]
@@ -237,13 +237,16 @@
   },
   "output": {
     "bin_dir": "bin",
-    "case_dir": "cases",
-    "synthetic_example": true
+    "case_dir": "cases"
   },
   "planner_profiles": {
     "FINAL": {
       "max_spacing_mm": 20,
       "max_yaw_step_ddeg": 20
+    },
+    "QUICK": {
+      "max_spacing_mm": 35,
+      "max_yaw_step_ddeg": 40
     },
     "STANDARD": {
       "max_spacing_mm": 25,
@@ -254,7 +257,7 @@
       "max_yaw_step_ddeg": 30
     }
   },
-  "project_id": "HJMB_SYNTHETIC_EXAMPLE_V40",
+  "project_id": "路径文件生成",
   "protocol_version": 40,
   "site_pose_provider": {
     "type": "MANUAL"
@@ -280,48 +283,48 @@
     },
     "P_PICK_1": {
       "configured": true,
-      "x_mm": 100,
-      "y_mm": 0,
+      "x_mm": 1500,
+      "y_mm": 505,
       "yaw_ddeg": 0
     },
     "P_PICK_2L": {
       "configured": true,
-      "x_mm": 200,
-      "y_mm": 0,
-      "yaw_ddeg": 0
+      "x_mm": 1283,
+      "y_mm": 293,
+      "yaw_ddeg": -535
     },
     "P_PICK_2R": {
       "configured": true,
-      "x_mm": 300,
-      "y_mm": 0,
-      "yaw_ddeg": 0
+      "x_mm": 1277,
+      "y_mm": -319,
+      "yaw_ddeg": 457
     },
     "P_PICK_3": {
       "configured": true,
-      "x_mm": 400,
-      "y_mm": 0,
+      "x_mm": 1505,
+      "y_mm": -513,
       "yaw_ddeg": 0
     },
     "P_START": {
       "configured": true,
-      "x_mm": 0,
-      "y_mm": 0,
+      "x_mm": -208,
+      "y_mm": -2,
       "yaw_ddeg": 0
     }
   },
   "start_check": {
-    "position_tolerance_mm": 20,
+    "position_tolerance_mm": 30,
     "stable_time_ms": 100,
     "yaw_tolerance_ddeg": 50
   },
   "topology_profiles": {
     "PICK_1_TO_3": {
       "gates": [],
-      "profile_id": "S_LTR_SYNTHETIC"
+      "profile_id": "S_LTR_DEFAULT"
     },
     "PICK_3_TO_1": {
       "gates": [],
-      "profile_id": "S_RTL_SYNTHETIC"
+      "profile_id": "S_RTL_DEFAULT"
     }
   },
   "traj_table": {
@@ -333,53 +336,53 @@
       "configured": true,
       "dx_mm": 0,
       "dy_mm": 0,
-      "estimated_action_time_ms": 1000,
+      "estimated_action_time_ms": 700,
       "yaw_ddeg": 900
     },
     "BIN_12": {
-      "configured": true,
+      "configured": false,
       "dx_mm": 0,
       "dy_mm": 0,
-      "estimated_action_time_ms": 1200,
-      "yaw_ddeg": 450
+      "estimated_action_time_ms": 700,
+      "yaw_ddeg": 0
     },
     "BIN_2": {
       "configured": true,
       "dx_mm": 0,
       "dy_mm": 0,
-      "estimated_action_time_ms": 1000,
+      "estimated_action_time_ms": 700,
       "yaw_ddeg": 0
     },
     "BIN_23": {
-      "configured": true,
+      "configured": false,
       "dx_mm": 0,
       "dy_mm": 0,
-      "estimated_action_time_ms": 1200,
-      "yaw_ddeg": -450
+      "estimated_action_time_ms": 700,
+      "yaw_ddeg": 0
     },
     "BIN_3": {
       "configured": true,
       "dx_mm": 0,
       "dy_mm": 0,
-      "estimated_action_time_ms": 1000,
+      "estimated_action_time_ms": 700,
       "yaw_ddeg": -900
     }
   },
   "vehicle": {
     "footprint": {
-      "collision_resolution_mm": 10,
+      "collision_resolution_mm": 10.0,
       "field_boundary_footprint_profile": "LARGE_CIRCLE",
       "numerical_epsilon_mm": 1e-06,
       "pickup_arc_segments": 64,
-      "r_large_mm": 120,
-      "r_small_mm": 70,
-      "strict_validation_resolution_mm": 5
+      "r_large_mm": 120.0,
+      "r_small_mm": 70.0,
+      "strict_validation_resolution_mm": 5.0
     },
     "wheel": {
-      "hard_limit_rpm": 400,
-      "plan_limit_rpm": 300,
-      "radius_mm": 50,
-      "rotation_radius_mm": 200
+      "hard_limit_rpm": 450,
+      "plan_limit_rpm": 420,
+      "radius_mm": 76.0,
+      "rotation_radius_mm": 260.0
     }
   }
 }

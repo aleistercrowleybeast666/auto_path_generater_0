@@ -56,7 +56,7 @@ class V40GuiInteractionTest(unittest.TestCase):
         self.assertEqual(window.tabs.count(), 2)
         self.assertFalse(window.cancel_button.isEnabled())
         self.assertTrue(window.log_dock.isHidden())
-        self.assertEqual(len(window.context.state.project.sites), 5)
+        self.assertEqual(len(window.context.state.project.sites), 8)
         self.assertGreater(window.optimization_batch_page.leg_table.rowCount(), 0)
 
         view = window.path_editor_page.field_view
