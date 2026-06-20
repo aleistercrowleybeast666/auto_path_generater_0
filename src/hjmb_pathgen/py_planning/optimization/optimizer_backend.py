@@ -30,6 +30,7 @@ def perturb_waypoints(guess: InitialGuess, *, pass_index: int, step_mm: float) -
                     guess_id=f"{guess.guess_id}_p{pass_index}_{point_index}_{'pos' if sign > 0 else 'neg'}",
                     source=f"{guess.source}_REFINE",
                     waypoints=tuple(points),
+                    tension=guess.tension,
                 )
             )
     return tuple(variants)

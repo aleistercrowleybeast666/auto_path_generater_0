@@ -4719,6 +4719,823 @@
     {
       "analysis": {
         "eval_counts": {
+          "dense_nodes": 49,
+          "iteration_count": 2,
+          "repair_iterations": 1,
+          "subdivision_count": 7,
+          "timed_samples": 49
+        },
+        "max_accel_mmps2": 1076.5324419849946,
+        "max_beta_ddegps2": 1004.0458062695923,
+        "max_lateral_accel_mmps2": 972.0,
+        "max_metrics": {
+          "max_beta_ddegps2": 1004.0458062695923,
+          "max_lateral_accel_mmps2": 972.0,
+          "max_speed_mmps": 736.7619643542192,
+          "max_total_accel_mmps2": 1076.5324419849946,
+          "max_wheel_rpm": 111.96099687739694,
+          "max_wz_ddegps": 532.6445560486393
+        },
+        "max_speed_mmps": 736.7619643542192,
+        "max_wheel_rpm": 111.96099687739694,
+        "max_wz_ddegps": 532.6445560486393,
+        "min_clearance_mm": 56.38223180526717,
+        "optimizer_elapsed_ms": 11416,
+        "optimizer_profile": "AUTOMATIC",
+        "optimizer_seed": 0,
+        "planned_time_ms": 3675,
+        "planner_algorithm_version": "PHASE6_LEG_OPTIMIZER_V1",
+        "selected_candidate_id": "grid_detour_0_yaw2",
+        "selected_candidate_source": "OBSTACLE_ASTAR",
+        "total_length_mm": 1017.1779771896881,
+        "validation": {
+          "collision_status": "PASSED",
+          "time_parameterization": {
+            "failure_category": null,
+            "iteration_count": 2,
+            "limiting_constraints": {
+              "lateral_accel": 12,
+              "max_speed": 15,
+              "yaw_accel_profile": 22
+            },
+            "max_metrics": {
+              "max_beta_ddegps2": 1004.0458062695923,
+              "max_lateral_accel_mmps2": 972.0,
+              "max_speed_mmps": 736.7619643542192,
+              "max_total_accel_mmps2": 1076.5324419849946,
+              "max_wheel_rpm": 111.96099687739694,
+              "max_wz_ddegps": 532.6445560486393
+            },
+            "node_count": 49,
+            "planned_time_ms": 3675,
+            "quantization_margins": {
+              "max_position_error": 0.49842496255041624,
+              "max_velocity_error": 0.49700806518305285
+            },
+            "reason": "OK",
+            "repair_iterations": 1,
+            "sample_count": 49,
+            "segment_times_ms": [
+              3675
+            ],
+            "subdivision_count": 7,
+            "success": true,
+            "warnings": []
+          },
+          "topology": {
+            "crossings": [],
+            "errors": [],
+            "success": true,
+            "warnings": []
+          }
+        },
+        "warnings": []
+      },
+      "control_points": [
+        {
+          "order": 0,
+          "representation": "PIECEWISE_CUBIC_BEZIER",
+          "x_mm": 1277.0,
+          "y_mm": -319.0
+        },
+        {
+          "order": 1,
+          "representation": "PIECEWISE_CUBIC_BEZIER",
+          "x_mm": 1277.0,
+          "y_mm": -319.8666666666667
+        },
+        {
+          "order": 2,
+          "representation": "PIECEWISE_CUBIC_BEZIER",
+          "x_mm": 1277.0,
+          "y_mm": -331.1333333333333
+        },
+        {
+          "order": 3,
+          "representation": "PIECEWISE_CUBIC_BEZIER",
+          "x_mm": 1277.0,
+          "y_mm": -332.0
+        },
+        {
+          "order": 4,
+          "representation": "PIECEWISE_CUBIC_BEZIER",
+          "x_mm": 1277.0,
+          "y_mm": -332.8666666666667
+        },
+        {
+          "order": 5,
+          "representation": "PIECEWISE_CUBIC_BEZIER",
+          "x_mm": 1277.6462352872015,
+          "y_mm": -345.5774868523929
+        },
+        {
+          "order": 6,
+          "representation": "PIECEWISE_CUBIC_BEZIER",
+          "x_mm": 1277.0,
+          "y_mm": -345.0
+        },
+        {
+          "order": 7,
+          "representation": "PIECEWISE_CUBIC_BEZIER",
+          "x_mm": 1273.4036315794285,
+          "y_mm": -341.78622396459576
+        },
+        {
+          "order": 8,
+          "representation": "PIECEWISE_CUBIC_BEZIER",
+          "x_mm": 1230.3675223850526,
+          "y_mm": -294.80906950653736
+        },
+        {
+          "order": 9,
+          "representation": "PIECEWISE_CUBIC_BEZIER",
+          "x_mm": 1230.0,
+          "y_mm": -290.0
+        },
+        {
+          "order": 10,
+          "representation": "PIECEWISE_CUBIC_BEZIER",
+          "x_mm": 1227.1551788762297,
+          "y_mm": -252.77521295492036
+        },
+        {
+          "order": 11,
+          "representation": "PIECEWISE_CUBIC_BEZIER",
+          "x_mm": 1225.877223026539,
+          "y_mm": 232.89500723885158
+        },
+        {
+          "order": 12,
+          "representation": "PIECEWISE_CUBIC_BEZIER",
+          "x_mm": 1230.0,
+          "y_mm": 270.0
+        },
+        {
+          "order": 13,
+          "representation": "PIECEWISE_CUBIC_BEZIER",
+          "x_mm": 1230.7288108888135,
+          "y_mm": 276.5592979993215
+        },
+        {
+          "order": 14,
+          "representation": "PIECEWISE_CUBIC_BEZIER",
+          "x_mm": 1295.021842832886,
+          "y_mm": 335.66715950269713
+        },
+        {
+          "order": 15,
+          "representation": "PIECEWISE_CUBIC_BEZIER",
+          "x_mm": 1300.0,
+          "y_mm": 340.0
+        },
+        {
+          "order": 16,
+          "representation": "PIECEWISE_CUBIC_BEZIER",
+          "x_mm": 1313.0383000537909,
+          "y_mm": 351.348150046818
+        },
+        {
+          "order": 17,
+          "representation": "PIECEWISE_CUBIC_BEZIER",
+          "x_mm": 1486.6666666666667,
+          "y_mm": 494.0
+        },
+        {
+          "order": 18,
+          "representation": "PIECEWISE_CUBIC_BEZIER",
+          "x_mm": 1500.0,
+          "y_mm": 505.0
+        }
+      ],
+      "hashes": {
+        "dependency_hashes": {
+          "action_profile_hash": "5e12b840",
+          "collision_config_hash": "465e7dce",
+          "dynamics": "f7b5eb97",
+          "dynamics_config_hash": "f7b5eb97",
+          "field_objects": "1087c5c0",
+          "obstacle_geometry_hash": "1d1638fa",
+          "planner_config_hash": "3cc663e3",
+          "site_config_hash": "da89a1dd",
+          "sites": "ab7e27d2",
+          "topology_config_hash": "ec77e005",
+          "topology_profiles": "ec77e005",
+          "unload_profiles": "3d4b703c",
+          "vehicle": "04ef3dc2",
+          "vehicle_config_hash": "04ef3dc2"
+        },
+        "planner_algorithm_version": "PHASE6_LEG_OPTIMIZER_V1",
+        "self_hash32": "0x396B7AD6",
+        "validity_hash": "8e30ba7e43a887e87b1b236d7424f09c47b2126a8e4a6b214e7ba23f8d829414"
+      },
+      "key": {
+        "dependency_hashes": {
+          "action_profile_hash": "5e12b840",
+          "collision_config_hash": "465e7dce",
+          "dynamics": "f7b5eb97",
+          "dynamics_config_hash": "f7b5eb97",
+          "field_objects": "1087c5c0",
+          "obstacle_geometry_hash": "1d1638fa",
+          "planner_config_hash": "3cc663e3",
+          "site_config_hash": "da89a1dd",
+          "sites": "ab7e27d2",
+          "topology_config_hash": "ec77e005",
+          "topology_profiles": "ec77e005",
+          "unload_profiles": "3d4b703c",
+          "vehicle": "04ef3dc2",
+          "vehicle_config_hash": "04ef3dc2"
+        },
+        "footprint_state": {},
+        "from_pose": {
+          "x_mm": 1277.0,
+          "y_mm": -319.0,
+          "yaw_ddeg": 457.0
+        },
+        "from_state_id": "P_PICK_2R",
+        "load_state": {},
+        "mechanism_state": {},
+        "planner_algorithm_version": "PHASE6_LEG_OPTIMIZER_V1",
+        "route_family": "PICK_3_TO_1",
+        "to_pose": {
+          "x_mm": 1500.0,
+          "y_mm": 505.0,
+          "yaw_ddeg": 0.0
+        },
+        "to_state_id": "P_PICK_1",
+        "topology_gates": [],
+        "topology_profile": "S_RTL_DEFAULT",
+        "unload_state": {},
+        "version": "HJMB_PHASE6_DIRECTED_LEG_KEY_V1",
+        "yaw_policy": "SHORTEST"
+      },
+      "leg_id": "LEG_83C10A5F1059",
+      "nodes": [
+        {
+          "flags": 1,
+          "local_s_mm": 0,
+          "speed_mmps": 0,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 1277,
+          "y_mm": -319,
+          "yaw_ddeg": 457
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 25,
+          "speed_mmps": 135,
+          "vx_mmps": -6,
+          "vy_mmps": -135,
+          "wz_ddegps": -73,
+          "x_mm": 1277,
+          "y_mm": -344,
+          "yaw_ddeg": 452
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 50,
+          "speed_mmps": 135,
+          "vx_mmps": -90,
+          "vy_mmps": 100,
+          "wz_ddegps": -216,
+          "x_mm": 1261,
+          "y_mm": -328,
+          "yaw_ddeg": 426
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 62,
+          "speed_mmps": 145,
+          "vx_mmps": -96,
+          "vy_mmps": 109,
+          "wz_ddegps": -300,
+          "x_mm": 1253,
+          "y_mm": -319,
+          "yaw_ddeg": 400
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 74,
+          "speed_mmps": 154,
+          "vx_mmps": -100,
+          "vy_mmps": 117,
+          "wz_ddegps": -390,
+          "x_mm": 1245,
+          "y_mm": -309,
+          "yaw_ddeg": 374
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 83,
+          "speed_mmps": 161,
+          "vx_mmps": -76,
+          "vy_mmps": 141,
+          "wz_ddegps": -429,
+          "x_mm": 1240,
+          "y_mm": -302,
+          "yaw_ddeg": 351
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 91,
+          "speed_mmps": 170,
+          "vx_mmps": -45,
+          "vy_mmps": 164,
+          "wz_ddegps": -477,
+          "x_mm": 1235,
+          "y_mm": -294,
+          "yaw_ddeg": 327
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 99,
+          "speed_mmps": 181,
+          "vx_mmps": -9,
+          "vy_mmps": 181,
+          "wz_ddegps": -533,
+          "x_mm": 1230,
+          "y_mm": -287,
+          "yaw_ddeg": 304
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 108,
+          "speed_mmps": 178,
+          "vx_mmps": -7,
+          "vy_mmps": 177,
+          "wz_ddegps": -507,
+          "x_mm": 1230,
+          "y_mm": -280,
+          "yaw_ddeg": 281
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 116,
+          "speed_mmps": 167,
+          "vx_mmps": -5,
+          "vy_mmps": 167,
+          "wz_ddegps": -463,
+          "x_mm": 1229,
+          "y_mm": -272,
+          "yaw_ddeg": 257
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 124,
+          "speed_mmps": 160,
+          "vx_mmps": -3,
+          "vy_mmps": 160,
+          "wz_ddegps": -427,
+          "x_mm": 1229,
+          "y_mm": -265,
+          "yaw_ddeg": 233
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 136,
+          "speed_mmps": 152,
+          "vx_mmps": -3,
+          "vy_mmps": 152,
+          "wz_ddegps": -341,
+          "x_mm": 1229,
+          "y_mm": -252,
+          "yaw_ddeg": 205
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 149,
+          "speed_mmps": 148,
+          "vx_mmps": -2,
+          "vy_mmps": 148,
+          "wz_ddegps": -270,
+          "x_mm": 1229,
+          "y_mm": -240,
+          "yaw_ddeg": 177
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 161,
+          "speed_mmps": 149,
+          "vx_mmps": -2,
+          "vy_mmps": 149,
+          "wz_ddegps": -191,
+          "x_mm": 1229,
+          "y_mm": -227,
+          "yaw_ddeg": 161
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 174,
+          "speed_mmps": 151,
+          "vx_mmps": -2,
+          "vy_mmps": 150,
+          "wz_ddegps": -111,
+          "x_mm": 1228,
+          "y_mm": -215,
+          "yaw_ddeg": 145
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 198,
+          "speed_mmps": 172,
+          "vx_mmps": -2,
+          "vy_mmps": 172,
+          "wz_ddegps": -5,
+          "x_mm": 1228,
+          "y_mm": -190,
+          "yaw_ddeg": 137
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 223,
+          "speed_mmps": 287,
+          "vx_mmps": -2,
+          "vy_mmps": 287,
+          "wz_ddegps": 0,
+          "x_mm": 1228,
+          "y_mm": -165,
+          "yaw_ddeg": 137
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 248,
+          "speed_mmps": 365,
+          "vx_mmps": -2,
+          "vy_mmps": 365,
+          "wz_ddegps": 0,
+          "x_mm": 1228,
+          "y_mm": -141,
+          "yaw_ddeg": 137
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 273,
+          "speed_mmps": 430,
+          "vx_mmps": -2,
+          "vy_mmps": 430,
+          "wz_ddegps": 0,
+          "x_mm": 1228,
+          "y_mm": -116,
+          "yaw_ddeg": 137
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 298,
+          "speed_mmps": 486,
+          "vx_mmps": -2,
+          "vy_mmps": 486,
+          "wz_ddegps": 0,
+          "x_mm": 1228,
+          "y_mm": -91,
+          "yaw_ddeg": 137
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 323,
+          "speed_mmps": 536,
+          "vx_mmps": -2,
+          "vy_mmps": 536,
+          "wz_ddegps": 0,
+          "x_mm": 1228,
+          "y_mm": -66,
+          "yaw_ddeg": 137
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 347,
+          "speed_mmps": 581,
+          "vx_mmps": -1,
+          "vy_mmps": 581,
+          "wz_ddegps": 0,
+          "x_mm": 1227,
+          "y_mm": -41,
+          "yaw_ddeg": 137
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 372,
+          "speed_mmps": 624,
+          "vx_mmps": -1,
+          "vy_mmps": 624,
+          "wz_ddegps": 0,
+          "x_mm": 1227,
+          "y_mm": -17,
+          "yaw_ddeg": 137
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 397,
+          "speed_mmps": 664,
+          "vx_mmps": 0,
+          "vy_mmps": 664,
+          "wz_ddegps": 0,
+          "x_mm": 1227,
+          "y_mm": 8,
+          "yaw_ddeg": 137
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 422,
+          "speed_mmps": 701,
+          "vx_mmps": 0,
+          "vy_mmps": 701,
+          "wz_ddegps": 0,
+          "x_mm": 1227,
+          "y_mm": 33,
+          "yaw_ddeg": 137
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 447,
+          "speed_mmps": 737,
+          "vx_mmps": 1,
+          "vy_mmps": 737,
+          "wz_ddegps": 0,
+          "x_mm": 1227,
+          "y_mm": 58,
+          "yaw_ddeg": 137
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 471,
+          "speed_mmps": 707,
+          "vx_mmps": 2,
+          "vy_mmps": 707,
+          "wz_ddegps": 0,
+          "x_mm": 1227,
+          "y_mm": 83,
+          "yaw_ddeg": 137
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 496,
+          "speed_mmps": 670,
+          "vx_mmps": 2,
+          "vy_mmps": 670,
+          "wz_ddegps": 0,
+          "x_mm": 1228,
+          "y_mm": 108,
+          "yaw_ddeg": 137
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 521,
+          "speed_mmps": 630,
+          "vx_mmps": 3,
+          "vy_mmps": 630,
+          "wz_ddegps": 0,
+          "x_mm": 1228,
+          "y_mm": 132,
+          "yaw_ddeg": 137
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 546,
+          "speed_mmps": 588,
+          "vx_mmps": 4,
+          "vy_mmps": 588,
+          "wz_ddegps": 0,
+          "x_mm": 1228,
+          "y_mm": 157,
+          "yaw_ddeg": 137
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 571,
+          "speed_mmps": 543,
+          "vx_mmps": 5,
+          "vy_mmps": 543,
+          "wz_ddegps": 0,
+          "x_mm": 1228,
+          "y_mm": 182,
+          "yaw_ddeg": 137
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 595,
+          "speed_mmps": 494,
+          "vx_mmps": 6,
+          "vy_mmps": 494,
+          "wz_ddegps": 0,
+          "x_mm": 1228,
+          "y_mm": 207,
+          "yaw_ddeg": 137
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 620,
+          "speed_mmps": 439,
+          "vx_mmps": 8,
+          "vy_mmps": 439,
+          "wz_ddegps": 0,
+          "x_mm": 1229,
+          "y_mm": 232,
+          "yaw_ddeg": 137
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 645,
+          "speed_mmps": 411,
+          "vx_mmps": 15,
+          "vy_mmps": 411,
+          "wz_ddegps": 0,
+          "x_mm": 1229,
+          "y_mm": 256,
+          "yaw_ddeg": 137
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 670,
+          "speed_mmps": 411,
+          "vx_mmps": 276,
+          "vy_mmps": 305,
+          "wz_ddegps": 0,
+          "x_mm": 1237,
+          "y_mm": 279,
+          "yaw_ddeg": 137
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 695,
+          "speed_mmps": 411,
+          "vx_mmps": 293,
+          "vy_mmps": 288,
+          "wz_ddegps": 0,
+          "x_mm": 1254,
+          "y_mm": 297,
+          "yaw_ddeg": 137
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 719,
+          "speed_mmps": 439,
+          "vx_mmps": 318,
+          "vy_mmps": 302,
+          "wz_ddegps": 0,
+          "x_mm": 1272,
+          "y_mm": 314,
+          "yaw_ddeg": 137
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 744,
+          "speed_mmps": 421,
+          "vx_mmps": 309,
+          "vy_mmps": 286,
+          "wz_ddegps": 0,
+          "x_mm": 1290,
+          "y_mm": 331,
+          "yaw_ddeg": 137
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 769,
+          "speed_mmps": 352,
+          "vx_mmps": 270,
+          "vy_mmps": 225,
+          "wz_ddegps": -3,
+          "x_mm": 1309,
+          "y_mm": 347,
+          "yaw_ddeg": 137
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 794,
+          "speed_mmps": 294,
+          "vx_mmps": 227,
+          "vy_mmps": 188,
+          "wz_ddegps": -55,
+          "x_mm": 1328,
+          "y_mm": 363,
+          "yaw_ddeg": 135
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 819,
+          "speed_mmps": 276,
+          "vx_mmps": 212,
+          "vy_mmps": 175,
+          "wz_ddegps": -131,
+          "x_mm": 1347,
+          "y_mm": 379,
+          "yaw_ddeg": 127
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 844,
+          "speed_mmps": 288,
+          "vx_mmps": 222,
+          "vy_mmps": 183,
+          "wz_ddegps": -218,
+          "x_mm": 1366,
+          "y_mm": 395,
+          "yaw_ddeg": 112
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 868,
+          "speed_mmps": 305,
+          "vx_mmps": 235,
+          "vy_mmps": 194,
+          "wz_ddegps": -291,
+          "x_mm": 1385,
+          "y_mm": 410,
+          "yaw_ddeg": 90
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 893,
+          "speed_mmps": 334,
+          "vx_mmps": 258,
+          "vy_mmps": 212,
+          "wz_ddegps": -337,
+          "x_mm": 1404,
+          "y_mm": 426,
+          "yaw_ddeg": 65
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 918,
+          "speed_mmps": 300,
+          "vx_mmps": 232,
+          "vy_mmps": 191,
+          "wz_ddegps": -275,
+          "x_mm": 1423,
+          "y_mm": 442,
+          "yaw_ddeg": 41
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 943,
+          "speed_mmps": 289,
+          "vx_mmps": 223,
+          "vy_mmps": 184,
+          "wz_ddegps": -200,
+          "x_mm": 1443,
+          "y_mm": 458,
+          "yaw_ddeg": 21
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 968,
+          "speed_mmps": 276,
+          "vx_mmps": 213,
+          "vy_mmps": 175,
+          "wz_ddegps": -110,
+          "x_mm": 1462,
+          "y_mm": 473,
+          "yaw_ddeg": 7
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 992,
+          "speed_mmps": 231,
+          "vx_mmps": 178,
+          "vy_mmps": 147,
+          "wz_ddegps": -29,
+          "x_mm": 1481,
+          "y_mm": 489,
+          "yaw_ddeg": 1
+        },
+        {
+          "arrival_state_id": "P_PICK_1",
+          "flags": 2,
+          "local_s_mm": 1017,
+          "speed_mmps": 0,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": 1500,
+          "y_mm": 505,
+          "yaw_ddeg": 0
+        }
+      ],
+      "review": {
+        "approved": false,
+        "locked": false,
+        "notes": "",
+        "stale_reason": "",
+        "state": "VALID"
+      },
+      "source": "PHASE6_OPTIMIZER",
+      "state": "VALID",
+      "topology_profile": "S_RTL_DEFAULT",
+      "yaw_profile": {
+        "alpha": 0.7,
+        "direction": "SHORTEST",
+        "finish_window_start_s_mm": 762.8834828922661,
+        "finish_window_start_s_ratio": 0.75,
+        "finish_yaw_ddeg": 0.0,
+        "model": "TWO_LOW_SPEED_WINDOWS",
+        "start_window_end_s_mm": 203.43559543793765,
+        "start_window_end_s_ratio": 0.2,
+        "start_yaw_ddeg": 457.0
+      }
+    },
+    {
+      "analysis": {
+        "eval_counts": {
           "dense_nodes": 73,
           "iteration_count": 2,
           "repair_iterations": 0,
@@ -5703,6 +6520,856 @@
         "start_window_end_s_mm": 268.1390031308387,
         "start_window_end_s_ratio": 0.15,
         "start_yaw_ddeg": 0.0
+      }
+    },
+    {
+      "analysis": {
+        "eval_counts": {
+          "dense_nodes": 52,
+          "iteration_count": 2,
+          "repair_iterations": 0,
+          "subdivision_count": 24,
+          "timed_samples": 52
+        },
+        "max_accel_mmps2": 1038.4286720094683,
+        "max_beta_ddegps2": 1025.8668513253624,
+        "max_lateral_accel_mmps2": 730.1095250475985,
+        "max_metrics": {
+          "max_beta_ddegps2": 1025.8668513253624,
+          "max_lateral_accel_mmps2": 730.1095250475985,
+          "max_speed_mmps": 459.90301382645833,
+          "max_total_accel_mmps2": 1038.4286720094683,
+          "max_wheel_rpm": 71.41076151721835,
+          "max_wz_ddegps": 761.7615915652063
+        },
+        "max_speed_mmps": 459.90301382645833,
+        "max_wheel_rpm": 71.41076151721835,
+        "max_wz_ddegps": 761.7615915652063,
+        "min_clearance_mm": 0.0,
+        "optimizer_elapsed_ms": 7142,
+        "optimizer_profile": "AUTOMATIC",
+        "optimizer_seed": 1,
+        "planned_time_ms": 4666,
+        "planner_algorithm_version": "PHASE6_LEG_OPTIMIZER_V1",
+        "selected_candidate_id": "grid_detour_0_yaw0",
+        "selected_candidate_source": "OBSTACLE_ASTAR",
+        "total_length_mm": 652.7725330910956,
+        "validation": {
+          "collision_status": "PASSED",
+          "time_parameterization": {
+            "failure_category": null,
+            "iteration_count": 2,
+            "limiting_constraints": {
+              "lateral_accel": 15,
+              "max_speed": 8,
+              "yaw_accel_profile": 29
+            },
+            "max_metrics": {
+              "max_beta_ddegps2": 1025.8668513253624,
+              "max_lateral_accel_mmps2": 730.1095250475985,
+              "max_speed_mmps": 459.90301382645833,
+              "max_total_accel_mmps2": 1038.4286720094683,
+              "max_wheel_rpm": 71.41076151721835,
+              "max_wz_ddegps": 761.7615915652063
+            },
+            "node_count": 52,
+            "planned_time_ms": 4666,
+            "quantization_margins": {
+              "max_position_error": 0.4958243866565226,
+              "max_velocity_error": 0.49354631054472975
+            },
+            "reason": "OK",
+            "repair_iterations": 0,
+            "sample_count": 52,
+            "segment_times_ms": [
+              4666
+            ],
+            "subdivision_count": 24,
+            "success": true,
+            "warnings": []
+          },
+          "topology": {
+            "crossings": [],
+            "errors": [],
+            "success": true,
+            "warnings": []
+          }
+        },
+        "warnings": []
+      },
+      "control_points": [
+        {
+          "order": 0,
+          "representation": "PIECEWISE_CUBIC_BEZIER",
+          "x_mm": -1290.0,
+          "y_mm": 800.0
+        },
+        {
+          "order": 1,
+          "representation": "PIECEWISE_CUBIC_BEZIER",
+          "x_mm": -1287.5,
+          "y_mm": 800.0
+        },
+        {
+          "order": 2,
+          "representation": "PIECEWISE_CUBIC_BEZIER",
+          "x_mm": -1255.0,
+          "y_mm": 800.0
+        },
+        {
+          "order": 3,
+          "representation": "PIECEWISE_CUBIC_BEZIER",
+          "x_mm": -1252.5,
+          "y_mm": 800.0
+        },
+        {
+          "order": 4,
+          "representation": "PIECEWISE_CUBIC_BEZIER",
+          "x_mm": -1250.0,
+          "y_mm": 800.0
+        },
+        {
+          "order": 5,
+          "representation": "PIECEWISE_CUBIC_BEZIER",
+          "x_mm": -1215.4442063261909,
+          "y_mm": 802.460219652749
+        },
+        {
+          "order": 6,
+          "representation": "PIECEWISE_CUBIC_BEZIER",
+          "x_mm": -1215.0,
+          "y_mm": 800.0
+        },
+        {
+          "order": 7,
+          "representation": "PIECEWISE_CUBIC_BEZIER",
+          "x_mm": -1212.8669871885968,
+          "y_mm": 788.1863905829971
+        },
+        {
+          "order": 8,
+          "representation": "PIECEWISE_CUBIC_BEZIER",
+          "x_mm": -1213.823669469375,
+          "y_mm": 630.2938842177082
+        },
+        {
+          "order": 9,
+          "representation": "PIECEWISE_CUBIC_BEZIER",
+          "x_mm": -1220.0,
+          "y_mm": 620.0
+        },
+        {
+          "order": 10,
+          "representation": "PIECEWISE_CUBIC_BEZIER",
+          "x_mm": -1231.0413660706402,
+          "y_mm": 601.5977232155998
+        },
+        {
+          "order": 11,
+          "representation": "PIECEWISE_CUBIC_BEZIER",
+          "x_mm": -1438.3020683907166,
+          "y_mm": 413.4808989139169
+        },
+        {
+          "order": 12,
+          "representation": "PIECEWISE_CUBIC_BEZIER",
+          "x_mm": -1455.0,
+          "y_mm": 400.0
+        },
+        {
+          "order": 13,
+          "representation": "PIECEWISE_CUBIC_BEZIER",
+          "x_mm": -1456.9451884129264,
+          "y_mm": 398.42957265745383
+        },
+        {
+          "order": 14,
+          "representation": "PIECEWISE_CUBIC_BEZIER",
+          "x_mm": -1490.0,
+          "y_mm": 400.0
+        },
+        {
+          "order": 15,
+          "representation": "PIECEWISE_CUBIC_BEZIER",
+          "x_mm": -1492.5,
+          "y_mm": 400.0
+        },
+        {
+          "order": 16,
+          "representation": "PIECEWISE_CUBIC_BEZIER",
+          "x_mm": -1495.0,
+          "y_mm": 400.0
+        },
+        {
+          "order": 17,
+          "representation": "PIECEWISE_CUBIC_BEZIER",
+          "x_mm": -1527.5,
+          "y_mm": 400.0
+        },
+        {
+          "order": 18,
+          "representation": "PIECEWISE_CUBIC_BEZIER",
+          "x_mm": -1530.0,
+          "y_mm": 400.0
+        }
+      ],
+      "hashes": {
+        "dependency_hashes": {
+          "action_profile_hash": "5e12b840",
+          "collision_config_hash": "465e7dce",
+          "dynamics": "f7b5eb97",
+          "dynamics_config_hash": "f7b5eb97",
+          "field_objects": "1087c5c0",
+          "obstacle_geometry_hash": "1d1638fa",
+          "planner_config_hash": "3cc663e3",
+          "site_config_hash": "da89a1dd",
+          "sites": "ab7e27d2",
+          "topology_config_hash": "ec77e005",
+          "topology_profiles": "ec77e005",
+          "unload_profiles": "3d4b703c",
+          "vehicle": "04ef3dc2",
+          "vehicle_config_hash": "04ef3dc2"
+        },
+        "planner_algorithm_version": "PHASE6_LEG_OPTIMIZER_V1",
+        "self_hash32": "0x3A0AD04F",
+        "validity_hash": "4e4a2338826e2c225ce6329ea195b5adcbcbcc13fb6f0c9becc4dcb773e3644a"
+      },
+      "key": {
+        "dependency_hashes": {
+          "action_profile_hash": "5e12b840",
+          "collision_config_hash": "465e7dce",
+          "dynamics": "f7b5eb97",
+          "dynamics_config_hash": "f7b5eb97",
+          "field_objects": "1087c5c0",
+          "obstacle_geometry_hash": "1d1638fa",
+          "planner_config_hash": "3cc663e3",
+          "site_config_hash": "da89a1dd",
+          "sites": "ab7e27d2",
+          "topology_config_hash": "ec77e005",
+          "topology_profiles": "ec77e005",
+          "unload_profiles": "3d4b703c",
+          "vehicle": "04ef3dc2",
+          "vehicle_config_hash": "04ef3dc2"
+        },
+        "footprint_state": {},
+        "from_pose": {
+          "x_mm": -1290.0,
+          "y_mm": 800.0,
+          "yaw_ddeg": -900.0
+        },
+        "from_state_id": "DROP_STEP_1",
+        "load_state": {},
+        "mechanism_state": {},
+        "planner_algorithm_version": "PHASE6_LEG_OPTIMIZER_V1",
+        "route_family": "PICK_3_TO_1",
+        "to_pose": {
+          "x_mm": -1530.0,
+          "y_mm": 400.0,
+          "yaw_ddeg": 0.0
+        },
+        "to_state_id": "DROP_STEP_2",
+        "topology_gates": [],
+        "topology_profile": "S_RTL_DEFAULT",
+        "unload_state": {},
+        "version": "HJMB_PHASE6_DIRECTED_LEG_KEY_V1",
+        "yaw_policy": "CCW_ONLY"
+      },
+      "leg_id": "LEG_B666AED78E16",
+      "nodes": [
+        {
+          "flags": 1,
+          "local_s_mm": 0,
+          "speed_mmps": 0,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": -1290,
+          "y_mm": 800,
+          "yaw_ddeg": -900
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 24,
+          "speed_mmps": 107,
+          "vx_mmps": 107,
+          "vy_mmps": 0,
+          "wz_ddegps": 151,
+          "x_mm": -1266,
+          "y_mm": 800,
+          "yaw_ddeg": -887
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 36,
+          "speed_mmps": 107,
+          "vx_mmps": 107,
+          "vy_mmps": 3,
+          "wz_ddegps": 256,
+          "x_mm": -1254,
+          "y_mm": 800,
+          "yaw_ddeg": -858
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 48,
+          "speed_mmps": 113,
+          "vx_mmps": 113,
+          "vy_mmps": 6,
+          "wz_ddegps": 381,
+          "x_mm": -1242,
+          "y_mm": 801,
+          "yaw_ddeg": -828
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 54,
+          "speed_mmps": 117,
+          "vx_mmps": 117,
+          "vy_mmps": 1,
+          "wz_ddegps": 408,
+          "x_mm": -1236,
+          "y_mm": 801,
+          "yaw_ddeg": -805
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 60,
+          "speed_mmps": 125,
+          "vx_mmps": 125,
+          "vy_mmps": -4,
+          "wz_ddegps": 447,
+          "x_mm": -1230,
+          "y_mm": 801,
+          "yaw_ddeg": -782
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 66,
+          "speed_mmps": 130,
+          "vx_mmps": 129,
+          "vy_mmps": -9,
+          "wz_ddegps": 477,
+          "x_mm": -1224,
+          "y_mm": 801,
+          "yaw_ddeg": -760
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 73,
+          "speed_mmps": 121,
+          "vx_mmps": 121,
+          "vy_mmps": -14,
+          "wz_ddegps": 459,
+          "x_mm": -1217,
+          "y_mm": 801,
+          "yaw_ddeg": -737
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 81,
+          "speed_mmps": 114,
+          "vx_mmps": 97,
+          "vy_mmps": -59,
+          "wz_ddegps": 373,
+          "x_mm": -1216,
+          "y_mm": 793,
+          "yaw_ddeg": -712
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 89,
+          "speed_mmps": 108,
+          "vx_mmps": 47,
+          "vy_mmps": -98,
+          "wz_ddegps": 302,
+          "x_mm": -1215,
+          "y_mm": 786,
+          "yaw_ddeg": -686
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 97,
+          "speed_mmps": 108,
+          "vx_mmps": 2,
+          "vy_mmps": -108,
+          "wz_ddegps": 248,
+          "x_mm": -1214,
+          "y_mm": 779,
+          "yaw_ddeg": -661
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 121,
+          "speed_mmps": 108,
+          "vx_mmps": 0,
+          "vy_mmps": -108,
+          "wz_ddegps": 32,
+          "x_mm": -1214,
+          "y_mm": 754,
+          "yaw_ddeg": -631
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 145,
+          "speed_mmps": 108,
+          "vx_mmps": -1,
+          "vy_mmps": -108,
+          "wz_ddegps": 0,
+          "x_mm": -1214,
+          "y_mm": 730,
+          "yaw_ddeg": -630
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 169,
+          "speed_mmps": 218,
+          "vx_mmps": -4,
+          "vy_mmps": -218,
+          "wz_ddegps": 0,
+          "x_mm": -1214,
+          "y_mm": 706,
+          "yaw_ddeg": -630
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 193,
+          "speed_mmps": 303,
+          "vx_mmps": -9,
+          "vy_mmps": -303,
+          "wz_ddegps": 0,
+          "x_mm": -1215,
+          "y_mm": 682,
+          "yaw_ddeg": -630
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 218,
+          "speed_mmps": 376,
+          "vx_mmps": -18,
+          "vy_mmps": -376,
+          "wz_ddegps": 0,
+          "x_mm": -1216,
+          "y_mm": 658,
+          "yaw_ddeg": -630
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 242,
+          "speed_mmps": 396,
+          "vx_mmps": -38,
+          "vy_mmps": -395,
+          "wz_ddegps": 0,
+          "x_mm": -1218,
+          "y_mm": 634,
+          "yaw_ddeg": -630
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 266,
+          "speed_mmps": 396,
+          "vx_mmps": -269,
+          "vy_mmps": -291,
+          "wz_ddegps": 0,
+          "x_mm": -1227,
+          "y_mm": 612,
+          "yaw_ddeg": -630
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 290,
+          "speed_mmps": 396,
+          "vx_mmps": -282,
+          "vy_mmps": -278,
+          "wz_ddegps": 0,
+          "x_mm": -1244,
+          "y_mm": 595,
+          "yaw_ddeg": -630
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 314,
+          "speed_mmps": 396,
+          "vx_mmps": -286,
+          "vy_mmps": -275,
+          "wz_ddegps": 0,
+          "x_mm": -1261,
+          "y_mm": 578,
+          "yaw_ddeg": -630
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 338,
+          "speed_mmps": 396,
+          "vx_mmps": -288,
+          "vy_mmps": -272,
+          "wz_ddegps": 0,
+          "x_mm": -1278,
+          "y_mm": 561,
+          "yaw_ddeg": -630
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 363,
+          "speed_mmps": 439,
+          "vx_mmps": -320,
+          "vy_mmps": -300,
+          "wz_ddegps": 0,
+          "x_mm": -1296,
+          "y_mm": 545,
+          "yaw_ddeg": -630
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 387,
+          "speed_mmps": 460,
+          "vx_mmps": -337,
+          "vy_mmps": -313,
+          "wz_ddegps": 0,
+          "x_mm": -1314,
+          "y_mm": 528,
+          "yaw_ddeg": -630
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 411,
+          "speed_mmps": 402,
+          "vx_mmps": -295,
+          "vy_mmps": -273,
+          "wz_ddegps": 0,
+          "x_mm": -1331,
+          "y_mm": 512,
+          "yaw_ddeg": -630
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 435,
+          "speed_mmps": 334,
+          "vx_mmps": -246,
+          "vy_mmps": -226,
+          "wz_ddegps": 0,
+          "x_mm": -1349,
+          "y_mm": 495,
+          "yaw_ddeg": -630
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 459,
+          "speed_mmps": 249,
+          "vx_mmps": -184,
+          "vy_mmps": -168,
+          "wz_ddegps": 0,
+          "x_mm": -1367,
+          "y_mm": 479,
+          "yaw_ddeg": -630
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 484,
+          "speed_mmps": 110,
+          "vx_mmps": -81,
+          "vy_mmps": -74,
+          "wz_ddegps": 0,
+          "x_mm": -1385,
+          "y_mm": 463,
+          "yaw_ddeg": -630
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 508,
+          "speed_mmps": 94,
+          "vx_mmps": -69,
+          "vy_mmps": -63,
+          "wz_ddegps": 106,
+          "x_mm": -1403,
+          "y_mm": 447,
+          "yaw_ddeg": -623
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 516,
+          "speed_mmps": 90,
+          "vx_mmps": -67,
+          "vy_mmps": -61,
+          "wz_ddegps": 197,
+          "x_mm": -1409,
+          "y_mm": 441,
+          "yaw_ddeg": -601
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 524,
+          "speed_mmps": 89,
+          "vx_mmps": -66,
+          "vy_mmps": -59,
+          "wz_ddegps": 286,
+          "x_mm": -1415,
+          "y_mm": 436,
+          "yaw_ddeg": -580
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 532,
+          "speed_mmps": 89,
+          "vx_mmps": -66,
+          "vy_mmps": -59,
+          "wz_ddegps": 379,
+          "x_mm": -1421,
+          "y_mm": 430,
+          "yaw_ddeg": -558
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 537,
+          "speed_mmps": 89,
+          "vx_mmps": -66,
+          "vy_mmps": -59,
+          "wz_ddegps": 423,
+          "x_mm": -1424,
+          "y_mm": 427,
+          "yaw_ddeg": -531
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 542,
+          "speed_mmps": 90,
+          "vx_mmps": -67,
+          "vy_mmps": -60,
+          "wz_ddegps": 472,
+          "x_mm": -1428,
+          "y_mm": 424,
+          "yaw_ddeg": -504
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 546,
+          "speed_mmps": 92,
+          "vx_mmps": -68,
+          "vy_mmps": -61,
+          "wz_ddegps": 527,
+          "x_mm": -1432,
+          "y_mm": 421,
+          "yaw_ddeg": -477
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 551,
+          "speed_mmps": 94,
+          "vx_mmps": -70,
+          "vy_mmps": -62,
+          "wz_ddegps": 587,
+          "x_mm": -1435,
+          "y_mm": 417,
+          "yaw_ddeg": -449
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 556,
+          "speed_mmps": 96,
+          "vx_mmps": -72,
+          "vy_mmps": -64,
+          "wz_ddegps": 651,
+          "x_mm": -1439,
+          "y_mm": 414,
+          "yaw_ddeg": -422
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 560,
+          "speed_mmps": 99,
+          "vx_mmps": -80,
+          "vy_mmps": -58,
+          "wz_ddegps": 674,
+          "x_mm": -1442,
+          "y_mm": 412,
+          "yaw_ddeg": -393
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 564,
+          "speed_mmps": 102,
+          "vx_mmps": -89,
+          "vy_mmps": -51,
+          "wz_ddegps": 702,
+          "x_mm": -1445,
+          "y_mm": 409,
+          "yaw_ddeg": -365
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 568,
+          "speed_mmps": 107,
+          "vx_mmps": -98,
+          "vy_mmps": -42,
+          "wz_ddegps": 736,
+          "x_mm": -1448,
+          "y_mm": 407,
+          "yaw_ddeg": -336
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 572,
+          "speed_mmps": 109,
+          "vx_mmps": -105,
+          "vy_mmps": -32,
+          "wz_ddegps": 762,
+          "x_mm": -1451,
+          "y_mm": 404,
+          "yaw_ddeg": -307
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 576,
+          "speed_mmps": 105,
+          "vx_mmps": -103,
+          "vy_mmps": -19,
+          "wz_ddegps": 738,
+          "x_mm": -1454,
+          "y_mm": 402,
+          "yaw_ddeg": -279
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 580,
+          "speed_mmps": 102,
+          "vx_mmps": -101,
+          "vy_mmps": -8,
+          "wz_ddegps": 719,
+          "x_mm": -1457,
+          "y_mm": 400,
+          "yaw_ddeg": -250
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 584,
+          "speed_mmps": 99,
+          "vx_mmps": -99,
+          "vy_mmps": -6,
+          "wz_ddegps": 665,
+          "x_mm": -1462,
+          "y_mm": 400,
+          "yaw_ddeg": -225
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 588,
+          "speed_mmps": 96,
+          "vx_mmps": -96,
+          "vy_mmps": -4,
+          "wz_ddegps": 615,
+          "x_mm": -1466,
+          "y_mm": 400,
+          "yaw_ddeg": -200
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 592,
+          "speed_mmps": 94,
+          "vx_mmps": -94,
+          "vy_mmps": -2,
+          "wz_ddegps": 569,
+          "x_mm": -1470,
+          "y_mm": 400,
+          "yaw_ddeg": -175
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 596,
+          "speed_mmps": 92,
+          "vx_mmps": -92,
+          "vy_mmps": -1,
+          "wz_ddegps": 528,
+          "x_mm": -1474,
+          "y_mm": 400,
+          "yaw_ddeg": -150
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 600,
+          "speed_mmps": 91,
+          "vx_mmps": -91,
+          "vy_mmps": 1,
+          "wz_ddegps": 491,
+          "x_mm": -1478,
+          "y_mm": 400,
+          "yaw_ddeg": -125
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 604,
+          "speed_mmps": 91,
+          "vx_mmps": -91,
+          "vy_mmps": 3,
+          "wz_ddegps": 459,
+          "x_mm": -1482,
+          "y_mm": 400,
+          "yaw_ddeg": -100
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 612,
+          "speed_mmps": 91,
+          "vx_mmps": -91,
+          "vy_mmps": 2,
+          "wz_ddegps": 361,
+          "x_mm": -1490,
+          "y_mm": 400,
+          "yaw_ddeg": -72
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 621,
+          "speed_mmps": 90,
+          "vx_mmps": -90,
+          "vy_mmps": 1,
+          "wz_ddegps": 263,
+          "x_mm": -1498,
+          "y_mm": 400,
+          "yaw_ddeg": -44
+        },
+        {
+          "flags": 0,
+          "local_s_mm": 629,
+          "speed_mmps": 90,
+          "vx_mmps": -90,
+          "vy_mmps": 0,
+          "wz_ddegps": 167,
+          "x_mm": -1506,
+          "y_mm": 400,
+          "yaw_ddeg": -16
+        },
+        {
+          "arrival_state_id": "DROP_STEP_2",
+          "flags": 2,
+          "local_s_mm": 653,
+          "speed_mmps": 0,
+          "vx_mmps": 0,
+          "vy_mmps": 0,
+          "wz_ddegps": 0,
+          "x_mm": -1530,
+          "y_mm": 400,
+          "yaw_ddeg": 0
+        }
+      ],
+      "review": {
+        "approved": false,
+        "locked": false,
+        "notes": "",
+        "stale_reason": "",
+        "state": "VALID"
+      },
+      "source": "PHASE6_OPTIMIZER",
+      "state": "VALID",
+      "topology_profile": "S_RTL_DEFAULT",
+      "yaw_profile": {
+        "alpha": 0.3,
+        "direction": "CCW_ONLY",
+        "finish_window_start_s_mm": 489.5793998183217,
+        "finish_window_start_s_ratio": 0.75,
+        "finish_yaw_ddeg": 0.0,
+        "model": "TWO_LOW_SPEED_WINDOWS",
+        "start_window_end_s_mm": 130.55450661821914,
+        "start_window_end_s_ratio": 0.2,
+        "start_yaw_ddeg": -900.0
       }
     },
     {

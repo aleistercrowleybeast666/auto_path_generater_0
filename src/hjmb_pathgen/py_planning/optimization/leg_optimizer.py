@@ -104,7 +104,7 @@ def _evaluate_guess_batch(
         if _cancelled(request) or _deadline_expired(profile, start_time):
             break
         _emit(request, diagnostics, PlannerStage.INITIAL_GUESS, f"evaluating {guess.guess_id}", candidate_id=guess.guess_id)
-        candidate = _evaluate_guess(request, profile, guess)
+        candidate = _evaluate_guess(request, profile, guess, start_time=start_time)
         evaluations.append(candidate.evaluation)
         if candidate.evaluation.success:
             if best is None or candidate_objective_key(candidate.evaluation) < candidate_objective_key(best.evaluation):
@@ -112,9 +112,15 @@ def _evaluate_guess_batch(
     return best
 
 
-def _evaluate_guess(request: LegOptimizationRequest, profile: OptimizationProfile, guess: InitialGuess) -> _EvaluatedCandidate:
+def _evaluate_guess(
+    request: LegOptimizationRequest,
+    profile: OptimizationProfile,
+    guess: InitialGuess,
+    *,
+    start_time: float | None = None,
+) -> _EvaluatedCandidate:
     try:
-        path = BezierPath.from_waypoints(guess.waypoints)
+        path = BezierPath.from_waypoints(guess.waypoints, tension=guess.tension)
         if _path_self_intersects(path):
             return _candidate_failure(guess, LegFailureCategory.INVALID_REQUEST, "Bezier path self-intersects")
     except ValueError as exc:
@@ -122,6 +128,15 @@ def _evaluate_guess(request: LegOptimizationRequest, profile: OptimizationProfil
 
     best: _EvaluatedCandidate | None = None
     for yaw_index, yaw_profile in enumerate(_yaw_candidates(request, profile)):
+        # Always evaluate the first yaw candidate once the XY candidate has
+        # been admitted by _evaluate_guess_batch.  If cancellation arrives
+        # immediately afterwards, return that valid best-so-far result rather
+        # than discarding completed work.  The GUI still provides hard process
+        # termination for truly immediate user cancellation.
+        if yaw_index > 0 and _cancelled(request):
+            break
+        if yaw_index > 0 and start_time is not None and _deadline_expired(profile, start_time):
+            break
         candidate = _evaluate_xy_yaw(request, profile, guess, path, yaw_profile, yaw_index=yaw_index)
         if candidate.evaluation.success and (best is None or candidate_objective_key(candidate.evaluation) < candidate_objective_key(best.evaluation)):
             best = candidate
@@ -225,7 +240,7 @@ def _yaw_candidates(request: LegOptimizationRequest, profile: OptimizationProfil
 
 
 def _yaw_guess(guess: InitialGuess, yaw_index: int) -> InitialGuess:
-    return InitialGuess(guess_id=f"{guess.guess_id}_yaw{yaw_index}", source=guess.source, waypoints=guess.waypoints)
+    return InitialGuess(guess_id=f"{guess.guess_id}_yaw{yaw_index}", source=guess.source, waypoints=guess.waypoints, tension=guess.tension)
 
 
 def _build_leg(request: LegOptimizationRequest, profile: OptimizationProfile, candidate: _EvaluatedCandidate, *, elapsed_ms: int) -> LegV40:
@@ -414,13 +429,13 @@ def _validate_request(request: LegOptimizationRequest) -> None:
 
 
 def _ordered_guesses_with_seed(guesses: tuple[InitialGuess, ...], profile: OptimizationProfile, rng: random.Random) -> tuple[InitialGuess, ...]:
-    base = list(guesses)
-    seeded = list(base[:1])
-    remainder = base[1:]
-    rng.shuffle(remainder)
-    seeded.extend(remainder)
+    # Initial guesses are deliberately ordered by reliability: manual/warm
+    # starts, obstacle-aware detours, the straight line, then gate variants.
+    # Shuffling that order previously meant a valid detour could be dropped by
+    # max_initial_guesses, leaving FULL_AUTO to test only colliding straight
+    # paths. Randomness is used only inside explicitly seeded variants.
     expanded: list[InitialGuess] = []
-    for guess in seeded:
+    for guess in guesses:
         expanded.append(guess)
         if len(guess.waypoints) == 2 and profile.random_variant_count:
             expanded.extend(_random_midpoint_guesses(guess, profile, rng))
@@ -443,7 +458,14 @@ def _random_midpoint_guesses(guess: InitialGuess, profile: OptimizationProfile, 
             start.x_mm + dx * along + normal[0] * offset,
             start.y_mm + dy * along + normal[1] * offset,
         )
-        result.append(InitialGuess(f"{guess.guess_id}_seed{index}", "SEEDED_MIDPOINT", (start, midpoint, finish)))
+        result.append(
+            InitialGuess(
+                f"{guess.guess_id}_seed{index}",
+                "SEEDED_MIDPOINT",
+                (start, midpoint, finish),
+                tension=guess.tension,
+            )
+        )
     return tuple(result)
 
 

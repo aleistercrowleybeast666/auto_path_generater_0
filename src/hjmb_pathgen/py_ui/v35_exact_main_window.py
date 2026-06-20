@@ -103,6 +103,8 @@ class V35ExactV4MainWindow(legacy.MainWindow):
             Path(project_root).resolve(strict=False) if project_root else Path.cwd()
         )
         self._v4_worker: WorkerJobHandle | None = None
+        self._v4_followup: tuple[str, dict[str, Any]] | None = None
+        self._v4_current_job = ""
         self._v4_dirty = False
         self._v4_loading_case = False
         super().__init__()
@@ -118,11 +120,14 @@ class V35ExactV4MainWindow(legacy.MainWindow):
         self._v4_poll_timer.setInterval(200)
         self._v4_poll_timer.timeout.connect(self._poll_worker)
 
-        # Do not reload a Case for every intermediate digit while the user is
-        # typing an ID such as 123.  valueChanged is emitted only after commit.
+        # The legacy spin box remains as a hidden compatibility control.
+        # The V4 GUI adds an explicit 0..359 drop-down so selecting a multi-
+        # digit traj_id cannot be reset by a refresh of the legacy widgets.
         self.traj_id_spin.setRange(0, 359)
         self.traj_id_spin.setKeyboardTracking(False)
         self.traj_id_spin.setAccelerated(True)
+        self._pending_traj_id = max(0, min(359, int(self.project.traj_id)))
+        self.traj_id_spin.editingFinished.connect(self._commit_traj_id_selection)
 
         self._replace_mode_combo()
         self._rewire_toolbar()
@@ -188,8 +193,8 @@ class V35ExactV4MainWindow(legacy.MainWindow):
         self.v4_progress.setRange(0, 100)
         self.v4_progress.setValue(0)
         self.v4_progress.setTextVisible(True)
-        self.v4_total_time_label = QLabel("总时间：—")
-        self.v4_total_time_label.setMinimumWidth(190)
+        self.v4_total_time_label = QLabel("底盘运动时间：— | 总时间：—")
+        self.v4_total_time_label.setMinimumWidth(300)
         stop_button = QPushButton("立即停止")
         stop_button.clicked.connect(self._cancel_worker)
         task_layout.addWidget(self.v4_task_label)
@@ -197,6 +202,26 @@ class V35ExactV4MainWindow(legacy.MainWindow):
         task_layout.addWidget(self.v4_total_time_label)
         task_layout.addWidget(stop_button)
         if panel_layout is not None:
+            # The first row contains traj_id.  An explicit apply button makes
+            # typed multi-digit IDs reliable even when the user immediately
+            # clicks Generate without first leaving the spin box.
+            top_item = panel_layout.itemAt(0)
+            top_layout = top_item.layout() if top_item is not None else None
+            if top_layout is not None:
+                self.traj_id_combo = QComboBox()
+                self.traj_id_combo.setMinimumWidth(115)
+                self.traj_id_combo.setMaxVisibleItems(24)
+                for traj_id in range(360):
+                    self.traj_id_combo.addItem(f"P{traj_id:04d}", traj_id)
+                self.traj_id_combo.setToolTip("选择 traj_id，范围 P0000~P0359")
+                self.traj_id_combo.activated.connect(self._traj_id_combo_activated)
+                self.traj_id_spin.hide()
+                top_layout.insertWidget(1, self.traj_id_combo)
+                apply_id = QPushButton("载入ID")
+                apply_id.setToolTip("载入下拉框中选择的 traj_id 对应模式Case")
+                apply_id.clicked.connect(self._commit_traj_id_selection)
+                top_layout.insertWidget(2, apply_id)
+                self._set_traj_id_controls(self._pending_traj_id)
             tab_index = panel_layout.indexOf(self.right_tabs)
             panel_layout.insertWidget(max(0, tab_index), task_strip)
 
@@ -279,7 +304,7 @@ class V35ExactV4MainWindow(legacy.MainWindow):
         self.plan_result = None
         self.plan_error = "当前编辑尚未生成V4轨迹"
         if hasattr(self, "v4_total_time_label"):
-            self.v4_total_time_label.setText("总时间：STALE")
+            self.v4_total_time_label.setText("底盘运动时间：STALE | 总时间：STALE")
         self.update_status("已修改：仅标记 STALE，不会自动规划")
 
     def plan_now(self) -> None:
@@ -300,7 +325,7 @@ class V35ExactV4MainWindow(legacy.MainWindow):
             GenerationMode.FULL_AUTO: "generate-full-auto-one",
         }[self._generation_mode]
         params: dict[str, Any] = {
-            "traj_id": int(self.traj_id_spin.value()),
+            "traj_id": self._current_traj_id(),
         }
         self._start_worker(job, params)
 
@@ -309,6 +334,8 @@ class V35ExactV4MainWindow(legacy.MainWindow):
     # ------------------------------------------------------------------
     def refresh_all(self, *args, **kwargs):  # type: ignore[override]
         super().refresh_all(*args, **kwargs)
+        if hasattr(self, "traj_id_combo"):
+            self._set_traj_id_controls(self.project.traj_id)
         if hasattr(self, "path_mode_combo"):
             self._set_mode_combo(self._generation_mode)
             self._update_v4_mode_ui()
@@ -338,14 +365,46 @@ class V35ExactV4MainWindow(legacy.MainWindow):
         )
         self._load_current_mode_case()
 
-    def _traj_id_changed(self, value: int) -> None:
-        if self.updating_ui:
-            return
+    def _set_traj_id_controls(self, value: int) -> int:
+        value = max(0, min(359, int(value)))
+        self._pending_traj_id = value
         self.project.traj_id = value
+        self.traj_id_spin.setValue(value)
+        combo = getattr(self, "traj_id_combo", None)
+        if combo is not None:
+            index = combo.findData(value)
+            if index >= 0:
+                combo.setCurrentIndex(index)
+        return value
+
+    def _traj_id_changed(self, value: int) -> None:
+        # Kept for the hidden legacy spin box.  No Case load is performed here.
+        if self.updating_ui or self._v4_loading_case:
+            return
+        self._set_traj_id_controls(value)
+
+    def _traj_id_combo_activated(self, _index: int) -> None:
+        if self.updating_ui or self._v4_loading_case:
+            return
+        self._commit_traj_id_selection()
+
+    def _current_traj_id(self) -> int:
+        combo = getattr(self, "traj_id_combo", None)
+        if combo is not None and combo.currentData() is not None:
+            value = int(combo.currentData())
+        else:
+            self.traj_id_spin.interpretText()
+            value = int(self.traj_id_spin.value())
+        return self._set_traj_id_controls(value)
+
+    def _commit_traj_id_selection(self) -> None:
+        if self.updating_ui or self._v4_loading_case:
+            return
+        value = self._current_traj_id()
         if self._v4_state is not None:
             self._load_current_mode_case()
         else:
-            self.update_status()
+            self.update_status(f"traj_id 已设为 {value}")
 
     def parameter_changed(self, *_args) -> None:
         if self.updating_ui:
@@ -446,7 +505,7 @@ class V35ExactV4MainWindow(legacy.MainWindow):
         self.save_json()
         if self._v4_state is not None:
             path = self._v4_state.layout.case_json_path_for_mode(
-                int(self.traj_id_spin.value()), self._generation_mode
+                self._current_traj_id(), self._generation_mode
             )
             QMessageBox.information(
                 self,
@@ -475,7 +534,7 @@ class V35ExactV4MainWindow(legacy.MainWindow):
             self._warn("打开失败", str(exc))
             return
         self._generation_mode = case.generation_mode
-        self.traj_id_spin.setValue(case.traj_id)
+        self._set_traj_id_controls(case.traj_id)
         self._put_case_in_state(case)
         self._load_case_into_legacy_view(case)
 
@@ -492,7 +551,7 @@ class V35ExactV4MainWindow(legacy.MainWindow):
         self._start_worker(
             "validate-current",
             {
-                "traj_id": int(self.traj_id_spin.value()),
+                "traj_id": self._current_traj_id(),
                 "generation_mode": self._generation_mode.value,
             },
         )
@@ -538,7 +597,13 @@ class V35ExactV4MainWindow(legacy.MainWindow):
                     "plan_limit_rpm": int(vehicle_profile.wheel_plan_limit_rpm),
                     "hard_limit_rpm": int(vehicle_profile.wheel_hard_limit_rpm),
                 },
-                "footprint": {},
+                "footprint": {
+                    "r_large_mm": float(vehicle_profile.r_large_mm),
+                    "r_small_mm": float(vehicle_profile.r_small_mm),
+                    "collision_resolution_mm": float(vehicle_profile.collision_resolution_mm),
+                    "strict_validation_resolution_mm": float(vehicle_profile.strict_validation_resolution_mm),
+                    "pickup_arc_segments": int(vehicle_profile.pickup_arc_segments),
+                },
             },
             "dynamics": {
                 "max_speed_mmps": int(planner.max_speed_mmps),
@@ -654,7 +719,16 @@ class V35ExactV4MainWindow(legacy.MainWindow):
             "plan_limit_rpm": int(self.project.vehicle_profile.wheel_plan_limit_rpm),
             "hard_limit_rpm": int(self.project.vehicle_profile.wheel_hard_limit_rpm),
         }
-        vehicle = {**dict(base.vehicle), "wheel": wheel}
+        footprint = {
+            **dict(base.vehicle.get("footprint", {})),
+            "r_large_mm": float(self.project.vehicle_profile.r_large_mm),
+            "r_small_mm": float(self.project.vehicle_profile.r_small_mm),
+            "collision_resolution_mm": float(self.project.vehicle_profile.collision_resolution_mm),
+            "strict_validation_resolution_mm": float(self.project.vehicle_profile.strict_validation_resolution_mm),
+            "pickup_arc_segments": int(self.project.vehicle_profile.pickup_arc_segments),
+            "field_boundary_footprint_profile": "LARGE_CIRCLE",
+        }
+        vehicle = {**dict(base.vehicle), "wheel": wheel, "footprint": footprint}
         planner = self.project.planner
         dynamics = {
             **dict(base.dynamics),
@@ -734,7 +808,7 @@ class V35ExactV4MainWindow(legacy.MainWindow):
                 return
             self._update_v4_mode_ui()
             return
-        case = self._v4_state.current_case(int(self.traj_id_spin.value()), self._generation_mode)
+        case = self._v4_state.current_case(self._current_traj_id(), self._generation_mode)
         if case is None:
             self._prepare_empty_mode_view()
         else:
@@ -798,7 +872,7 @@ class V35ExactV4MainWindow(legacy.MainWindow):
         try:
             self._generation_mode = mode
             self.project.traj_id = case.traj_id
-            self.traj_id_spin.setValue(case.traj_id)
+            self._set_traj_id_controls(case.traj_id)
             if mode == GenerationMode.MANUAL:
                 self.project.path_mode = PATH_MODE_FREE
                 self.project.points = []
@@ -952,7 +1026,7 @@ class V35ExactV4MainWindow(legacy.MainWindow):
     def _save_current_case_to_project(self) -> Path:
         if self._v4_state is None:
             raise RuntimeError("未打开V4项目")
-        traj_id = int(self.traj_id_spin.value())
+        traj_id = self._current_traj_id()
         if self._generation_mode == GenerationMode.MANUAL:
             case = self._manual_case_from_view(traj_id)
         elif self._generation_mode == GenerationMode.SEMI_AUTO:
@@ -1180,11 +1254,33 @@ class V35ExactV4MainWindow(legacy.MainWindow):
             site.x_mm = float(raw["x_mm"])
             site.y_mm = float(raw["y_mm"])
             site.yaw_ddeg = int(raw["yaw_ddeg"])
+        footprint = dict(self._v4_state.project.vehicle.get("footprint", {}))
+        profile = self.project.vehicle_profile
+        profile.r_large_mm = float(footprint.get("r_large_mm", profile.r_large_mm))
+        profile.r_small_mm = float(footprint.get("r_small_mm", profile.r_small_mm))
+        profile.collision_resolution_mm = float(
+            footprint.get("collision_resolution_mm", profile.collision_resolution_mm)
+        )
+        profile.strict_validation_resolution_mm = float(
+            footprint.get(
+                "strict_validation_resolution_mm",
+                profile.strict_validation_resolution_mm,
+            )
+        )
+        profile.pickup_arc_segments = int(
+            footprint.get("pickup_arc_segments", profile.pickup_arc_segments)
+        )
 
     # ------------------------------------------------------------------
     # Worker and batch controls.
     # ------------------------------------------------------------------
-    def _start_worker(self, job: str, params: dict[str, Any]) -> None:
+    def _start_worker(
+        self,
+        job: str,
+        params: dict[str, Any],
+        *,
+        continuation: bool = False,
+    ) -> None:
         if not self._ensure_v4_workspace("启动任务"):
             return
         if self._v4_worker is not None and self._v4_worker.is_alive():
@@ -1195,10 +1291,14 @@ class V35ExactV4MainWindow(legacy.MainWindow):
         except Exception as exc:  # noqa: BLE001
             self._warn("启动失败", str(exc))
             return
-        self.v4_progress.setValue(0)
+        self._v4_current_job = job
+        if not continuation:
+            self._v4_followup = None
+            self.v4_progress.setValue(0)
         self.v4_task_label.setText(f"任务：{job}")
         self._v4_poll_timer.start()
-        self._append_log(f"启动任务 {job}: {params}")
+        prefix = "继续任务" if continuation else "启动任务"
+        self._append_log(f"{prefix} {job}: {params}")
 
     def _poll_worker(self) -> None:
         if self._v4_worker is None:
@@ -1212,28 +1312,69 @@ class V35ExactV4MainWindow(legacy.MainWindow):
                 self.v4_task_label.setText(f"任务：{stage}")
                 self._append_log(f"[{payload.get('stage', 'PROGRESS')}] {payload.get('message', '')}")
             elif message.kind == "result":
-                self.v4_progress.setValue(100)
-                self.v4_task_label.setText("任务：完成")
-                self._append_log(f"任务完成: {payload}")
+                followup = payload.get("followup")
+                if isinstance(followup, dict) and followup.get("job"):
+                    self._v4_followup = (
+                        str(followup["job"]),
+                        dict(followup.get("params", {})),
+                    )
+                    self.v4_progress.setValue(max(78, self.v4_progress.value()))
+                    self.v4_task_label.setText("任务：准备在新进程中装配")
+                    prepared = payload.get("prepared_candidate_id")
+                    if prepared:
+                        self._append_log(f"候选 {prepared} 已完成优化；即将启动干净进程装配")
+                    else:
+                        self._append_log("依赖路段已就绪；即将启动干净进程装配")
+                else:
+                    self.v4_progress.setValue(100)
+                    self.v4_task_label.setText("任务：完成")
+                    generation = payload.get("generation")
+                    if isinstance(generation, dict):
+                        timing = generation.get("timing", {})
+                        motion = timing.get("motion_time_ms")
+                        total = timing.get("total_time_ms")
+                        self._append_log(
+                            f"任务完成: P{int(generation.get('traj_id', 0)):04d}; "
+                            f"底盘运动时间={motion} ms; 总时间={total} ms"
+                        )
+                    else:
+                        self._append_log(f"任务完成: {payload}")
             elif message.kind == "error":
+                self._v4_followup = None
                 self.v4_task_label.setText("任务：失败")
                 self._append_log(f"任务失败: {payload.get('error', payload)}")
             elif message.kind == "cancelled":
+                self._v4_followup = None
                 self.v4_task_label.setText("任务：已停止")
                 self._append_log("任务已取消")
         if self._v4_worker.is_alive():
             return
+
         self._v4_worker.join(0.1)
+        self._v4_worker.close()
         self._v4_worker = None
-        self._v4_poll_timer.stop()
         self._reload_v4_state()
+
+        followup = self._v4_followup
+        self._v4_followup = None
+        if followup is not None:
+            job, params = followup
+            self._start_worker(job, params, continuation=True)
+            self.v4_progress.setValue(max(80, self.v4_progress.value()))
+            return
+
+        self._v4_poll_timer.stop()
+        self._v4_current_job = ""
 
     def _cancel_worker(self) -> None:
         if self._v4_worker is not None and self._v4_worker.is_alive():
             worker = self._v4_worker
             worker.cancel()
             worker.join(0.05)
+            worker.close()
             self._v4_worker = None
+            self._v4_followup = None
+            self._v4_current_job = ""
             self._v4_poll_timer.stop()
             self.v4_task_label.setText("任务：已停止")
             self._append_log("已立即终止worker")
@@ -1257,7 +1398,7 @@ class V35ExactV4MainWindow(legacy.MainWindow):
     def _optimize_missing(self) -> None:
         self._start_worker(
             "optimize-missing-legs",
-            {"profile": "STANDARD"},
+            {},
         )
 
     def _reoptimize_selected_leg(self) -> None:
@@ -1267,7 +1408,7 @@ class V35ExactV4MainWindow(legacy.MainWindow):
             return
         self._start_worker(
             "reoptimize-current-leg",
-            {"leg_id": leg_id, "profile": "STANDARD"},
+            {"leg_id": leg_id},
         )
 
     def _clear_selected_leg(self) -> None:
@@ -1298,7 +1439,7 @@ class V35ExactV4MainWindow(legacy.MainWindow):
             return
         self._start_worker(
             "generate-full-auto-all",
-            {"profile": "STANDARD"},
+            {},
         )
 
     def _validate_all(self) -> None:
@@ -1307,7 +1448,7 @@ class V35ExactV4MainWindow(legacy.MainWindow):
     def _convert_to_semi_auto(self) -> None:
         if self._v4_state is None:
             return
-        traj_id = int(self.traj_id_spin.value())
+        traj_id = self._current_traj_id()
         try:
             converted = convert_full_auto_to_semi_auto(self._v4_state.layout, traj_id)
         except Exception as exc:  # noqa: BLE001
@@ -1331,7 +1472,7 @@ class V35ExactV4MainWindow(legacy.MainWindow):
         self._start_worker(
             "export-final",
             {
-                "traj_id": int(self.traj_id_spin.value()),
+                "traj_id": self._current_traj_id(),
                 "generation_mode": self._generation_mode.value,
                 "profile": "default",
                 "approve": True,
@@ -1425,7 +1566,7 @@ class V35ExactV4MainWindow(legacy.MainWindow):
             total_ms = int(self.plan_result.summary.estimated_total_time_ms)
         elif self._v4_state is not None:
             case = self._v4_state.current_case(
-                int(self.traj_id_spin.value()), self._generation_mode
+                self._current_traj_id(), self._generation_mode
             )
             if case is not None:
                 raw_motion = case.estimates.get("planned_motion_time_ms")
@@ -1434,16 +1575,11 @@ class V35ExactV4MainWindow(legacy.MainWindow):
                     motion_ms = int(raw_motion)
                 if isinstance(raw_total, (int, float)):
                     total_ms = int(raw_total)
-        if motion_ms is None and total_ms is None:
-            self.v4_total_time_label.setText("总时间：—")
-        elif motion_ms is None:
-            self.v4_total_time_label.setText(f"总时间：{total_ms / 1000.0:.2f} s")
-        elif total_ms is None or total_ms == motion_ms:
-            self.v4_total_time_label.setText(f"总时间：{motion_ms / 1000.0:.2f} s")
-        else:
-            self.v4_total_time_label.setText(
-                f"总时间：{total_ms / 1000.0:.2f} s（底盘 {motion_ms / 1000.0:.2f} s）"
-            )
+        motion_text = "—" if motion_ms is None else f"{motion_ms / 1000.0:.2f} s"
+        total_text = "—" if total_ms is None else f"{total_ms / 1000.0:.2f} s"
+        self.v4_total_time_label.setText(
+            f"底盘运动时间：{motion_text} | 总时间：{total_text}"
+        )
 
     def _set_mode_combo(self, mode: GenerationMode) -> None:
         if not hasattr(self, "path_mode_combo"):

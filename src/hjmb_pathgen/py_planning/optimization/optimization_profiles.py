@@ -37,6 +37,22 @@ DEFAULT_PROFILES = {
         yaw_window_pairs=((0.25, 0.75),),
         random_variant_count=0,
     ),
+    LegOptimizationProfileName.AUTOMATIC: OptimizationProfile(
+        name=LegOptimizationProfileName.AUTOMATIC,
+        max_spacing_mm=25.0,
+        oversample_per_segment=48,
+        max_initial_guesses=4,
+        coordinate_passes=0,
+        coordinate_step_mm=50.0,
+        time_budget_ms=12000,
+        strict_collision=True,
+        # Full-auto uses a fixed, compact low-speed yaw search. This removes
+        # the old profile selector while keeping rotation concentrated in the
+        # two low-speed windows.
+        yaw_alpha_values=(0.30, 0.50, 0.70),
+        yaw_window_pairs=((0.20, 0.75),),
+        random_variant_count=0,
+    ),
     LegOptimizationProfileName.STANDARD: OptimizationProfile(
         name=LegOptimizationProfileName.STANDARD,
         max_spacing_mm=25.0,

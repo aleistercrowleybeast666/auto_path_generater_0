@@ -292,6 +292,7 @@ def optimize_missing_legs(
     max_count: int | None = None,
     force: bool = False,
     traj_id: int | None = None,
+    candidate_id: str | None = None,
     progress_callback: Callable[[dict[str, Any]], None] | None = None,
     cancel_check: Callable[[], bool] | None = None,
 ) -> OptimizeMissingLegsResult:
@@ -302,7 +303,14 @@ def optimize_missing_legs(
     relevant_requirements = [
         item
         for item in collection.requirements
-        if traj_id is None or any(usage.traj_id == traj_id for usage in item.usage)
+        if (
+            traj_id is None
+            or any(
+                usage.traj_id == traj_id
+                and (candidate_id is None or usage.candidate_id == candidate_id)
+                for usage in item.usage
+            )
+        )
     ]
     targets = [
         item
@@ -328,9 +336,30 @@ def optimize_missing_legs(
                 seed=seed + index,
                 yaw_policy=_yaw_policy_from_usage(layout, target),
                 warm_start_leg=warm_start,
+                cancel_check=cancel_check,
+                progress_callback=(
+                    None
+                    if progress_callback is None
+                    else lambda diagnostic, leg_id=target.leg_id: progress_callback(
+                        {
+                            "current_item": leg_id,
+                            "optimizer_stage": diagnostic.get("stage", ""),
+                            "optimizer_message": diagnostic.get("message", ""),
+                        }
+                    )
+                ),
             )
             if not result.success or result.leg is None:
-                failures.append({"leg_id": target.leg_id, "reason": result.reason, "state": result.state.value})
+                failures.append(
+                    {
+                        "leg_id": target.leg_id,
+                        "reason": result.reason,
+                        "state": result.state.value,
+                        "from_state_id": target.transition.from_state_id,
+                        "to_state_id": target.transition.to_state_id,
+                        "evaluations": [item.to_dict() for item in result.evaluations],
+                    }
+                )
                 continue
             library = upsert_leg(
                 library,

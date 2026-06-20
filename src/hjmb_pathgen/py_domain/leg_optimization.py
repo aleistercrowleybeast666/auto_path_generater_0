@@ -15,6 +15,9 @@ from hjmb_pathgen.py_domain.topology import TopologyGate
 
 class LegOptimizationProfileName(StrEnum):
     QUICK_PREVIEW = "QUICK_PREVIEW"
+    # Fixed internal profile used by FULL_AUTO. It is not exposed as a user
+    # choice: the operator simply asks for the best automatic result.
+    AUTOMATIC = "AUTOMATIC"
     STANDARD = "STANDARD"
     FINAL = "FINAL"
 

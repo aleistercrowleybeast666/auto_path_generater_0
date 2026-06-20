@@ -9,6 +9,7 @@ from typing import Iterable
 from hjmb_pathgen.py_planning.geometry.bezier import Point2D, point_from_dict
 from hjmb_pathgen.py_domain.leg_optimization import LegOptimizationRequest
 from hjmb_pathgen.py_domain.topology import TopologyGate
+from hjmb_pathgen.py_planning.geometry.obstacle_detours import obstacle_aware_seeds
 
 
 @dataclass(frozen=True)
@@ -16,6 +17,7 @@ class InitialGuess:
     guess_id: str
     source: str
     waypoints: tuple[Point2D, ...]
+    tension: float = 0.75
 
 
 def build_initial_guesses(request: LegOptimizationRequest) -> tuple[InitialGuess, ...]:
@@ -26,6 +28,15 @@ def build_initial_guesses(request: LegOptimizationRequest) -> tuple[InitialGuess
         guesses.append(_manual_guess(start, finish, request.initial_control_points, "MANUAL_CONTROL_POINTS"))
     if request.warm_start_leg is not None and request.warm_start_leg.control_points:
         guesses.append(_warm_start_guess(start, finish, request.warm_start_leg.control_points))
+    for seed in obstacle_aware_seeds(request):
+        guesses.append(
+            InitialGuess(
+                seed.seed_id,
+                seed.source,
+                seed.waypoints,
+                tension=seed.tension,
+            )
+        )
     guesses.append(InitialGuess("straight", "STRAIGHT", (start, finish)))
     if request.topology_gates:
         guesses.append(InitialGuess("gate_center", "TOPOLOGY_GATE_CENTER", _gate_points(start, finish, request.topology_gates, offset_ratio=0.0)))

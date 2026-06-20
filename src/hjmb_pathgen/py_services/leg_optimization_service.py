@@ -44,6 +44,8 @@ def leg_request_from_transition(
     seed: int = 0,
     yaw_policy: YawPolicy = YawPolicy.SHORTEST,
     warm_start_leg: LegV40 | None = None,
+    progress_callback: Any | None = None,
+    cancel_check: Any | None = None,
 ) -> LegOptimizationRequest:
     from_pose = Pose2D.from_dict(transition.from_pose, field_name="from_pose")
     to_pose = Pose2D.from_dict(transition.to_pose, field_name="to_pose")
@@ -64,6 +66,8 @@ def leg_request_from_transition(
         seed=seed,
         yaw_policy=yaw_policy,
         warm_start_leg=warm_start_leg,
+        progress_callback=progress_callback,
+        cancel_check=cancel_check,
     )
 
 
@@ -75,6 +79,8 @@ def optimize_transition_leg(
     seed: int = 0,
     yaw_policy: YawPolicy = YawPolicy.SHORTEST,
     warm_start_leg: LegV40 | None = None,
+    progress_callback: Any | None = None,
+    cancel_check: Any | None = None,
 ) -> LegOptimizationResult:
     return optimize_leg(
         leg_request_from_transition(
@@ -84,6 +90,8 @@ def optimize_transition_leg(
             seed=seed,
             yaw_policy=yaw_policy,
             warm_start_leg=warm_start_leg,
+            progress_callback=progress_callback,
+            cancel_check=cancel_check,
         )
     )
 

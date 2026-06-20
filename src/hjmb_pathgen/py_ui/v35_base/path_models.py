@@ -379,6 +379,14 @@ class VehicleProfile:
     rotation_radius_mm: float = 260.0
     wheel_plan_limit_rpm: int = 420
     wheel_hard_limit_rpm: int = 450
+    # Collision footprint configuration persisted to project.json.
+    # R_large is used for cylinders and field boundaries; R_small is used for
+    # drop boxes. Pickup boxes use the yaw-rotating clipped disk built from both.
+    r_large_mm: float = 120.0
+    r_small_mm: float = 70.0
+    collision_resolution_mm: float = 10.0
+    strict_validation_resolution_mm: float = 5.0
+    pickup_arc_segments: int = 64
     mecanum_convention: str = "X_FL_FR_RL_RR"
     geometry_note: str = "示例初值，导出前请按实车核对"
 
@@ -399,6 +407,24 @@ class VehicleProfile:
             wheel_hard_limit_rpm=parse_int(
                 data.get("wheel_hard_limit_rpm", 450),
                 "vehicle_profile.wheel_hard_limit_rpm",
+            ),
+            r_large_mm=parse_float(
+                data.get("r_large_mm", 120.0), "vehicle_profile.r_large_mm"
+            ),
+            r_small_mm=parse_float(
+                data.get("r_small_mm", 70.0), "vehicle_profile.r_small_mm"
+            ),
+            collision_resolution_mm=parse_float(
+                data.get("collision_resolution_mm", 10.0),
+                "vehicle_profile.collision_resolution_mm",
+            ),
+            strict_validation_resolution_mm=parse_float(
+                data.get("strict_validation_resolution_mm", 5.0),
+                "vehicle_profile.strict_validation_resolution_mm",
+            ),
+            pickup_arc_segments=parse_int(
+                data.get("pickup_arc_segments", 64),
+                "vehicle_profile.pickup_arc_segments",
             ),
             mecanum_convention=str(data.get("mecanum_convention", "X_FL_FR_RL_RR")),
             geometry_note=str(data.get("geometry_note", "示例初值，导出前请按实车核对")),

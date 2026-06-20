@@ -1338,6 +1338,32 @@ class MainWindow(QMainWindow):
             "轮速运行硬限",
             self._int_spin("vehicle.wheel_hard_limit_rpm", 1, 1000, " rpm"),
         )
+        vehicle_form.addRow(
+            "碰撞大包络 R_large",
+            self._double_spin("vehicle.r_large_mm", 1.0, 1000.0, 1, " mm"),
+        )
+        vehicle_form.addRow(
+            "碰撞小包络 R_small",
+            self._double_spin("vehicle.r_small_mm", 1.0, 1000.0, 1, " mm"),
+        )
+        vehicle_form.addRow(
+            "碰撞递归分辨率",
+            self._double_spin("vehicle.collision_resolution_mm", 0.5, 100.0, 1, " mm"),
+        )
+        vehicle_form.addRow(
+            "严格校验分辨率",
+            self._double_spin("vehicle.strict_validation_resolution_mm", 0.5, 100.0, 1, " mm"),
+        )
+        vehicle_form.addRow(
+            "取货圆缺离散段数",
+            self._int_spin("vehicle.pickup_arc_segments", 3, 256, ""),
+        )
+        footprint_note = QLabel(
+            "圆柱/场地边界使用 R_large；放货箱使用 R_small；"
+            "取货箱使用由 R_large、R_small 和当前 yaw 构成的旋转圆缺。"
+        )
+        footprint_note.setWordWrap(True)
+        vehicle_form.addRow("避障包络说明", footprint_note)
         convention = QComboBox()
         convention.addItem("X_FL_FR_RL_RR", "X_FL_FR_RL_RR")
         convention.currentIndexChanged.connect(self.parameter_changed)
@@ -1699,6 +1725,11 @@ class MainWindow(QMainWindow):
             "vehicle.rotation_radius_mm": p.vehicle_profile.rotation_radius_mm,
             "vehicle.wheel_plan_limit_rpm": p.vehicle_profile.wheel_plan_limit_rpm,
             "vehicle.wheel_hard_limit_rpm": p.vehicle_profile.wheel_hard_limit_rpm,
+            "vehicle.r_large_mm": p.vehicle_profile.r_large_mm,
+            "vehicle.r_small_mm": p.vehicle_profile.r_small_mm,
+            "vehicle.collision_resolution_mm": p.vehicle_profile.collision_resolution_mm,
+            "vehicle.strict_validation_resolution_mm": p.vehicle_profile.strict_validation_resolution_mm,
+            "vehicle.pickup_arc_segments": p.vehicle_profile.pickup_arc_segments,
             "vehicle.mecanum_convention": p.vehicle_profile.mecanum_convention,
             "mechanism.drop_safety_margin_ms": (
                 p.mechanism_profile.drop_safety_margin_ms
@@ -1776,6 +1807,25 @@ class MainWindow(QMainWindow):
         p.vehicle_profile.wheel_hard_limit_rpm = value(
             "vehicle.wheel_hard_limit_rpm"
         )
+        r_large = float(value("vehicle.r_large_mm"))
+        r_small = float(value("vehicle.r_small_mm"))
+        collision_resolution = float(value("vehicle.collision_resolution_mm"))
+        strict_resolution = float(value("vehicle.strict_validation_resolution_mm"))
+        if r_large <= r_small:
+            # Keep the model valid even while the operator edits one field at a
+            # time. The status text explains the exact rule.
+            r_large = r_small + 1.0
+            self.param_widgets["vehicle.r_large_mm"].setValue(r_large)
+            self.update_status("碰撞包络要求 R_large > R_small，已将 R_large 调整为 R_small+1 mm")
+        if strict_resolution > collision_resolution:
+            strict_resolution = collision_resolution
+            self.param_widgets["vehicle.strict_validation_resolution_mm"].setValue(strict_resolution)
+            self.update_status("严格校验分辨率不能大于普通碰撞分辨率，已自动收紧")
+        p.vehicle_profile.r_large_mm = r_large
+        p.vehicle_profile.r_small_mm = r_small
+        p.vehicle_profile.collision_resolution_mm = collision_resolution
+        p.vehicle_profile.strict_validation_resolution_mm = strict_resolution
+        p.vehicle_profile.pickup_arc_segments = int(value("vehicle.pickup_arc_segments"))
         p.vehicle_profile.mecanum_convention = value(
             "vehicle.mecanum_convention"
         )
