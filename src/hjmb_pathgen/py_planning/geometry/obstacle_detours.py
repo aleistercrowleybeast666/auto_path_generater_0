@@ -128,6 +128,32 @@ def _s_route_seed(
     if not request.to_state_id.startswith("DROP_STEP_"):
         return None
 
+    if request.topology_gates:
+        # Gates are the authoritative route topology.  Add short horizontal
+        # staging shoulders around each vertical gate; using only the two gate
+        # centres makes a cubic join too sharp and can collapse the start speed
+        # envelope to zero.  The shoulders also prevent the curve from rounding
+        # back across a cylinder after it has crossed a gate.
+        gate_points: list[Point2D] = []
+        for gate in request.topology_gates:
+            cx, cy = gate.center
+            gate_points.extend(
+                (
+                    Point2D(cx + 300.0, cy),
+                    Point2D(cx, cy),
+                    Point2D(cx - 300.0, cy),
+                )
+            )
+        # Make the first and last two chords collinear.  This gives both stop
+        # endpoints zero geometric curvature, avoiding a conservative lateral
+        # acceleration cap that otherwise leaves the first interval at v=0.
+        first = gate_points[0]
+        last = gate_points[-1]
+        start_mid = Point2D((start.x_mm + first.x_mm) * 0.5, (start.y_mm + first.y_mm) * 0.5)
+        finish_mid = Point2D((last.x_mm + finish.x_mm) * 0.5, (last.y_mm + finish.y_mm) * 0.5)
+        points = _clean_points((start, start_mid, *gate_points, finish_mid, finish))
+        return DetourSeed("official_s_gate_seed", "TOPOLOGY_GATE_S", points, tension=0.18)
+
     route_family = str(request.route_family)
     sign = -1.0 if route_family == "PICK_1_TO_3" else 1.0
     points = _clean_points(

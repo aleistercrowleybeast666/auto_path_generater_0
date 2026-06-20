@@ -22,6 +22,11 @@ from .manual_path_service import plan_manual_case
 from .semi_auto_path_service import plan_semi_auto_case, semi_case_with_derived_arrivals
 from .output_service import CaseOutputOptions, CaseOutputResult, write_case_outputs
 from .path_validation_service import case_with_collision_result, validate_case_collision
+from .execution_time_estimator import (
+    arrival_release_from_segments,
+    estimate_fifo_execution,
+    time_at_s_from_segments,
+)
 from hjmb_pathgen.py_io.layout.project_layout import ProjectLayout
 
 
@@ -42,14 +47,28 @@ def write_manual_outputs(
     result = plan_manual_case(case, project, profile_name=profile_name)
     if result.trajectory is None:
         raise CompileError(f"P{case.traj_id:04d} manual planning failed: {result.timing.reason}")
-    bin_bytes = encode_trajectory(result.trajectory)
     collision = validate_case_collision(case, project, samples=tuple(result.timing.samples), strict=True)
     if not collision.passed:
         raise CompileError(
             f"P{case.traj_id:04d} manual collision validation failed: {collision.status.value}"
         )
+    execution = _trajectory_execution_estimate(case, project, result.trajectory)
     case = case_with_collision_result(case, collision)
-    case = replace(case, review={**case.review, "state": "VALID"})
+    case = replace(
+        case,
+        estimates={
+            **case.estimates,
+            "planned_motion_time_ms": execution.motion_time_ms,
+            "planned_mechanism_time_ms": execution.added_wait_time_ms,
+            "planned_mechanism_busy_time_ms": execution.mechanism_busy_time_ms,
+            "planned_total_estimate_ms": execution.total_time_ms,
+            "planned_total_estimate_state": "FIFO_OVERLAP_WITH_STOP_CARRY_FORWARD",
+            "action_timeline": list(execution.action_timeline),
+        },
+        review={**case.review, "state": "VALID"},
+    )
+    trajectory = _trajectory_with_estimate(result.trajectory, case, execution.total_time_ms)
+    bin_bytes = encode_trajectory(trajectory)
     hashes = {"bin_crc32": f"{crc32_ieee(bin_bytes):08x}"}
     case_path = layout.case_json_path_for_mode(case.traj_id, GenerationMode.MANUAL) if write_case_json else None
     bin_path = layout.bin_path_for_mode(case.traj_id, GenerationMode.MANUAL) if write_bin else None
@@ -58,7 +77,7 @@ def write_manual_outputs(
         if case_path is not None:
             save_case(case_path, case)
         if bin_path is not None:
-            save_bin(bin_path, result.trajectory)
+            save_bin(bin_path, trajectory)
         if report_path is not None:
             _write_report(
                 report_path,
@@ -133,19 +152,18 @@ def write_semi_auto_outputs(
                 "total_count": 1,
             }
         )
-    mechanism_ms = sum(
-        int(item.get("estimated_time_ms", 0))
-        for item in case.actions.get("source", ())
-        if isinstance(item, dict)
-    )
+    execution = _trajectory_execution_estimate(case, project, planned.trajectory)
     checked_case = case_with_collision_result(case, collision)
     case = replace(
         checked_case,
         estimates={
             **checked_case.estimates,
-            "planned_motion_time_ms": int(planned.timing.planned_time_ms),
-            "planned_mechanism_time_ms": mechanism_ms,
-            "planned_total_estimate_ms": int(planned.timing.planned_time_ms) + mechanism_ms,
+            "planned_motion_time_ms": execution.motion_time_ms,
+            "planned_mechanism_time_ms": execution.added_wait_time_ms,
+            "planned_mechanism_busy_time_ms": execution.mechanism_busy_time_ms,
+            "planned_total_estimate_ms": execution.total_time_ms,
+            "planned_total_estimate_state": "FIFO_OVERLAP_WITH_STOP_CARRY_FORWARD",
+            "action_timeline": list(execution.action_timeline),
         },
         review={
             **checked_case.review,
@@ -161,14 +179,7 @@ def write_semi_auto_outputs(
     # Geometry/timing did not change when only estimates, review and collision
     # diagnostics were attached.  Refresh the source hash in-place instead of
     # running all nine yaw-window candidates a second time.
-    trajectory = replace(
-        planned.trajectory,
-        header=replace(
-            planned.trajectory.header,
-            source_case_hash32=canonical_json_crc32(case.to_dict()),
-            planned_total_estimate_ms=int(planned.timing.planned_time_ms) + mechanism_ms,
-        ),
-    ).normalized()
+    trajectory = _trajectory_with_estimate(planned.trajectory, case, execution.total_time_ms)
     trajectory.validate()
     if progress_callback is not None:
         progress_callback(
@@ -215,6 +226,31 @@ def write_semi_auto_outputs(
         warnings=warnings,
         bin_bytes=bin_bytes,
     )
+
+
+def _trajectory_execution_estimate(case: CaseManifestV40, project: Any, trajectory: Any):
+    releases = arrival_release_from_segments(trajectory.segments)
+    return estimate_fifo_execution(
+        project,
+        case.actions.get("source", ()),
+        motion_time_ms=int(trajectory.header.planned_motion_time_ms),
+        arrival_release_ms=releases,
+        compiled_actions=trajectory.actions,
+        time_at_s_mm=time_at_s_from_segments(trajectory.segments),
+    )
+
+
+def _trajectory_with_estimate(trajectory: Any, case: CaseManifestV40, total_time_ms: int):
+    updated = replace(
+        trajectory,
+        header=replace(
+            trajectory.header,
+            source_case_hash32=canonical_json_crc32(case.to_dict()),
+            planned_total_estimate_ms=int(total_time_ms),
+        ),
+    ).normalized()
+    updated.validate()
+    return updated
 
 
 def _semi_collision_error(traj_id: int, collision: Any) -> str:

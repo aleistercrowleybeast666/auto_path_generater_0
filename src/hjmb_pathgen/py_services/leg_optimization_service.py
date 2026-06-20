@@ -18,6 +18,7 @@ from hjmb_pathgen.py_domain.project import ProjectV40
 from hjmb_pathgen.py_domain.route_case import CaseManifestV40
 from hjmb_pathgen.py_domain.task_plan import TransitionRequirement
 from hjmb_pathgen.py_domain.topology import topology_gates_from_profile
+from hjmb_pathgen.py_planning.geometry.automatic_topology import topology_profile_object
 from hjmb_pathgen.py_planning.optimization.leg_optimizer import PLANNER_ALGORITHM_VERSION, optimize_leg
 from hjmb_pathgen.py_planning.dynamics.time_parameterization import TimeParameterizationLimits, TimeParameterizationRequest, samples_from_points, time_parameterize
 from hjmb_pathgen.py_services.leg_library_service import (
@@ -49,7 +50,7 @@ def leg_request_from_transition(
 ) -> LegOptimizationRequest:
     from_pose = Pose2D.from_dict(transition.from_pose, field_name="from_pose")
     to_pose = Pose2D.from_dict(transition.to_pose, field_name="to_pose")
-    topology_profile = _topology_profile_object(project, transition.topology_profile)
+    topology_profile = topology_profile_object(project, transition.topology_profile, route_family=transition.route_family)
     dependencies = dict(transition.dependency_hashes)
     dependencies.update(compute_project_functional_hashes(project))
     return LegOptimizationRequest(
@@ -221,16 +222,6 @@ def _find_transition(case: CaseManifestV40, project: ProjectV40, transition_id: 
         if transition.requirement_id == transition_id or transition.semantic_hash == transition_id:
             return transition
     raise CompileError(f"transition requirement not found: {transition_id}")
-
-
-def _topology_profile_object(project: ProjectV40, profile_id: str) -> dict[str, Any]:
-    direct = project.topology_profiles.get(profile_id)
-    if isinstance(direct, dict):
-        return dict(direct)
-    for value in project.topology_profiles.values():
-        if isinstance(value, dict) and str(value.get("profile_id", "")) == profile_id:
-            return dict(value)
-    return {}
 
 
 def _case_yaw_policy(case: CaseManifestV40, transition: TransitionRequirement | None = None) -> YawPolicy:

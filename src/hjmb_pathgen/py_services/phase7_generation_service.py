@@ -30,7 +30,12 @@ from hjmb_pathgen.py_services.leg_optimization_service import leg_request_from_t
 from hjmb_pathgen.py_services.leg_stale_service import leg_stale_reasons
 from hjmb_pathgen.py_services.output_service import CaseOutputOptions, CaseOutputResult, write_case_outputs
 from hjmb_pathgen.py_io.layout.project_layout import ProjectLayout
-from hjmb_pathgen.py_services.task_compiler import build_case_draft, compile_task_candidates
+from hjmb_pathgen.py_services.task_compiler import (
+    automatic_candidate_subset,
+    build_case_draft,
+    compile_task_candidates,
+)
+from hjmb_pathgen.py_services.execution_time_estimator import estimate_fifo_execution
 from hjmb_pathgen.py_services.traj_table_service import write_route_case_table
 
 UNIQUE_LEG_REPORT_JSON = "phase7_unique_leg_report.json"
@@ -115,6 +120,7 @@ class CandidateTiming:
     complete: bool
     motion_time_ms: int
     mechanism_time_ms: int
+    mechanism_busy_time_ms: int
     total_time_ms: int
     leg_ids: tuple[str, ...]
     missing_leg_ids: tuple[str, ...]
@@ -128,6 +134,7 @@ class CandidateTiming:
             "complete": self.complete,
             "motion_time_ms": self.motion_time_ms,
             "mechanism_time_ms": self.mechanism_time_ms,
+            "mechanism_busy_time_ms": self.mechanism_busy_time_ms,
             "total_time_ms": self.total_time_ms,
             "leg_ids": list(self.leg_ids),
             "missing_leg_ids": list(self.missing_leg_ids),
@@ -250,7 +257,7 @@ def collect_unique_legs(layout: ProjectLayout, *, write_report: bool = True) -> 
 
     for row in sorted(table.cases, key=lambda item: item.traj_id):
         candidate_set = compile_task_candidates(row, project)
-        for candidate in candidate_set.candidates:
+        for candidate in automatic_candidate_subset(candidate_set.candidates):
             built = build_case_draft(row, project, preferred_candidate_id=candidate.candidate_id)
             for index, requirement in enumerate(built.transition_requirements):
                 key = _leg_id_for_transition(requirement, project, built.case)
@@ -298,20 +305,37 @@ def optimize_missing_legs(
 ) -> OptimizeMissingLegsResult:
     layout.ensure_directories()
     project = load_project(layout.project_json)
-    collection = collect_unique_legs(layout)
     library = load_or_create_leg_library(layout.leg_library_json, project)
-    relevant_requirements = [
-        item
-        for item in collection.requirements
-        if (
-            traj_id is None
-            or any(
-                usage.traj_id == traj_id
-                and (candidate_id is None or usage.candidate_id == candidate_id)
-                for usage in item.usage
+    if traj_id is None:
+        collection = collect_unique_legs(layout)
+        relevant_requirements = list(collection.requirements)
+    else:
+        # A single-ID GUI generation must not compile/audit all 360 cases.
+        # Build only the deterministic route candidates for this row; this also
+        # makes cancellation and progress feedback effectively immediate.
+        table = _ensure_route_case_table(layout)
+        row = _row_by_traj_id(table, traj_id)
+        candidate_set = compile_task_candidates(row, project)
+        selected_candidates = automatic_candidate_subset(candidate_set.candidates)
+        if candidate_id is not None:
+            selected_candidates = tuple(
+                item for item in selected_candidates if item.candidate_id == candidate_id
             )
-        )
-    ]
+        if not selected_candidates:
+            raise CompileError(f"P{traj_id:04d} has no matching automatic candidate")
+        by_leg: dict[str, tuple[TransitionRequirement, list[UniqueLegUsage]]] = {}
+        for candidate in selected_candidates:
+            built = build_case_draft(
+                row, project, preferred_candidate_id=candidate.candidate_id
+            )
+            for index, transition in enumerate(built.transition_requirements):
+                leg_id = _leg_id_for_transition(transition, project, built.case)
+                entry = by_leg.setdefault(leg_id, (transition, []))
+                entry[1].append(UniqueLegUsage(traj_id, candidate.candidate_id, index))
+        relevant_requirements = [
+            _unique_requirement_from_library(leg_id, transition, usage, library, project)
+            for leg_id, (transition, usage) in by_leg.items()
+        ]
     targets = [
         item
         for item in relevant_requirements
@@ -662,11 +686,12 @@ def _candidate_timings(
     candidate_set = compile_task_candidates(row, project)
     timings: list[CandidateTiming] = []
     audit_cache = leg_audit_cache if leg_audit_cache is not None else {}
-    for candidate in candidate_set.candidates:
+    for candidate in automatic_candidate_subset(candidate_set.candidates):
         built = build_case_draft(row, project, preferred_candidate_id=candidate.candidate_id)
         leg_ids: list[str] = []
         missing: list[str] = []
         motion_time = 0
+        arrival_release: dict[object, int] = {}
         for requirement in built.transition_requirements:
             leg_id = _leg_id_for_transition(requirement, project, built.case)
             leg_ids.append(leg_id)
@@ -676,7 +701,13 @@ def _candidate_timings(
                 missing.append(leg_id)
             else:
                 motion_time += int(leg.analysis.get("planned_time_ms", 0))
-        mechanism_time = sum(int(action.get("estimated_time_ms", 0)) for action in built.case.actions.get("source", []))
+                arrival_release[requirement.to_state_id] = motion_time
+        execution = estimate_fifo_execution(
+            project,
+            built.case.actions.get("source", []),
+            motion_time_ms=motion_time,
+            arrival_release_ms=arrival_release,
+        )
         timings.append(
             CandidateTiming(
                 candidate_id=candidate.candidate_id,
@@ -684,8 +715,9 @@ def _candidate_timings(
                 route_family=candidate.route_family.name,
                 complete=not missing,
                 motion_time_ms=motion_time,
-                mechanism_time_ms=mechanism_time,
-                total_time_ms=motion_time + mechanism_time,
+                mechanism_time_ms=execution.added_wait_time_ms,
+                mechanism_busy_time_ms=execution.mechanism_busy_time_ms,
+                total_time_ms=execution.total_time_ms,
                 leg_ids=tuple(leg_ids),
                 missing_leg_ids=tuple(missing),
                 failure_reason="" if not missing else "missing, stale, failed, preview, or invalid legs",
@@ -730,8 +762,9 @@ def _best_complete_case(
             "planned_motion_time_ms": selected.motion_time_ms,
             "planned_motion_time_state": "LEG_LIBRARY_SUM",
             "planned_mechanism_time_ms": selected.mechanism_time_ms,
+            "planned_mechanism_busy_time_ms": selected.mechanism_busy_time_ms,
             "planned_total_estimate_ms": selected.total_time_ms,
-            "planned_total_estimate_state": "MOTION_PLUS_FIFO_MECHANISM",
+            "planned_total_estimate_state": "FIFO_OVERLAP_WITH_STOP_CARRY_FORWARD",
         }
     )
     hashes = dict(built.case.hashes)

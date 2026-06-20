@@ -222,8 +222,20 @@ def build_default_v4_project(
             "BIN_23": {"configured": False, "yaw_ddeg": 0, "dx_mm": 0, "dy_mm": 0, "estimated_action_time_ms": int(action_durations_ms.get("DROP_23", 700))},
         },
         "topology_profiles": {
-            "PICK_1_TO_3": {"profile_id": "S_LTR_DEFAULT", "gates": []},
-            "PICK_3_TO_1": {"profile_id": "S_RTL_DEFAULT", "gates": []},
+            "PICK_1_TO_3": {
+                "profile_id": "S_LEFT_DEFAULT",
+                "transfer_profile_id": "S_LEFT_TRANSFER",
+                "auto_generate_transfer_gates": True,
+                "gate_clearance_mm": 65,
+                "gates": [],
+            },
+            "PICK_3_TO_1": {
+                "profile_id": "S_RIGHT_DEFAULT",
+                "transfer_profile_id": "S_RIGHT_TRANSFER",
+                "auto_generate_transfer_gates": True,
+                "gate_clearance_mm": 65,
+                "gates": [],
+            },
         },
         "action_profiles": action_profiles,
         "planner_profiles": {

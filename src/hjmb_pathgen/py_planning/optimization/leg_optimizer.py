@@ -37,7 +37,7 @@ from hjmb_pathgen.py_planning.dynamics.time_parameterization import (
 from hjmb_pathgen.py_planning.optimization.yaw_windows import YawWindowProfile
 from hjmb_pathgen.py_services.path_validation_service import validate_spatial_path_collision
 
-PLANNER_ALGORITHM_VERSION = "PHASE6_LEG_OPTIMIZER_V1"
+PLANNER_ALGORITHM_VERSION = "PHASE6_LEG_OPTIMIZER_V2_S_GATES"
 
 
 @dataclass(frozen=True)

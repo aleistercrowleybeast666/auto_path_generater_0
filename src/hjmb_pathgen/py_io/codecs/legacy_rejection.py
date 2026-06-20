@@ -54,4 +54,16 @@ def reject_deleted_fields(value: Any, object_type: str, field_path: str = "$") -
 def _is_allowed_v40_field(field_path: str) -> bool:
     """Allow V4 fields whose names collide with removed V3 action fields."""
 
-    return field_path.endswith(".flags") and ".nodes[" in field_path
+    if field_path.endswith(".flags") and ".nodes[" in field_path:
+        return True
+    if field_path.endswith(".gate_id") and (
+        "topology_profiles" in field_path
+        or ".topology_gates[" in field_path
+        or ".topology.crossings[" in field_path
+        or ".gates[" in field_path
+    ):
+        # ``gate_id`` was a removed runtime Gate field in V3.x, but V4 uses
+        # the same spelling for offline virtual topology-gate definitions and
+        # their validation diagnostics.
+        return True
+    return False

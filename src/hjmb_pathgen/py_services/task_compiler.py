@@ -15,6 +15,7 @@ from hjmb_pathgen.py_domain.route_case import CaseManifestV40, RouteCaseRowV40
 from hjmb_pathgen.py_domain.task_mapping import DropTarget, drop_targets_from_label_positions
 from hjmb_pathgen.py_domain.task_plan import CandidatePlan, TransitionRequirement, UnloadStep
 from hjmb_pathgen.py_services.action_source_compiler import compile_source_actions
+from hjmb_pathgen.py_planning.geometry.automatic_topology import topology_profile_for_transition
 from hjmb_pathgen.py_utils.yaw_unwrap import unwrap_yaw_sequence
 
 ROUTE_FAMILY_ORDER = (RouteFamily.PICK_1_TO_3, RouteFamily.PICK_3_TO_1)
@@ -77,6 +78,62 @@ def compile_task_candidates(row: RouteCaseRowV40, project: ProjectV40) -> TaskCa
                 unavailable_reasons.append(f"{route_family.name}/{unload_spec.label}: {exc}")
     candidates = sorted(candidates, key=_candidate_sort_key)
     return TaskCandidateSet(row=row, drop_targets=drop_targets, candidates=tuple(candidates), unavailable_reasons=tuple(unavailable_reasons))
+
+
+def automatic_candidate_subset(candidates: tuple[CandidatePlan, ...] | list[CandidatePlan]) -> tuple[CandidatePlan, ...]:
+    """Return only task-optimal candidates that obey the user's left/right rule.
+
+    The unloading plan is decided before route geometry.  Fewer unloading stops
+    are preferred.  For that best stop count, stops {1,2} use the right route
+    (pickup sequence ending at PICK_1); stops {2,3} use the left route (ending
+    at PICK_3); {1,2,3}, {1,3}, and all ties default to the left route.
+    """
+
+    items = tuple(candidates)
+    if not items:
+        return ()
+    minimum_stops = min(item.stop_count for item in items)
+    reduced = tuple(item for item in items if item.stop_count == minimum_stops)
+    matched = tuple(
+        item for item in reduced
+        if item.route_family == preferred_route_family_for_candidate(item)
+    )
+    return tuple(sorted(matched or reduced, key=_candidate_sort_key))
+
+
+def unload_stop_ranks(candidate: CandidatePlan) -> tuple[int, ...]:
+    result: list[int] = []
+    for step in candidate.unload_sequence:
+        rank = None
+        for index, site in enumerate(step.physical_sites):
+            if site == step.anchor_site and index < len(step.target_ranks):
+                rank = int(step.target_ranks[index])
+                break
+        if rank is None and step.target_ranks:
+            rank = int(step.target_ranks[0])
+        if rank is not None:
+            result.append(rank)
+    return tuple(sorted(set(result)))
+
+
+def preferred_route_family_for_candidate(candidate: CandidatePlan) -> RouteFamily:
+    ranks = set(unload_stop_ranks(candidate))
+    if ranks == {1, 2}:
+        # User naming: pickup-1 to drop-1 is the right-hand traversal.
+        return RouteFamily.PICK_3_TO_1
+    if ranks == {2, 3}:
+        return RouteFamily.PICK_1_TO_3
+    # {1,2,3}, {1,3}, and any ambiguous arrangement are equal; default left.
+    return RouteFamily.PICK_1_TO_3
+
+
+def route_selection_reason(candidate: CandidatePlan) -> str:
+    ranks = set(unload_stop_ranks(candidate))
+    if ranks == {1, 2}:
+        return "RIGHT_ROUTE_FOR_UNLOAD_STOPS_1_2"
+    if ranks == {2, 3}:
+        return "LEFT_ROUTE_FOR_UNLOAD_STOPS_2_3"
+    return "LEFT_ROUTE_TIE_DEFAULT"
 
 
 def build_case_draft(
@@ -144,10 +201,15 @@ def build_case_draft(
 def transition_requirements_for_case(case: CaseManifestV40, project: ProjectV40) -> tuple[TransitionRequirement, ...]:
     states = [_start_state_for_case(case, project), *case.arrival_states]
     route_family = str(case.selected_plan.get("route_family", ""))
-    topology_profile = _topology_profile(project, route_family)
     dependency_hashes = _transition_dependency_hashes(project)
     requirements: list[TransitionRequirement] = []
     for from_state, to_state in zip(states, states[1:], strict=False):
+        topology_profile = topology_profile_for_transition(
+            project,
+            route_family,
+            str(from_state["state_id"]),
+            str(to_state["state_id"]),
+        )
         semantic = {
             "from_state_id": from_state["state_id"],
             "to_state_id": to_state["state_id"],
@@ -190,6 +252,10 @@ def candidate_review_dict(candidate: CandidatePlan) -> dict[str, Any]:
         "yaw_sequence_ddeg": list(candidate.yaw_sequence_ddeg),
         "estimated_mechanism_time_ms": candidate.estimated_mechanism_time_ms,
         "stop_count": candidate.stop_count,
+        "unload_stop_ranks": list(unload_stop_ranks(candidate)),
+        "preferred_route_family": preferred_route_family_for_candidate(candidate).name,
+        "route_selection_reason": route_selection_reason(candidate),
+        "route_rule_match": candidate.route_family == preferred_route_family_for_candidate(candidate),
         "warnings": list(candidate.warnings),
         "unavailable_reasons": list(candidate.unavailable_reasons),
         "locked_by_user": candidate.locked_by_user,
@@ -410,7 +476,8 @@ def _select_candidate(
             expected_hash = str(selected_plan.get("semantic_hash", ""))
             locked_by_user = True
     if candidate_id is None:
-        selected = candidates[0]
+        automatic = automatic_candidate_subset(candidates)
+        selected = automatic[0] if automatic else candidates[0]
     else:
         selected = by_id.get(candidate_id)
         if selected is None:
@@ -572,8 +639,11 @@ def _selected_plan_dict(candidate_set: TaskCandidateSet, selected: CandidatePlan
         "yaw_direction": selected.yaw_direction.value,
         "yaw_sequence_ddeg": list(selected.yaw_sequence_ddeg),
         "estimated_mechanism_time_ms": selected.estimated_mechanism_time_ms,
+        "unload_stop_ranks": list(unload_stop_ranks(selected)),
+        "preferred_route_family": preferred_route_family_for_candidate(selected).name,
+        "route_selection_reason": route_selection_reason(selected),
         "locked_by_user": selected.locked_by_user,
-        "selection_state": "LOCKED" if selected.locked_by_user else "DEFAULT_PHASE3_DRAFT",
+        "selection_state": "LOCKED" if selected.locked_by_user else "DETERMINISTIC_ROUTE_RULE",
         "candidates": [candidate_review_dict(candidate) for candidate in candidate_set.candidates],
         "unavailable_reasons": list(candidate_set.unavailable_reasons),
     }
@@ -668,15 +738,6 @@ def _resolve_unconstrained_route_yaws(
         if raw_yaw == YAW_UNSPECIFIED_DDEG:
             item["pose"]["yaw_source"] = "UNCONSTRAINED_0XFFFF"
     return states[0], tuple(states[1:])
-
-
-def _topology_profile(project: ProjectV40, route_family: str) -> str:
-    profile = project.topology_profiles.get(route_family, {})
-    if isinstance(profile, dict):
-        return str(profile.get("profile_id", route_family))
-    if profile:
-        return str(profile)
-    return route_family
 
 
 def _transition_dependency_hashes(project: ProjectV40) -> dict[str, Any]:
