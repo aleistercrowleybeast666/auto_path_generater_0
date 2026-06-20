@@ -25,6 +25,7 @@ SEMI_POINT_FIELDS = {
     "max_speed_mmps",
     "corner_trim_mm",
     "state_id",
+    "unload_pose_profile_id",
 }
 
 ROUTE_A_SITE_SEQUENCE = (
@@ -57,6 +58,7 @@ class SemiPathPointV40:
     max_speed_mmps: int | None = None
     corner_trim_mm: float = 200.0
     state_id: str = ""
+    unload_pose_profile_id: str = ""
 
     @classmethod
     def from_dict(cls, data: dict[str, Any], *, field_path: str) -> "SemiPathPointV40":
@@ -103,6 +105,17 @@ class SemiPathPointV40:
             raise V40ValidationError("SemiPathPointV40", f"{field_path}.corner_trim_mm", "must be a non-negative number", actual=trim)
         if point_type != ManualPathPointType.WAYPOINT:
             trim = 0.0
+        unload_pose_profile_id = str(data.get("unload_pose_profile_id", ""))
+        if unload_pose_profile_id and not (
+            point_type == ManualPathPointType.ARRIVAL
+            and site_key is not None
+            and site_key.startswith("P_DROP_")
+        ):
+            raise V40ValidationError(
+                "SemiPathPointV40", f"{field_path}.unload_pose_profile_id",
+                "only P_DROP ARRIVAL rows may select an unload pose profile",
+                actual=unload_pose_profile_id,
+            )
         return cls(
             point_type=point_type,
             site_key=site_key,
@@ -112,6 +125,7 @@ class SemiPathPointV40:
             max_speed_mmps=max_speed,
             corner_trim_mm=float(trim),
             state_id=str(data.get("state_id", "")),
+            unload_pose_profile_id=unload_pose_profile_id,
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -129,6 +143,8 @@ class SemiPathPointV40:
                 data["corner_trim_mm"] = self.corner_trim_mm
         if self.state_id:
             data["state_id"] = self.state_id
+        if self.unload_pose_profile_id:
+            data["unload_pose_profile_id"] = self.unload_pose_profile_id
         return data
 
 

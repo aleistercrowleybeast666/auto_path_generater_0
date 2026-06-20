@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from hjmb_pathgen.py_io.codecs.legacy_rejection import reject_deleted_fields, reject_legacy_format
 
 from .errors import V40ValidationError, expect_equal, reject_unknown_fields, require_fields
+from .competition_task_config import UNLOAD_POSE_PROFILE_IDS
 from .protocol import (
     DROP_SITE_KEYS,
     NOMINAL_FIELD_LENGTH_MM,
@@ -40,8 +41,11 @@ PROJECT_REQUIRED_FIELDS = {
     "output",
     "traj_table",
 }
+PROJECT_OPTIONAL_FIELDS = {"unload_pose_profiles"}
+PROJECT_ALLOWED_FIELDS = PROJECT_REQUIRED_FIELDS | PROJECT_OPTIONAL_FIELDS
 COMMON_SITE_FIELDS = {"configured", "x_mm", "y_mm", "yaw_ddeg"}
 UNLOAD_PROFILE_FIELDS = {"configured", "yaw_ddeg", "dx_mm", "dy_mm", "estimated_action_time_ms"}
+UNLOAD_POSE_PROFILE_FIELDS = UNLOAD_PROFILE_FIELDS
 FOOTPRINT_REQUIRED_FIELDS = {
     "r_large_mm",
     "r_small_mm",
@@ -78,6 +82,7 @@ class ProjectV40:
     finish_policy: dict[str, Any]
     output: dict[str, Any]
     traj_table: dict[str, Any]
+    unload_pose_profiles: dict[str, Any] = field(default_factory=dict)
     protocol_version: int = 40
     format: str = PROJECT_FORMAT
 
@@ -85,7 +90,7 @@ class ProjectV40:
     def from_dict(cls, data: dict[str, Any]) -> "ProjectV40":
         reject_deleted_fields(data, "ProjectV40")
         reject_legacy_format(data.get("format"), "ProjectV40")
-        reject_unknown_fields(data, PROJECT_REQUIRED_FIELDS, "ProjectV40")
+        reject_unknown_fields(data, PROJECT_ALLOWED_FIELDS, "ProjectV40")
         require_fields(data, PROJECT_REQUIRED_FIELDS, "ProjectV40")
         expect_equal(data["format"], PROJECT_FORMAT, "ProjectV40", "format")
         expect_equal(data["protocol_version"], 40, "ProjectV40", "protocol_version")
@@ -96,6 +101,9 @@ class ProjectV40:
         expect_equal(provider.get("type"), "MANUAL", "ProjectV40", "site_pose_provider.type")
         sites = validate_project_sites(data["sites"], "ProjectV40", "sites")
         unload_profiles = validate_unload_profiles(data["unload_profiles"], "ProjectV40", "unload_profiles")
+        unload_pose_profiles = validate_unload_pose_profiles(
+            data.get("unload_pose_profiles"), unload_profiles, "ProjectV40", "unload_pose_profiles"
+        )
         field_objects = validate_project_field_objects(data["field_objects"], "ProjectV40", "field_objects")
         vehicle = validate_project_vehicle(data["vehicle"], "ProjectV40", "vehicle")
         return cls(
@@ -117,6 +125,7 @@ class ProjectV40:
             finish_policy=dict(data["finish_policy"]),
             output=dict(data["output"]),
             traj_table=dict(data["traj_table"]),
+            unload_pose_profiles=unload_pose_profiles,
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -140,6 +149,7 @@ class ProjectV40:
             "finish_policy": self.finish_policy,
             "output": self.output,
             "traj_table": self.traj_table,
+            "unload_pose_profiles": self.unload_pose_profiles,
         }
 
 
@@ -208,6 +218,74 @@ def validate_unload_profiles(data: object, object_type: str, field_path: str) ->
                 object_type,
                 f"{field_path}.{key}.estimated_action_time_ms",
             ),
+        }
+    return result
+
+
+def validate_unload_pose_profiles(
+    data: object | None,
+    legacy_unload_profiles: dict[str, Any],
+    object_type: str,
+    field_path: str,
+) -> dict[str, Any]:
+    """Validate the eleven operation-specific yaw calibrations.
+
+    Older V4 projects only had five mask-level ``unload_profiles``.  They are
+    migrated in memory so existing projects remain loadable; every save writes
+    the explicit eleven-entry table.
+    """
+
+    if data is None:
+        return _migrate_unload_pose_profiles(legacy_unload_profiles)
+    if not isinstance(data, dict):
+        raise V40ValidationError(object_type, field_path, "must be an object", actual=type(data).__name__)
+    if set(data) != set(UNLOAD_POSE_PROFILE_IDS):
+        raise V40ValidationError(
+            object_type, field_path, "must contain exactly the eleven unload pose profiles",
+            actual=sorted(data), expected=list(UNLOAD_POSE_PROFILE_IDS),
+        )
+    result: dict[str, Any] = {}
+    for key in UNLOAD_POSE_PROFILE_IDS:
+        raw = data[key]
+        if not isinstance(raw, dict):
+            raise V40ValidationError(object_type, f"{field_path}.{key}", "profile must be an object", actual=type(raw).__name__)
+        reject_unknown_fields(raw, UNLOAD_POSE_PROFILE_FIELDS, object_type, f"{field_path}.{key}")
+        require_fields(raw, UNLOAD_POSE_PROFILE_FIELDS, object_type, f"{field_path}.{key}")
+        result[key] = {
+            "configured": _expect_bool(raw["configured"], object_type, f"{field_path}.{key}.configured"),
+            "yaw_ddeg": _expect_site_int(raw["yaw_ddeg"], object_type, f"{field_path}.{key}.yaw_ddeg"),
+            "dx_mm": _expect_site_int(raw["dx_mm"], object_type, f"{field_path}.{key}.dx_mm"),
+            "dy_mm": _expect_site_int(raw["dy_mm"], object_type, f"{field_path}.{key}.dy_mm"),
+            "estimated_action_time_ms": _expect_nonnegative_int(
+                raw["estimated_action_time_ms"], object_type, f"{field_path}.{key}.estimated_action_time_ms"
+            ),
+        }
+    return result
+
+
+def _migrate_unload_pose_profiles(legacy: dict[str, Any]) -> dict[str, Any]:
+    mask_by_profile = {
+        "DROP_F4_BIN_1": "BIN_1",
+        "DROP_F5_BIN_1": "BIN_1",
+        "DROP_F5_BIN_2": "BIN_2",
+        "DROP_F6_BIN_1": "BIN_1",
+        "DROP_F6_BIN_2": "BIN_2",
+        "DROP_F6_BIN_3": "BIN_3",
+        "DROP_F7_BIN_2": "BIN_2",
+        "DROP_F7_BIN_3": "BIN_3",
+        "DROP_F8_BIN_3": "BIN_3",
+        "DROP_F45_BIN_12": "BIN_12",
+        "DROP_F78_BIN_23": "BIN_23",
+    }
+    result: dict[str, Any] = {}
+    for profile_id, mask in mask_by_profile.items():
+        source = dict(legacy.get(mask, {}))
+        result[profile_id] = {
+            "configured": bool(source.get("configured", False)),
+            "yaw_ddeg": int(source.get("yaw_ddeg", 0)),
+            "dx_mm": int(source.get("dx_mm", 0)),
+            "dy_mm": int(source.get("dy_mm", 0)),
+            "estimated_action_time_ms": int(source.get("estimated_action_time_ms", 0)),
         }
     return result
 

@@ -547,6 +547,7 @@ class EditPoint:
     max_speed_mmps: int = 0
     corner_trim_mm: float = 200.0
     exact_pass: bool = False
+    unload_pose_profile_id: str = ""
 
     @classmethod
     def from_dict(cls, data: dict) -> "EditPoint":
@@ -571,6 +572,7 @@ class EditPoint:
                 data.get("corner_trim_mm", default_corner_trim), "point.corner_trim_mm"
             ),
             exact_pass=bool(data.get("exact_pass", default_exact_pass)),
+            unload_pose_profile_id=str(data.get("unload_pose_profile_id", "")),
         )
 
 
@@ -840,8 +842,10 @@ class PathProject:
                     }
                 )
                 return base
-            # Fixed x/y/yaw live only in project.json/fixed_sites.  Even when
-            # yaw is 0xFFFF, do not copy an override into every path point.
+            # Fixed x/y live only in project.json/fixed_sites.  A drop row may
+            # select one of the operation-specific unload pose profiles.
+            if point.unload_pose_profile_id:
+                base["unload_pose_profile_id"] = point.unload_pose_profile_id
             return base
         base.update(
             {

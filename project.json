@@ -254,7 +254,8 @@
     },
     "default": {
       "max_spacing_mm": 25,
-      "max_yaw_step_ddeg": 30
+      "max_yaw_step_ddeg": 30,
+      "use_unload_pose_profiles": true
     }
   },
   "project_id": "路径文件生成",
@@ -335,7 +336,87 @@
   },
   "traj_table": {
     "expected_case_count": 360,
-    "source_csv": "traj_id.csv"
+    "source_path": "task_config/competition_task_config.json",
+    "source_type": "TASK_CONFIG_JSON"
+  },
+  "unload_pose_profiles": {
+    "DROP_F45_BIN_12": {
+      "configured": true,
+      "dx_mm": 0,
+      "dy_mm": 0,
+      "estimated_action_time_ms": 700,
+      "yaw_ddeg": 0
+    },
+    "DROP_F4_BIN_1": {
+      "configured": true,
+      "dx_mm": 0,
+      "dy_mm": 0,
+      "estimated_action_time_ms": 700,
+      "yaw_ddeg": 900
+    },
+    "DROP_F5_BIN_1": {
+      "configured": true,
+      "dx_mm": 0,
+      "dy_mm": 0,
+      "estimated_action_time_ms": 700,
+      "yaw_ddeg": 900
+    },
+    "DROP_F5_BIN_2": {
+      "configured": true,
+      "dx_mm": 0,
+      "dy_mm": 0,
+      "estimated_action_time_ms": 700,
+      "yaw_ddeg": 0
+    },
+    "DROP_F6_BIN_1": {
+      "configured": true,
+      "dx_mm": 0,
+      "dy_mm": 0,
+      "estimated_action_time_ms": 700,
+      "yaw_ddeg": 900
+    },
+    "DROP_F6_BIN_2": {
+      "configured": true,
+      "dx_mm": 0,
+      "dy_mm": 0,
+      "estimated_action_time_ms": 700,
+      "yaw_ddeg": 0
+    },
+    "DROP_F6_BIN_3": {
+      "configured": true,
+      "dx_mm": 0,
+      "dy_mm": 0,
+      "estimated_action_time_ms": 700,
+      "yaw_ddeg": -900
+    },
+    "DROP_F78_BIN_23": {
+      "configured": true,
+      "dx_mm": 0,
+      "dy_mm": 0,
+      "estimated_action_time_ms": 700,
+      "yaw_ddeg": 0
+    },
+    "DROP_F7_BIN_2": {
+      "configured": true,
+      "dx_mm": 0,
+      "dy_mm": 0,
+      "estimated_action_time_ms": 700,
+      "yaw_ddeg": 0
+    },
+    "DROP_F7_BIN_3": {
+      "configured": true,
+      "dx_mm": 0,
+      "dy_mm": 0,
+      "estimated_action_time_ms": 700,
+      "yaw_ddeg": -900
+    },
+    "DROP_F8_BIN_3": {
+      "configured": true,
+      "dx_mm": 0,
+      "dy_mm": 0,
+      "estimated_action_time_ms": 700,
+      "yaw_ddeg": -900
+    }
   },
   "unload_profiles": {
     "BIN_1": {

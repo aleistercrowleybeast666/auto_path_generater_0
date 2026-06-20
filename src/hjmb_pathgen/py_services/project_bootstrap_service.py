@@ -6,7 +6,6 @@ so project creation can also be tested and used by CLI tools.
 
 from __future__ import annotations
 
-import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
@@ -15,6 +14,7 @@ from hjmb_pathgen.py_domain.project import ProjectV40
 from hjmb_pathgen.py_domain.protocol import REQUIRED_SITE_KEYS, YAW_UNSPECIFIED_DDEG
 from hjmb_pathgen.py_io.layout.project_layout import ProjectLayout
 from hjmb_pathgen.py_services.traj_table_service import write_route_case_table
+from hjmb_pathgen.py_services.competition_task_config_service import ensure_competition_task_config
 
 ACTION_PROFILE_KEYS = (
     "PREP_PICK_1",
@@ -56,8 +56,10 @@ def bootstrap_v4_workspace(
 ) -> BootstrapResult:
     """Create ``project.json`` and the V4 directory tree when they are absent.
 
-    Existing project.json is never overwritten.  A missing traj_id.csv is copied from
-    ``source_traj_csv`` when available and route_case_table.json is then generated.
+    Existing project.json is never overwritten.  The English-only deterministic
+    task_config/competition_task_config.json is created when absent and is the
+    primary source for route_case_table.json.  ``source_traj_csv`` is accepted only
+    for API compatibility and is not required by the normal workflow.
     """
 
     root_path = Path(root).resolve(strict=False)
@@ -81,23 +83,20 @@ def bootstrap_v4_workspace(
         warnings.extend(
             (
                 "已按当前GUI配置创建project.json。",
-                "碰撞包络、BIN_12/BIN_23姿态和场地物体尺寸使用初始值，正式比赛前必须核对。",
+                "碰撞包络、11项倒货姿态和场地物体尺寸使用初始值，正式比赛前必须核对。",
             )
         )
     else:
         layout.ensure_directories()
 
-    if not layout.traj_id_csv.exists() and source_traj_csv is not None:
-        source = Path(source_traj_csv).resolve(strict=False)
-        if source.exists() and source.is_file() and source != layout.traj_id_csv:
-            shutil.copy2(source, layout.traj_id_csv)
+    # The normal V4 workflow is independent of the legacy Chinese CSV.
+    ensure_competition_task_config(layout.competition_task_config_json)
 
-    created_route_table = False
-    if layout.traj_id_csv.exists() and not layout.route_case_table_json.exists():
-        write_route_case_table(layout)
-        created_route_table = True
-    elif not layout.traj_id_csv.exists():
-        warnings.append("未找到traj_id.csv：MANUAL可使用，SEMI_AUTO/FULL_AUTO任务语义暂不可生成。")
+    created_route_table = not layout.route_case_table_json.exists()
+    # Always rebuild the small 360-row mapping from the English task JSON.
+    # This removes hidden dependence on an old CSV-generated table and makes
+    # task-config edits take effect on the next project load.
+    write_route_case_table(layout)
 
     return BootstrapResult(
         layout=layout,
@@ -221,6 +220,19 @@ def build_default_v4_project(
             "BIN_12": {"configured": False, "yaw_ddeg": 0, "dx_mm": 0, "dy_mm": 0, "estimated_action_time_ms": int(action_durations_ms.get("DROP_12", 700))},
             "BIN_23": {"configured": False, "yaw_ddeg": 0, "dx_mm": 0, "dy_mm": 0, "estimated_action_time_ms": int(action_durations_ms.get("DROP_23", 700))},
         },
+        "unload_pose_profiles": {
+            "DROP_F4_BIN_1": {"configured": True, "yaw_ddeg": 900, "dx_mm": 0, "dy_mm": 0, "estimated_action_time_ms": int(action_durations_ms.get("DROP_1", 700))},
+            "DROP_F5_BIN_1": {"configured": True, "yaw_ddeg": 900, "dx_mm": 0, "dy_mm": 0, "estimated_action_time_ms": int(action_durations_ms.get("DROP_1", 700))},
+            "DROP_F5_BIN_2": {"configured": True, "yaw_ddeg": 0, "dx_mm": 0, "dy_mm": 0, "estimated_action_time_ms": int(action_durations_ms.get("DROP_2", 700))},
+            "DROP_F6_BIN_1": {"configured": True, "yaw_ddeg": 900, "dx_mm": 0, "dy_mm": 0, "estimated_action_time_ms": int(action_durations_ms.get("DROP_1", 700))},
+            "DROP_F6_BIN_2": {"configured": True, "yaw_ddeg": 0, "dx_mm": 0, "dy_mm": 0, "estimated_action_time_ms": int(action_durations_ms.get("DROP_2", 700))},
+            "DROP_F6_BIN_3": {"configured": True, "yaw_ddeg": -900, "dx_mm": 0, "dy_mm": 0, "estimated_action_time_ms": int(action_durations_ms.get("DROP_3", 700))},
+            "DROP_F7_BIN_2": {"configured": True, "yaw_ddeg": 0, "dx_mm": 0, "dy_mm": 0, "estimated_action_time_ms": int(action_durations_ms.get("DROP_2", 700))},
+            "DROP_F7_BIN_3": {"configured": True, "yaw_ddeg": -900, "dx_mm": 0, "dy_mm": 0, "estimated_action_time_ms": int(action_durations_ms.get("DROP_3", 700))},
+            "DROP_F8_BIN_3": {"configured": True, "yaw_ddeg": -900, "dx_mm": 0, "dy_mm": 0, "estimated_action_time_ms": int(action_durations_ms.get("DROP_3", 700))},
+            "DROP_F45_BIN_12": {"configured": False, "yaw_ddeg": 0, "dx_mm": 0, "dy_mm": 0, "estimated_action_time_ms": int(action_durations_ms.get("DROP_12", 700))},
+            "DROP_F78_BIN_23": {"configured": False, "yaw_ddeg": 0, "dx_mm": 0, "dy_mm": 0, "estimated_action_time_ms": int(action_durations_ms.get("DROP_23", 700))},
+        },
         "topology_profiles": {
             "PICK_1_TO_3": {
                 "profile_id": "S_LEFT_DEFAULT",
@@ -239,7 +251,7 @@ def build_default_v4_project(
         },
         "action_profiles": action_profiles,
         "planner_profiles": {
-            "default": {"max_spacing_mm": 25, "max_yaw_step_ddeg": 30},
+            "default": {"max_spacing_mm": 25, "max_yaw_step_ddeg": 30, "use_unload_pose_profiles": True},
             "QUICK": {"max_spacing_mm": 35, "max_yaw_step_ddeg": 40},
             "STANDARD": {"max_spacing_mm": 25, "max_yaw_step_ddeg": 30},
             "FINAL": {"max_spacing_mm": 20, "max_yaw_step_ddeg": 20},
@@ -248,6 +260,10 @@ def build_default_v4_project(
         "arrival_check": dict(arrival_check),
         "finish_policy": {"mode": "AT_FINAL_DROP"},
         "output": {"case_dir": "cases", "bin_dir": "bin"},
-        "traj_table": {"source_csv": "traj_id.csv", "expected_case_count": 360},
+        "traj_table": {
+            "source_type": "TASK_CONFIG_JSON",
+            "source_path": "task_config/competition_task_config.json",
+            "expected_case_count": 360,
+        },
     }
     return ProjectV40.from_dict(data)

@@ -18,6 +18,7 @@ class UnloadStep:
     vehicle_bins: tuple[str, ...]
     anchor_site: str
     yaw_ddeg: int
+    unload_pose_profile_id: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -29,6 +30,7 @@ class UnloadStep:
             "vehicle_bins": list(self.vehicle_bins),
             "anchor_site": self.anchor_site,
             "yaw_ddeg": self.yaw_ddeg,
+            "unload_pose_profile_id": self.unload_pose_profile_id,
         }
 
 

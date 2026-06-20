@@ -104,8 +104,15 @@ def compile_source_actions(
                 physical_sites=list(step.physical_sites),
                 vehicle_bins=list(step.vehicle_bins),
                 anchor_site=step.anchor_site,
-                unload_profile_hash=canonical_json_crc32_hex(_unload_profile(project, step.unload_mask)),
-                unload_estimated_action_time_ms=int(_unload_profile(project, step.unload_mask).get("estimated_action_time_ms", 0)),
+                unload_pose_profile_id=step.unload_pose_profile_id,
+                unload_pose_profile_hash=canonical_json_crc32_hex(
+                    _unload_pose_profile(project, step.unload_pose_profile_id)
+                ),
+                estimated_time_override_ms=int(
+                    _unload_pose_profile(project, step.unload_pose_profile_id).get(
+                        "estimated_action_time_ms", 0
+                    )
+                ),
             )
         )
         for vehicle_bin, bean_type in zip(step.vehicle_bins, step.bean_types, strict=True):
@@ -126,7 +133,12 @@ def _source_action(project: ProjectV40, action_code: ActionCode, **semantic: Any
     profile = _action_profile(project, action_code.name)
     mode = _mode_name(profile.get("mode"))
     post_wait_ms = int(profile.get("post_wait_ms", 0))
-    estimate = int(profile.get("estimated_time_ms", semantic.pop("unload_estimated_action_time_ms", 0))) + post_wait_ms
+    estimate_override = semantic.pop("estimated_time_override_ms", None)
+    estimate = int(
+        estimate_override
+        if estimate_override is not None
+        else profile.get("estimated_time_ms", 0)
+    ) + post_wait_ms
     action = {
         "action": action_code.name,
         "mode": mode,
@@ -159,6 +171,13 @@ def _unload_profile(project: ProjectV40, unload_mask: UnloadMask) -> dict[str, A
     profile = project.unload_profiles[unload_mask.value]
     if not isinstance(profile, dict):
         raise CompileError(f"unload_profile {unload_mask.value} must be an object")
+    return dict(profile)
+
+
+def _unload_pose_profile(project: ProjectV40, profile_id: str) -> dict[str, Any]:
+    profile = project.unload_pose_profiles.get(profile_id)
+    if not isinstance(profile, dict):
+        raise CompileError(f"missing unload pose profile: {profile_id}")
     return dict(profile)
 
 

@@ -52,6 +52,7 @@ class Phase3TaskCompilerTest(unittest.TestCase):
 
     def test_two_route_families_pick2_side_and_bin_assignment(self):
         candidates = compile_task_candidates(route_row(), phase3_project()).candidates
+        self.assertEqual(len(candidates), 2)
         route_families = {candidate.route_family.name for candidate in candidates}
         self.assertEqual(route_families, {"PICK_1_TO_3", "PICK_3_TO_1"})
         pick_1_to_3 = [candidate for candidate in candidates if candidate.route_family.name == "PICK_1_TO_3"][0]
@@ -71,19 +72,17 @@ class Phase3TaskCompilerTest(unittest.TestCase):
         self.assertTrue(all(len(candidate.unload_sequence) == 3 for candidate in separated_candidates))
 
         consecutive_candidates = compile_task_candidates(route_row(), phase3_project()).candidates
-        self.assertEqual(len(consecutive_candidates), 6)
+        self.assertEqual(len(consecutive_candidates), 2)
         masks = {step.unload_mask.value for candidate in consecutive_candidates for step in candidate.unload_sequence}
-        self.assertNotIn("BIN_13", masks)
-        self.assertNotIn("BIN_123", masks)
-        self.assertTrue({"BIN_12", "BIN_23"}.issubset(masks))
+        self.assertEqual(masks, {"BIN_12", "BIN_3"})
+        self.assertTrue(all(candidate.stop_count == 2 for candidate in consecutive_candidates))
 
     def test_dual_unload_requires_manual_yaw_profile(self):
-        data = phase3_project_dict()
-        data["unload_profiles"]["BIN_12"]["configured"] = False
+        data = phase3_project().to_dict()
+        data["unload_pose_profiles"]["DROP_F45_BIN_12"]["configured"] = False
         project = phase3_project().__class__.from_dict(data)
         candidate_set = compile_task_candidates(route_row(), project)
-        masks = {step.unload_mask.value for candidate in candidate_set.candidates for step in candidate.unload_sequence}
-        self.assertNotIn("BIN_12", masks)
+        self.assertEqual(candidate_set.candidates, ())
         self.assertIn("missing or uncalibrated", " ".join(candidate_set.unavailable_reasons))
 
     def test_source_actions_preserve_pick_store_unload_bin_mapping(self):
@@ -133,14 +132,15 @@ class Phase3TaskCompilerTest(unittest.TestCase):
             {"P_START", "P_PICK_1", "P_PICK_2L", "P_PICK_2R", "P_PICK_3", "P_DROP_1", "P_DROP_2", "P_DROP_3"},
         )
         self.assertEqual(len(locked.case.logical_points), 8)
-        drop_1 = next(item for item in locked.case.logical_points if item["point_id"] == "P_DROP_1")
-        drop_box = next(
-            item for item in project.field_objects["drop_boxes"]
-            if item["physical_drop_site"] == drop_1["physical_drop_site"]
-        )
-        self.assertNotEqual(
-            (drop_1["pose"]["x_mm"], drop_1["pose"]["y_mm"]),
-            (drop_box["center_x_mm"], drop_box["center_y_mm"]),
+        active_drop_points = [
+            item for item in locked.case.logical_points
+            if item["point_id"].startswith("P_DROP_") and item.get("active")
+        ]
+        self.assertEqual({item["point_id"] for item in active_drop_points}, {"P_DROP_2", "P_DROP_3"})
+        self.assertTrue(all(item["pose"]["yaw_ddeg"] != 0xFFFF for item in active_drop_points))
+        self.assertEqual(
+            {item["unload_pose_profile_id"] for item in active_drop_points},
+            {"DROP_F45_BIN_12", "DROP_F6_BIN_3"},
         )
         rebuilt = build_case_draft(row, project, existing_case=locked.case)
         self.assertEqual(rebuilt.case.selected_plan["candidate_id"], candidate_id)

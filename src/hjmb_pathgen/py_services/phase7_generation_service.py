@@ -34,9 +34,11 @@ from hjmb_pathgen.py_services.task_compiler import (
     automatic_candidate_subset,
     build_case_draft,
     compile_task_candidates,
+    preferred_route_family_for_candidate,
 )
 from hjmb_pathgen.py_services.execution_time_estimator import estimate_fifo_execution
 from hjmb_pathgen.py_services.traj_table_service import write_route_case_table
+from hjmb_pathgen.py_services.competition_task_config_service import ensure_competition_task_config
 
 UNIQUE_LEG_REPORT_JSON = "phase7_unique_leg_report.json"
 BATCH_REPORT_JSON = "phase7_batch_report.json"
@@ -125,6 +127,7 @@ class CandidateTiming:
     leg_ids: tuple[str, ...]
     missing_leg_ids: tuple[str, ...]
     failure_reason: str = ""
+    route_rule_match: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -139,6 +142,7 @@ class CandidateTiming:
             "leg_ids": list(self.leg_ids),
             "missing_leg_ids": list(self.missing_leg_ids),
             "failure_reason": self.failure_reason,
+            "route_rule_match": self.route_rule_match,
         }
 
 
@@ -252,13 +256,14 @@ def collect_unique_legs(layout: ProjectLayout, *, write_report: bool = True) -> 
     layout.ensure_directories()
     project = load_project(layout.project_json)
     table = _ensure_route_case_table(layout)
+    task_config = ensure_competition_task_config(layout.competition_task_config_json)
     library = load_or_create_leg_library(layout.leg_library_json, project)
     requirements: dict[str, tuple[str, TransitionRequirement, list[UniqueLegUsage]]] = {}
 
     for row in sorted(table.cases, key=lambda item: item.traj_id):
-        candidate_set = compile_task_candidates(row, project)
-        for candidate in automatic_candidate_subset(candidate_set.candidates):
-            built = build_case_draft(row, project, preferred_candidate_id=candidate.candidate_id)
+        candidate_set = compile_task_candidates(row, project, task_config)
+        for candidate in automatic_candidate_subset(candidate_set.candidates, task_config):
+            built = build_case_draft(row, project, preferred_candidate_id=candidate.candidate_id, task_config=task_config)
             for index, requirement in enumerate(built.transition_requirements):
                 key = _leg_id_for_transition(requirement, project, built.case)
                 entry = requirements.setdefault(key, (key, requirement, []))
@@ -314,9 +319,10 @@ def optimize_missing_legs(
         # Build only the deterministic route candidates for this row; this also
         # makes cancellation and progress feedback effectively immediate.
         table = _ensure_route_case_table(layout)
+        task_config = ensure_competition_task_config(layout.competition_task_config_json)
         row = _row_by_traj_id(table, traj_id)
-        candidate_set = compile_task_candidates(row, project)
-        selected_candidates = automatic_candidate_subset(candidate_set.candidates)
+        candidate_set = compile_task_candidates(row, project, task_config)
+        selected_candidates = automatic_candidate_subset(candidate_set.candidates, task_config)
         if candidate_id is not None:
             selected_candidates = tuple(
                 item for item in selected_candidates if item.candidate_id == candidate_id
@@ -326,7 +332,8 @@ def optimize_missing_legs(
         by_leg: dict[str, tuple[TransitionRequirement, list[UniqueLegUsage]]] = {}
         for candidate in selected_candidates:
             built = build_case_draft(
-                row, project, preferred_candidate_id=candidate.candidate_id
+                row, project, preferred_candidate_id=candidate.candidate_id,
+                task_config=task_config,
             )
             for index, transition in enumerate(built.transition_requirements):
                 leg_id = _leg_id_for_transition(transition, project, built.case)
@@ -682,12 +689,13 @@ def _candidate_timings(
     library: LegLibraryV40,
     *,
     leg_audit_cache: dict[str, _ReusableLegAudit] | None = None,
+    task_config=None,
 ) -> tuple[CandidateTiming, ...]:
-    candidate_set = compile_task_candidates(row, project)
+    candidate_set = compile_task_candidates(row, project, task_config)
     timings: list[CandidateTiming] = []
     audit_cache = leg_audit_cache if leg_audit_cache is not None else {}
-    for candidate in automatic_candidate_subset(candidate_set.candidates):
-        built = build_case_draft(row, project, preferred_candidate_id=candidate.candidate_id)
+    for candidate in automatic_candidate_subset(candidate_set.candidates, task_config):
+        built = build_case_draft(row, project, preferred_candidate_id=candidate.candidate_id, task_config=task_config)
         leg_ids: list[str] = []
         missing: list[str] = []
         motion_time = 0
@@ -721,6 +729,10 @@ def _candidate_timings(
                 leg_ids=tuple(leg_ids),
                 missing_leg_ids=tuple(missing),
                 failure_reason="" if not missing else "missing, stale, failed, preview, or invalid legs",
+                route_rule_match=(
+                    candidate.route_family
+                    == preferred_route_family_for_candidate(candidate, task_config)
+                ),
             )
         )
     return tuple(sorted(timings, key=_candidate_timing_sort_key))
@@ -734,13 +746,19 @@ def _best_complete_case(
     *,
     leg_audit_cache: dict[str, _ReusableLegAudit] | None = None,
 ) -> tuple[CaseManifestV40, CandidateTiming]:
-    timings = _candidate_timings(row, project, library, leg_audit_cache=leg_audit_cache)
+    task_config = ensure_competition_task_config(layout.competition_task_config_json)
+    timings = _candidate_timings(
+        row, project, library, leg_audit_cache=leg_audit_cache, task_config=task_config
+    )
     complete = [item for item in timings if item.complete]
     if not complete:
         raise CompileError(f"P{row.traj_id:04d} has no complete candidate; optimize missing legs first")
     existing_case = _load_existing_task_case(layout, row.traj_id)
     selected, selection_state, locked_by_user = _select_phase8_candidate(row, existing_case, timings, complete)
-    built = build_case_draft(row, project, preferred_candidate_id=selected.candidate_id, lock_selected=locked_by_user)
+    built = build_case_draft(
+        row, project, preferred_candidate_id=selected.candidate_id,
+        lock_selected=locked_by_user, task_config=task_config,
+    )
     leg_refs, arrival_s = _leg_refs_and_arrival_s(built.transition_requirements, project, built.case, library, leg_audit_cache=leg_audit_cache)
     compiled_actions = _compiled_actions(built.case, project, arrival_s)
     review = dict(built.case.review)
@@ -756,6 +774,12 @@ def _best_complete_case(
     )
     selected_plan = dict(built.case.selected_plan)
     selected_plan["selection_state"] = selection_state
+    selected_plan["route_selection_reason"] = (
+        "LOCKED_BY_USER"
+        if locked_by_user
+        else "FASTEST_COMPLETE_GEOMETRY"
+    )
+    selected_plan["route_rule_match"] = bool(selected.route_rule_match)
     estimates = dict(built.case.estimates)
     estimates.update(
         {
@@ -946,8 +970,13 @@ def _action_mode(value: object) -> ActionMode:
     return ActionMode[text]
 
 
-def _candidate_timing_sort_key(timing: CandidateTiming) -> tuple[int, int, str]:
-    return (0 if timing.complete else 1, timing.total_time_ms, timing.candidate_id)
+def _candidate_timing_sort_key(timing: CandidateTiming) -> tuple[int, int, int, str]:
+    return (
+        0 if timing.complete else 1,
+        timing.total_time_ms,
+        0 if timing.route_rule_match else 1,
+        timing.candidate_id,
+    )
 
 
 def _select_phase8_candidate(
@@ -1079,7 +1108,10 @@ def _yaw_policy_from_usage(layout: ProjectLayout, target: UniqueLegRequirement) 
     table = _ensure_route_case_table(layout)
     row = _row_by_traj_id(table, first.traj_id)
     project = load_project(layout.project_json)
-    case = build_case_draft(row, project, preferred_candidate_id=first.candidate_id).case
+    task_config = ensure_competition_task_config(layout.competition_task_config_json)
+    case = build_case_draft(
+        row, project, preferred_candidate_id=first.candidate_id, task_config=task_config
+    ).case
     return _case_yaw_policy(case, target.transition)
 
 

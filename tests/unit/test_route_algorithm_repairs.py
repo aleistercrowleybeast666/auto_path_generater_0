@@ -17,6 +17,10 @@ from hjmb_pathgen.py_planning.geometry.automatic_topology import (
     topology_profile_for_transition,
 )
 from hjmb_pathgen.py_services.execution_time_estimator import estimate_fifo_execution
+from hjmb_pathgen.py_services.phase7_generation_service import (
+    CandidateTiming,
+    _candidate_timing_sort_key,
+)
 from hjmb_pathgen.py_services.task_compiler import (
     automatic_candidate_subset,
     build_case_draft,
@@ -69,10 +73,75 @@ def test_deterministic_left_right_route_rule() -> None:
     ):
         pair = tuple(_candidate(route, ranks) for route in (RouteFamily.PICK_1_TO_3, RouteFamily.PICK_3_TO_1))
         selected = automatic_candidate_subset(pair)
-        assert len(selected) == 1
-        assert selected[0].route_family == expected
-        assert preferred_route_family_for_candidate(selected[0]) == expected
-        assert unload_stop_ranks(selected[0]) == ranks
+        assert len(selected) == 2
+        assert {item.route_family for item in selected} == {
+            RouteFamily.PICK_1_TO_3,
+            RouteFamily.PICK_3_TO_1,
+        }
+        assert all(preferred_route_family_for_candidate(item) == expected for item in selected)
+        assert all(unload_stop_ranks(item) == ranks for item in selected)
+
+
+def test_faster_complete_route_wins_over_configured_tie_preference() -> None:
+    left = CandidateTiming(
+        candidate_id="LEFT",
+        semantic_hash="left",
+        route_family="PICK_1_TO_3",
+        complete=True,
+        motion_time_ms=9000,
+        mechanism_time_ms=1000,
+        mechanism_busy_time_ms=1000,
+        total_time_ms=10000,
+        leg_ids=(),
+        missing_leg_ids=(),
+        route_rule_match=True,
+    )
+    right = CandidateTiming(
+        candidate_id="RIGHT",
+        semantic_hash="right",
+        route_family="PICK_3_TO_1",
+        complete=True,
+        motion_time_ms=8000,
+        mechanism_time_ms=1000,
+        mechanism_busy_time_ms=1000,
+        total_time_ms=9000,
+        leg_ids=(),
+        missing_leg_ids=(),
+        route_rule_match=False,
+    )
+
+    assert min((left, right), key=_candidate_timing_sort_key) is right
+
+
+def test_configured_route_rule_is_only_exact_time_tie_breaker() -> None:
+    preferred = CandidateTiming(
+        candidate_id="PREFERRED",
+        semantic_hash="preferred",
+        route_family="PICK_1_TO_3",
+        complete=True,
+        motion_time_ms=9000,
+        mechanism_time_ms=1000,
+        mechanism_busy_time_ms=1000,
+        total_time_ms=10000,
+        leg_ids=(),
+        missing_leg_ids=(),
+        route_rule_match=True,
+    )
+    other = CandidateTiming(
+        candidate_id="OTHER",
+        semantic_hash="other",
+        route_family="PICK_3_TO_1",
+        complete=True,
+        motion_time_ms=9000,
+        mechanism_time_ms=1000,
+        mechanism_busy_time_ms=1000,
+        total_time_ms=10000,
+        leg_ids=(),
+        missing_leg_ids=(),
+        route_rule_match=False,
+    )
+
+    assert min((other, preferred), key=_candidate_timing_sort_key) is preferred
 
 
 def test_only_pickup_to_first_drop_uses_ordered_s_gates() -> None:

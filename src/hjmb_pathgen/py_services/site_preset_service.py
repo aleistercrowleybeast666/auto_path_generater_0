@@ -100,6 +100,7 @@ def apply_site_pose_preset(layout: ProjectLayout, preset_path: str | Path) -> Si
         vehicle=dict(project.vehicle),
         dynamics=dict(project.dynamics),
         unload_profiles=dict(project.unload_profiles),
+        unload_pose_profiles=dict(project.unload_pose_profiles),
         topology_profiles=dict(project.topology_profiles),
         action_profiles=dict(project.action_profiles),
         planner_profiles=dict(project.planner_profiles),

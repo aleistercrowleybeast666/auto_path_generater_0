@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import shutil
 from pathlib import Path
 from typing import Any
 
@@ -32,6 +31,8 @@ from hjmb_pathgen.py_io.layout.project_layout import ProjectLayout
 from hjmb_pathgen.py_io.migration.old_v40_layout_migration import migrate_old_v40_layout
 from hjmb_pathgen.py_io.migration.v35_case_migration import migrate_v35_to_manual, migrate_v35_to_semi_auto
 from hjmb_pathgen.py_services.leg_clear_service import clear_optimized_leg_result
+from hjmb_pathgen.py_services.competition_task_config_service import ensure_competition_task_config
+from hjmb_pathgen.py_services.traj_table_service import write_route_case_table
 from hjmb_pathgen.py_services.mode_case_service import convert_full_auto_to_semi_auto
 from hjmb_pathgen.py_services.phase9_delivery_service import write_json_report
 from hjmb_pathgen.py_workers.worker_process import WorkerJobHandle, start_worker_job
@@ -188,9 +189,8 @@ class V4MainWindow(QMainWindow):
             QMessageBox.warning(self, "新建项目", "目标目录必须为空。")
             return
         layout = ProjectLayout.create(target, self.context.state.project)
-        source_csv = self.context.state.layout.traj_id_csv
-        if source_csv.exists():
-            shutil.copy2(source_csv, layout.traj_id_csv)
+        ensure_competition_task_config(layout.competition_task_config_json)
+        write_route_case_table(layout)
         self.load_project_path(target)
 
     def choose_project(self) -> None:

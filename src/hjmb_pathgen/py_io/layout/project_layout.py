@@ -39,7 +39,9 @@ from hjmb_pathgen.py_io.layout.path_naming import bin_name, case_json_name, port
 PROJECT_JSON = "project.json"
 ROUTE_CASE_TABLE_JSON = "route_case_table.json"
 LEG_LIBRARY_JSON = "leg_library.json"
-TRAJ_ID_CSV = "traj_id.csv"
+TRAJ_ID_CSV = "traj_id.csv"  # legacy import only
+TASK_CONFIG_DIR = "task_config"
+COMPETITION_TASK_CONFIG_JSON = "competition_task_config.json"
 OPTIMIZATION_LOG_DIR = "optimization_log"
 REUSABLE_LEG_STATES = {LegState.VALID, LegState.APPROVED, LegState.LOCKED}
 
@@ -100,6 +102,14 @@ class ProjectLayout:
     @property
     def traj_id_csv(self) -> Path:
         return self.resolve_project_path(TRAJ_ID_CSV)
+
+    @property
+    def task_config_dir(self) -> Path:
+        return self.resolve_project_path(TASK_CONFIG_DIR)
+
+    @property
+    def competition_task_config_json(self) -> Path:
+        return self.resolve_project_path(Path(TASK_CONFIG_DIR) / COMPETITION_TASK_CONFIG_JSON)
 
     @property
     def cases_dir(self) -> Path:
@@ -218,6 +228,7 @@ class ProjectLayout:
             self.cache_dir,
             self.presets_dir,
             self.drafts_dir,
+            self.task_config_dir,
         ):
             path.mkdir(parents=True, exist_ok=True)
 
@@ -247,6 +258,7 @@ class ProjectLayout:
             self.cache_dir,
             self.presets_dir,
             self.drafts_dir,
+            self.task_config_dir,
         ):
             if not path.exists() or not path.is_dir():
                 reasons.append(f"missing directory: {path.relative_to(self.root)}")

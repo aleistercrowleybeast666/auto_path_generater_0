@@ -15,10 +15,11 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
     QApplication,
+    QCheckBox,
     QComboBox,
     QFileDialog,
     QFormLayout,
@@ -30,11 +31,15 @@ from PySide6.QtWidgets import (
     QPlainTextEdit,
     QProgressBar,
     QPushButton,
+    QScrollArea,
     QSpinBox,
+    QTableWidget,
+    QTableWidgetItem,
     QVBoxLayout,
     QWidget,
 )
 
+from hjmb_pathgen.py_domain.competition_task_config import UNLOAD_POSE_PROFILE_IDS
 from hjmb_pathgen.py_domain.enums import GenerationMode
 from hjmb_pathgen.py_domain.route_case import CaseManifestV40
 from hjmb_pathgen.py_domain.semi_path import (
@@ -49,6 +54,7 @@ from hjmb_pathgen.py_io.persistence.atomic_writer import atomic_write_bytes
 from hjmb_pathgen.py_services.leg_clear_service import clear_optimized_leg_result
 from hjmb_pathgen.py_services.case_draft_service import generate_case_draft
 from hjmb_pathgen.py_services.project_bootstrap_service import bootstrap_v4_workspace
+from hjmb_pathgen.py_services.competition_task_config_service import default_competition_task_config
 from hjmb_pathgen.py_services.mode_case_service import convert_full_auto_to_semi_auto
 from hjmb_pathgen.py_ui.ui_state import LoadedProjectState
 from hjmb_pathgen.py_workers.worker_process import WorkerJobHandle, start_worker_job
@@ -93,6 +99,32 @@ LOGICAL_SITE_KEYS = (
     "P_DROP_3",
 )
 
+UNLOAD_PROFILE_LABELS = {
+    "DROP_F4_BIN_1": "储箱1 → 4号箱",
+    "DROP_F5_BIN_1": "储箱1 → 5号箱",
+    "DROP_F5_BIN_2": "储箱2 → 5号箱",
+    "DROP_F6_BIN_1": "储箱1 → 6号箱",
+    "DROP_F6_BIN_2": "储箱2 → 6号箱",
+    "DROP_F6_BIN_3": "储箱3 → 6号箱",
+    "DROP_F7_BIN_2": "储箱2 → 7号箱",
+    "DROP_F7_BIN_3": "储箱3 → 7号箱",
+    "DROP_F8_BIN_3": "储箱3 → 8号箱",
+    "DROP_F45_BIN_12": "储箱1+2 → 4号箱+5号箱",
+    "DROP_F78_BIN_23": "储箱2+3 → 7号箱+8号箱",
+}
+
+UNLOAD_PROFILES_BY_STATION = {
+    "P_DROP_3": (
+        "DROP_F4_BIN_1", "DROP_F5_BIN_1", "DROP_F5_BIN_2", "DROP_F45_BIN_12",
+    ),
+    "P_DROP_2": (
+        "DROP_F6_BIN_1", "DROP_F6_BIN_2", "DROP_F6_BIN_3",
+    ),
+    "P_DROP_1": (
+        "DROP_F7_BIN_2", "DROP_F7_BIN_3", "DROP_F8_BIN_3", "DROP_F78_BIN_23",
+    ),
+}
+
 
 class V35ExactV4MainWindow(legacy.MainWindow):
     """The literal V3.5 GUI with V4 service callbacks."""
@@ -110,6 +142,7 @@ class V35ExactV4MainWindow(legacy.MainWindow):
         self._v4_current_job = ""
         self._v4_dirty = False
         self._v4_loading_case = False
+        self._draft_unload_pose_profiles: dict[str, dict[str, Any]] = {}
         super().__init__()
         self._v4_booting = False
 
@@ -215,7 +248,7 @@ class V35ExactV4MainWindow(legacy.MainWindow):
                 self.traj_id_combo = QComboBox()
                 self.traj_id_combo.setEditable(True)
                 self.traj_id_combo.setInsertPolicy(QComboBox.NoInsert)
-                self.traj_id_combo.setMinimumWidth(115)
+                self.traj_id_combo.setMinimumWidth(150)
                 self.traj_id_combo.setMaxVisibleItems(24)
                 for traj_id in range(360):
                     self.traj_id_combo.addItem(f"P{traj_id:04d}", traj_id)
@@ -225,7 +258,6 @@ class V35ExactV4MainWindow(legacy.MainWindow):
                 self.traj_id_combo.activated.connect(self._traj_id_combo_activated)
                 if self.traj_id_combo.lineEdit() is not None:
                     self.traj_id_combo.lineEdit().returnPressed.connect(self._commit_traj_id_selection)
-                    self.traj_id_combo.lineEdit().editingFinished.connect(self._normalize_traj_id_text)
                 self.traj_id_spin.hide()
                 top_layout.insertWidget(1, self.traj_id_combo)
                 apply_id = QPushButton("载入ID")
@@ -249,6 +281,39 @@ class V35ExactV4MainWindow(legacy.MainWindow):
                 button.setText("保存固定点到V4项目")
                 button.setToolTip("保存公共姿态到project.json；半自动模式同时保存8个逻辑点到Case JSON")
 
+        # The fixed-site/configuration page is intentionally wider and taller
+        # than the normal right panel.  Put the complete page into one scroll
+        # area so every field remains reachable on smaller displays instead of
+        # being clipped by nested group boxes and tables.
+        fixed_page_content = QWidget()
+        fixed_page_content.setObjectName("v4_fixed_page_scroll_content")
+        fixed_page_content.setMinimumWidth(1050)
+        fixed_page_layout = QVBoxLayout(fixed_page_content)
+        fixed_page_layout.setContentsMargins(4, 4, 4, 4)
+        fixed_page_layout.setSpacing(8)
+        while root_layout.count():
+            item = root_layout.takeAt(0)
+            widget = item.widget()
+            child_layout = item.layout()
+            spacer = item.spacerItem()
+            if widget is not None:
+                fixed_page_layout.addWidget(widget)
+            elif child_layout is not None:
+                fixed_page_layout.addLayout(child_layout)
+            elif spacer is not None:
+                fixed_page_layout.addItem(spacer)
+        self.fixed_page_scroll = QScrollArea()
+        self.fixed_page_scroll.setObjectName("v4_fixed_page_scroll")
+        self.fixed_page_scroll.setWidgetResizable(True)
+        self.fixed_page_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.fixed_page_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.fixed_page_scroll.setWidget(fixed_page_content)
+        root_layout.addWidget(self.fixed_page_scroll)
+        root_layout = fixed_page_layout
+
+        self.fixed_site_table.setMinimumWidth(700)
+        self.fixed_site_table.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+
         project_group = QGroupBox("V4 项目")
         project_layout = QVBoxLayout(project_group)
         row = QHBoxLayout()
@@ -266,6 +331,38 @@ class V35ExactV4MainWindow(legacy.MainWindow):
         self.v4_project_status.setWordWrap(True)
         project_layout.addWidget(self.v4_project_status)
         root_layout.addWidget(project_group)
+
+        unload_group = QGroupBox("倒货角度与到达姿态")
+        unload_layout = QVBoxLayout(unload_group)
+        self.use_unload_pose_profiles_check = QCheckBox("启用倒货角度选择")
+        self.use_unload_pose_profiles_check.setToolTip(
+            "启用后P_DROP_1/2/3固定点只保存位置，固定yaw自动写0xFFFF；"
+            "实际到达yaw由下表以及半自动路径点的下拉选择确定"
+        )
+        self.use_unload_pose_profiles_check.toggled.connect(
+            self._unload_pose_selection_toggled
+        )
+        unload_layout.addWidget(self.use_unload_pose_profiles_check)
+        self.unload_pose_table = QTableWidget(0, 7)
+        self.unload_pose_table.setHorizontalHeaderLabels(
+            ["配置ID", "操作", "启用", "yaw(0.1°)", "dx(mm)", "dy(mm)", "预计(ms)"]
+        )
+        self.unload_pose_table.verticalHeader().setVisible(False)
+        self.unload_pose_table.setMinimumHeight(280)
+        self.unload_pose_table.setMinimumWidth(1000)
+        self.unload_pose_table.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.unload_pose_table.setColumnWidth(0, 165)
+        self.unload_pose_table.setColumnWidth(1, 210)
+        self.unload_pose_table.cellChanged.connect(self._on_unload_pose_table_edited)
+        unload_layout.addWidget(self.unload_pose_table)
+        hint = QLabel(
+            "只有F4+F5可使用DROP_12，F7+F8可使用DROP_23；其余行均为单箱倒货姿态。"
+            "角度只需标定一次，360个traj_id自动复用。"
+        )
+        hint.setWordWrap(True)
+        unload_layout.addWidget(hint)
+        root_layout.addWidget(unload_group)
+        self._refresh_unload_pose_table()
 
         batch_group = QGroupBox("最优路段 / 批量生成")
         batch_layout = QVBoxLayout(batch_group)
@@ -304,6 +401,205 @@ class V35ExactV4MainWindow(legacy.MainWindow):
         batch_layout.addWidget(self.v4_log)
         root_layout.addWidget(batch_group)
 
+    def _default_unload_pose_profiles(self) -> dict[str, dict[str, Any]]:
+        defaults: dict[str, dict[str, Any]] = {}
+        for profile_id in UNLOAD_POSE_PROFILE_IDS:
+            if "BIN_12" in profile_id or "BIN_23" in profile_id:
+                yaw, configured = 0, False
+            elif profile_id.endswith("BIN_1"):
+                yaw, configured = 900, True
+            elif profile_id.endswith("BIN_2"):
+                yaw, configured = 0, True
+            else:
+                yaw, configured = -900, True
+            defaults[profile_id] = {
+                "configured": configured,
+                "yaw_ddeg": yaw,
+                "dx_mm": 0,
+                "dy_mm": 0,
+                "estimated_action_time_ms": 700,
+            }
+        return defaults
+
+    def _unload_profiles_enabled(self) -> bool:
+        return bool(
+            hasattr(self, "use_unload_pose_profiles_check")
+            and self.use_unload_pose_profiles_check.isChecked()
+        )
+
+    def _refresh_unload_pose_table(self) -> None:
+        if not hasattr(self, "unload_pose_table"):
+            return
+        source = self._draft_unload_pose_profiles or self._default_unload_pose_profiles()
+        self.unload_pose_table.blockSignals(True)
+        self.unload_pose_table.setRowCount(len(UNLOAD_POSE_PROFILE_IDS))
+        for row, profile_id in enumerate(UNLOAD_POSE_PROFILE_IDS):
+            profile = dict(source.get(profile_id, {}))
+            id_item = QTableWidgetItem(profile_id)
+            id_item.setFlags(id_item.flags() & ~Qt.ItemIsEditable)
+            self.unload_pose_table.setItem(row, 0, id_item)
+            label_item = QTableWidgetItem(UNLOAD_PROFILE_LABELS[profile_id])
+            label_item.setFlags(label_item.flags() & ~Qt.ItemIsEditable)
+            self.unload_pose_table.setItem(row, 1, label_item)
+            enabled = QCheckBox()
+            enabled.setChecked(bool(profile.get("configured", False)))
+            enabled.setToolTip("未启用的姿态不会被全自动候选或半自动规划使用")
+            enabled.toggled.connect(self._on_unload_pose_profile_enabled_changed)
+            self.unload_pose_table.setCellWidget(row, 2, enabled)
+            for column, key, default in (
+                (3, "yaw_ddeg", 0),
+                (4, "dx_mm", 0),
+                (5, "dy_mm", 0),
+                (6, "estimated_action_time_ms", 700),
+            ):
+                self.unload_pose_table.setItem(
+                    row, column, QTableWidgetItem(str(int(profile.get(key, default))))
+                )
+        self.unload_pose_table.blockSignals(False)
+        self.unload_pose_table.setEnabled(self._unload_profiles_enabled())
+
+    def _read_unload_pose_table(self) -> dict[str, dict[str, Any]]:
+        if not hasattr(self, "unload_pose_table"):
+            return dict(self._draft_unload_pose_profiles)
+        result: dict[str, dict[str, Any]] = {}
+        for row, expected_id in enumerate(UNLOAD_POSE_PROFILE_IDS):
+            profile_id = self.unload_pose_table.item(row, 0).text().strip()
+            if profile_id != expected_id:
+                raise ValueError(f"倒货姿态表第{row + 1}行ID被修改：{profile_id}")
+            configured_widget = self.unload_pose_table.cellWidget(row, 2)
+            configured = bool(
+                isinstance(configured_widget, QCheckBox) and configured_widget.isChecked()
+            )
+            yaw = int(self.unload_pose_table.item(row, 3).text().strip(), 0)
+            if yaw == YAW_UNSPECIFIED_DDEG:
+                raise ValueError(f"{profile_id}的实际倒货yaw不能是0xFFFF")
+            estimate = int(self.unload_pose_table.item(row, 6).text().strip(), 0)
+            if estimate < 0:
+                raise ValueError(f"{profile_id}的预计动作时间不能为负数")
+            result[profile_id] = {
+                "configured": configured,
+                "yaw_ddeg": yaw,
+                "dx_mm": int(self.unload_pose_table.item(row, 4).text().strip(), 0),
+                "dy_mm": int(self.unload_pose_table.item(row, 5).text().strip(), 0),
+                "estimated_action_time_ms": estimate,
+            }
+        return result
+
+    def _on_unload_pose_profile_enabled_changed(self, _enabled: bool) -> None:
+        self._on_unload_pose_table_edited(-1, -1)
+
+    def _on_unload_pose_table_edited(self, _row: int, _column: int) -> None:
+        if (
+            self._v4_booting
+            or self._v4_loading_case
+            or not self._unload_profiles_enabled()
+        ):
+            return
+        try:
+            profiles = self._read_unload_pose_table()
+        except (AttributeError, TypeError, ValueError):
+            # A temporarily incomplete cell is reported by the explicit save
+            # action; do not interrupt table editing on every keystroke.
+            return
+        self._draft_unload_pose_profiles = copy.deepcopy(profiles)
+        self._v4_dirty = True
+        self.refresh_point_table(self.selected_point_row())
+        self.update_status("倒货姿态参数已修改；保存公共配置后生效")
+
+    def _unload_pose_selection_toggled(self, enabled: bool) -> None:
+        if enabled:
+            for site_index in (5, 6, 7):
+                if site_index < len(self.project.fixed_sites):
+                    self.project.fixed_sites[site_index].yaw_ddeg = YAW_UNSPECIFIED_DDEG
+        if hasattr(self, "unload_pose_table"):
+            self.unload_pose_table.setEnabled(enabled)
+        self.refresh_fixed_site_table()
+        self.refresh_point_table(self.selected_point_row())
+        if not self._v4_booting and not self._v4_loading_case:
+            self._v4_dirty = True
+            self.update_status("倒货角度选择配置已修改；需要重新生成路径")
+
+    def refresh_fixed_site_table(self):
+        super().refresh_fixed_site_table()
+        if self._unload_profiles_enabled():
+            for row in (5, 6, 7):
+                widget = self.fixed_site_table.cellWidget(row, 4)
+                if widget is not None:
+                    widget.setEnabled(False)
+                    widget.setToolTip("已启用倒货角度选择：固定点yaw保持0xFFFF，实际yaw由倒货姿态决定")
+
+    def refresh_point_table(self, selected: int | None = None):
+        super().refresh_point_table(selected)
+        # The unload-pose selector replaces the compact yaw cell.  Keep the
+        # column wide enough for readable labels and let the table provide a
+        # horizontal scroll bar when the whole point table is wider than the
+        # right panel.
+        self.point_table.setColumnWidth(5, 285)
+        self.point_table.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        if not (
+            self._generation_mode == GenerationMode.SEMI_AUTO
+            and self._unload_profiles_enabled()
+        ):
+            return
+        profiles = self._draft_unload_pose_profiles or self._default_unload_pose_profiles()
+        for row, point in enumerate(self.project.points):
+            if point.type != POINT_TYPE_ARRIVAL or not (0 <= point.site_id < len(LOGICAL_SITE_KEYS)):
+                continue
+            station = LOGICAL_SITE_KEYS[point.site_id]
+            profile_ids = UNLOAD_PROFILES_BY_STATION.get(station)
+            if not profile_ids:
+                continue
+            combo = QComboBox()
+            combo.setMinimumWidth(270)
+            combo.view().setMinimumWidth(300)
+            combo.addItem("未选择（0xFFFF）", "")
+            for profile_id in profile_ids:
+                profile = profiles.get(profile_id, {})
+                combo.addItem(UNLOAD_PROFILE_LABELS[profile_id], profile_id)
+                item_index = combo.count() - 1
+                state = "已启用" if profile.get("configured", False) else "未启用"
+                combo.setItemData(
+                    item_index,
+                    f"{profile_id}\nyaw={profile.get('yaw_ddeg', 0)}，{state}",
+                    Qt.ToolTipRole,
+                )
+            current = combo.findData(point.unload_pose_profile_id)
+            combo.setCurrentIndex(max(0, current))
+            combo.setEnabled(self._generation_mode != GenerationMode.FULL_AUTO)
+            combo.currentIndexChanged.connect(
+                lambda _index, row=row, combo=combo: self._semi_unload_profile_changed(row, combo)
+            )
+            self.point_table.setCellWidget(row, 5, combo)
+
+    def on_point_site_changed(self, row: int, value):
+        super().on_point_site_changed(row, value)
+        if not 0 <= row < len(self.project.points):
+            return
+        point = self.project.points[row]
+        if point.type != POINT_TYPE_ARRIVAL or not (0 <= point.site_id < len(LOGICAL_SITE_KEYS)):
+            point.unload_pose_profile_id = ""
+            return
+        station = LOGICAL_SITE_KEYS[point.site_id]
+        allowed = UNLOAD_PROFILES_BY_STATION.get(station, ())
+        if point.unload_pose_profile_id not in allowed:
+            point.unload_pose_profile_id = ""
+        self.refresh_point_table(row)
+
+    def _semi_unload_profile_changed(self, row: int, combo: QComboBox) -> None:
+        if self.updating_ui or not 0 <= row < len(self.project.points):
+            return
+        profile_id = str(combo.currentData() or "")
+        point = self.project.points[row]
+        point.unload_pose_profile_id = profile_id
+        if profile_id:
+            profile = (self._draft_unload_pose_profiles or {}).get(profile_id, {})
+            point.yaw_ddeg = int(profile.get("yaw_ddeg", YAW_UNSPECIFIED_DDEG))
+        else:
+            point.yaw_ddeg = YAW_UNSPECIFIED_DDEG
+        self._v4_dirty = True
+        self.update_status("半自动倒货姿态已修改；保存Case后重新生成")
+        self.refresh_field(row)
+
     def _extend_parameter_tab(self) -> None:
         """Expose portable planning-parameter JSON import/export on the page."""
 
@@ -335,6 +631,7 @@ class V35ExactV4MainWindow(legacy.MainWindow):
             "vehicle": project.vehicle,
             "dynamics": project.dynamics,
             "unload_profiles": project.unload_profiles,
+            "unload_pose_profiles": project.unload_pose_profiles,
             "topology_profiles": project.topology_profiles,
             "action_profiles": project.action_profiles,
             "planner_profiles": project.planner_profiles,
@@ -373,7 +670,7 @@ class V35ExactV4MainWindow(legacy.MainWindow):
             if raw.get("format") != "HJMB_PLANNING_PARAMETERS_JSON_V40":
                 raise ValueError("format 必须为 HJMB_PLANNING_PARAMETERS_JSON_V40")
             fields = (
-                "vehicle", "dynamics", "unload_profiles", "topology_profiles",
+                "vehicle", "dynamics", "unload_profiles", "unload_pose_profiles", "topology_profiles",
                 "action_profiles", "planner_profiles", "start_check",
                 "arrival_check", "finish_policy",
             )
@@ -474,12 +771,20 @@ class V35ExactV4MainWindow(legacy.MainWindow):
         value = max(0, min(359, int(value)))
         self._pending_traj_id = value
         self.project.traj_id = value
+        spin_blocked = self.traj_id_spin.blockSignals(True)
         self.traj_id_spin.setValue(value)
+        self.traj_id_spin.blockSignals(spin_blocked)
         combo = getattr(self, "traj_id_combo", None)
         if combo is not None:
+            combo_blocked = combo.blockSignals(True)
             index = combo.findData(value)
             if index >= 0:
                 combo.setCurrentIndex(index)
+            # setEditText is deliberate: an editable QComboBox can otherwise
+            # keep stale text from the previous item even though its index has
+            # changed, which made later refreshes appear to force traj_id=0.
+            combo.setEditText(f"P{value:04d}")
+            combo.blockSignals(combo_blocked)
         return value
 
     def _traj_id_changed(self, value: int) -> None:
@@ -708,17 +1013,6 @@ class V35ExactV4MainWindow(legacy.MainWindow):
         if path:
             self.load_v4_project(path, create_if_missing=True)
 
-    def _candidate_traj_csv(self, target_root: Path) -> Path | None:
-        candidates = (
-            target_root / "traj_id.csv",
-            Path(__file__).resolve().parents[3] / "traj_id.csv",
-            Path.cwd() / "traj_id.csv",
-        )
-        for candidate in candidates:
-            if candidate.exists() and candidate.is_file():
-                return candidate
-        return None
-
     def _bootstrap_arguments(self) -> dict[str, Any]:
         common_sites = {}
         for index, key in enumerate(LOGICAL_SITE_KEYS):
@@ -784,7 +1078,6 @@ class V35ExactV4MainWindow(legacy.MainWindow):
             result = bootstrap_v4_workspace(
                 target,
                 **self._bootstrap_arguments(),
-                source_traj_csv=self._candidate_traj_csv(target),
             )
             state = LoadedProjectState.load(result.layout.root)
         except Exception as exc:  # noqa: BLE001
@@ -823,6 +1116,11 @@ class V35ExactV4MainWindow(legacy.MainWindow):
             self.v4_project_edit.setText(str(target))
             return self._ensure_v4_workspace("打开项目", root=target)
         try:
+            bootstrap_v4_workspace(
+                target,
+                **self._bootstrap_arguments(),
+                source_traj_csv=None,
+            )
             state = LoadedProjectState.load(target)
         except Exception as exc:  # noqa: BLE001
             self._warn("打开项目失败", str(exc))
@@ -847,6 +1145,11 @@ class V35ExactV4MainWindow(legacy.MainWindow):
             return None
         assert self._v4_state is not None
         base = self._v4_state.project
+        try:
+            unload_pose_profiles = self._read_unload_pose_table()
+        except (TypeError, ValueError) as exc:
+            self._warn("倒货姿态配置错误", str(exc))
+            return None
         sites = {key: dict(value) for key, value in base.sites.items()}
         for index, key in enumerate(LOGICAL_SITE_KEYS):
             site = self.project.fixed_sites[index]
@@ -856,6 +1159,9 @@ class V35ExactV4MainWindow(legacy.MainWindow):
                 "y_mm": int(round(site.y_mm)),
                 "yaw_ddeg": int(site.yaw_ddeg),
             }
+        if self._unload_profiles_enabled():
+            for key in ("P_DROP_1", "P_DROP_2", "P_DROP_3"):
+                sites[key]["yaw_ddeg"] = YAW_UNSPECIFIED_DDEG
         wheel = {
             **dict(base.vehicle.get("wheel", {})),
             "radius_mm": float(self.project.vehicle_profile.wheel_radius_mm),
@@ -915,6 +1221,9 @@ class V35ExactV4MainWindow(legacy.MainWindow):
             route_profile.setdefault("auto_generate_transfer_gates", True)
             route_profile.setdefault("gate_clearance_mm", 65)
             route_profile.setdefault("gates", [])
+        planner_profiles = {key: dict(value) for key, value in base.planner_profiles.items()}
+        default_planner = planner_profiles.setdefault("default", {})
+        default_planner["use_unload_pose_profiles"] = self._unload_profiles_enabled()
         project = replace(
             base,
             sites=sites,
@@ -924,10 +1233,13 @@ class V35ExactV4MainWindow(legacy.MainWindow):
             arrival_check=arrival_check,
             action_profiles=action_profiles,
             topology_profiles=topology_profiles,
+            planner_profiles=planner_profiles,
+            unload_pose_profiles=unload_pose_profiles,
         )
         save_project(self._v4_state.layout.project_json, project)
         self._v4_state.project = project
-        self._append_log("project.json公共姿态与规划参数已保存；没有自动规划")
+        self._draft_unload_pose_profiles = copy.deepcopy(unload_pose_profiles)
+        self._append_log("project.json公共姿态、倒货姿态与规划参数已保存；没有自动规划")
         if show_message:
             self.update_status(f"已保存V4项目配置：{self._v4_state.layout.project_json}")
         return self._v4_state.layout.project_json
@@ -1073,14 +1385,17 @@ class V35ExactV4MainWindow(legacy.MainWindow):
                     key = str(item["site_key"])
                     site_id = key_to_site[key]
                     site = self.project.fixed_sites[site_id]
+                    profile_id = str(item.get("unload_pose_profile_id", ""))
+                    profile = self._draft_unload_pose_profiles.get(profile_id, {})
                     point = EditPoint(
                         point_id=len(points),
                         type=ptype,
                         site_id=site_id,
                         x_mm=site.x_mm,
                         y_mm=site.y_mm,
-                        yaw_ddeg=site.yaw_ddeg,
+                        yaw_ddeg=int(profile.get("yaw_ddeg", site.yaw_ddeg)),
                         exact_pass=True,
+                        unload_pose_profile_id=profile_id,
                     )
                 else:
                     point = EditPoint(
@@ -1127,15 +1442,7 @@ class V35ExactV4MainWindow(legacy.MainWindow):
             site_key = str(state.get("site_key", ""))
             if state_id.startswith("DROP_STEP_"):
                 step = step_by_state.get(state_id, {})
-                physical_sites = list(step.get("physical_sites", []))
-                target_ranks = [int(value) for value in step.get("target_ranks", [])]
-                anchor = str(step.get("anchor_site", state.get("site_key", "")))
-                rank = target_ranks[0] if target_ranks else 1
-                if anchor in physical_sites:
-                    index = physical_sites.index(anchor)
-                    if index < len(target_ranks):
-                        rank = target_ranks[index]
-                site_key = f"P_DROP_{rank}"
+                site_key = str(step.get("anchor_site") or state.get("site_key", ""))
             if site_key not in key_to_site:
                 continue
             point_index = len(points)
@@ -1149,6 +1456,10 @@ class V35ExactV4MainWindow(legacy.MainWindow):
                     y_mm=float(pose.get("y_mm", self.project.fixed_sites[key_to_site[site_key]].y_mm)),
                     yaw_ddeg=int(pose.get("yaw_ddeg", YAW_UNSPECIFIED_DDEG)),
                     exact_pass=True,
+                    unload_pose_profile_id=str(
+                        state.get("unload_pose_profile_id")
+                        or step_by_state.get(state_id, {}).get("unload_pose_profile_id", "")
+                    ),
                 )
             )
         return points
@@ -1256,13 +1567,14 @@ class V35ExactV4MainWindow(legacy.MainWindow):
                     raise ValueError("半自动模式的START/ARRIVAL必须从8个固定点中选择")
                 site_key = LOGICAL_SITE_KEYS[point.site_id]
                 fixed_sequence.append(site_key)
-                semi_points.append(
-                    {
-                        "type": point.type,
-                        "site_key": site_key,
-                        "state_id": site_key,
-                    }
-                )
+                fixed_item = {
+                    "type": point.type,
+                    "site_key": site_key,
+                    "state_id": site_key,
+                }
+                if site_key.startswith("P_DROP_") and point.unload_pose_profile_id:
+                    fixed_item["unload_pose_profile_id"] = point.unload_pose_profile_id
+                semi_points.append(fixed_item)
             elif point.type == POINT_TYPE_WAYPOINT:
                 item: dict[str, Any] = {
                     "type": POINT_TYPE_WAYPOINT,
@@ -1423,6 +1735,19 @@ class V35ExactV4MainWindow(legacy.MainWindow):
             site.x_mm = float(raw["x_mm"])
             site.y_mm = float(raw["y_mm"])
             site.yaw_ddeg = int(raw["yaw_ddeg"])
+        self._draft_unload_pose_profiles = copy.deepcopy(
+            self._v4_state.project.unload_pose_profiles
+        )
+        enabled = bool(
+            self._v4_state.project.planner_profiles.get("default", {}).get(
+                "use_unload_pose_profiles", False
+            )
+        )
+        if hasattr(self, "use_unload_pose_profiles_check"):
+            self.use_unload_pose_profiles_check.blockSignals(True)
+            self.use_unload_pose_profiles_check.setChecked(enabled)
+            self.use_unload_pose_profiles_check.blockSignals(False)
+        self._refresh_unload_pose_table()
         footprint = dict(self._v4_state.project.vehicle.get("footprint", {}))
         profile = self.project.vehicle_profile
         profile.r_large_mm = float(footprint.get("r_large_mm", profile.r_large_mm))

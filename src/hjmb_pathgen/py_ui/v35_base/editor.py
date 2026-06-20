@@ -1518,10 +1518,11 @@ class MainWindow(QMainWindow):
                     (f"{self.project.fixed_sites[0].site_id} {self.project.fixed_sites[0].site_key}", 0)
                 ]
             elif self.project.path_mode == PATH_MODE_FIXED_8 and point.type == POINT_TYPE_ARRIVAL:
-                site_values = [
+                site_values = [("0xFF 未选择", SITE_ID_FREE)]
+                site_values.extend(
                     (f"{site.site_id} {site.site_key}", site.site_id)
                     for site in self.project.fixed_sites[1:]
-                ]
+                )
             else:
                 site_values = [("自由点", SITE_ID_FREE)]
                 site_values.extend(
@@ -1942,6 +1943,29 @@ class MainWindow(QMainWindow):
         for index, action in enumerate(self.project.actions):
             action.action_seq = index
 
+    def _capture_action_arrival_targets(self):
+        """Remember the actual point object targeted by every mechanical action.
+
+        The editor stores STOP_AND_WAIT references as numeric point IDs.  A
+        point insert/delete/move changes those IDs, so retaining only the raw
+        integer silently moves an action to the wrong ARRIVAL.  Capturing the
+        referenced object lets us rebuild IDs after the point list changes.
+        """
+
+        self.renumber_points()
+        points_by_id = {point.point_id: point for point in self.project.points}
+        return [
+            (action, points_by_id.get(action.arrival_point_id))
+            for action in self.project.actions
+        ]
+
+    def _restore_action_arrival_targets(self, captured) -> None:
+        new_ids = {id(point): index for index, point in enumerate(self.project.points)}
+        for action, target in captured:
+            if target is None:
+                continue
+            action.arrival_point_id = new_ids.get(id(target))
+
     def _traj_id_changed(self, value: int):
         if self.updating_ui:
             return
@@ -2159,6 +2183,7 @@ class MainWindow(QMainWindow):
             return
         if row <= 0:
             row = 1
+        captured_targets = self._capture_action_arrival_targets()
         display_points = display_edit_points(self.project)
         base = display_points[row] if row < len(display_points) else None
         point = EditPoint(
@@ -2167,6 +2192,7 @@ class MainWindow(QMainWindow):
             yaw_ddeg=YAW_UNSPECIFIED_DDEG,
         )
         self.project.points.insert(row, point)
+        self._restore_action_arrival_targets(captured_targets)
         self.refresh_all(selected_point=row)
         self.schedule_plan()
 
@@ -2177,7 +2203,9 @@ class MainWindow(QMainWindow):
         if row == 0:
             self.update_status("0 号点固定为 START，不能删除")
             return
+        captured_targets = self._capture_action_arrival_targets()
         del self.project.points[row]
+        self._restore_action_arrival_targets(captured_targets)
         self.refresh_all(selected_point=min(row, len(self.project.points) - 1))
         self.schedule_plan()
 
@@ -2189,10 +2217,12 @@ class MainWindow(QMainWindow):
         if row == 0 or target == 0:
             self.update_status("0 号点固定为 START，不能移动")
             return
+        captured_targets = self._capture_action_arrival_targets()
         self.project.points[row], self.project.points[target] = (
             self.project.points[target],
             self.project.points[row],
         )
+        self._restore_action_arrival_targets(captured_targets)
         self.refresh_all(selected_point=target)
         self.schedule_plan()
 
@@ -2248,17 +2278,11 @@ class MainWindow(QMainWindow):
             point.site_id = SITE_ID_FREE
             point.yaw_ddeg = YAW_UNSPECIFIED_DDEG
         if point.type == POINT_TYPE_ARRIVAL and self.project.path_mode == PATH_MODE_FIXED_8:
-            if point.site_id <= 0 or point.site_id >= len(self.project.fixed_sites):
-                used = {
-                    other.site_id
-                    for index, other in enumerate(self.project.points)
-                    if index != row and other.type == POINT_TYPE_ARRIVAL and other.site_id > 0
-                }
-                point.site_id = next(
-                    (site.site_id for site in self.project.fixed_sites[1:] if site.site_id not in used),
-                    1,
-                )
-            self._apply_fixed_site_to_point(point, point.site_id)
+            if 1 <= point.site_id < len(self.project.fixed_sites):
+                self._apply_fixed_site_to_point(point, point.site_id)
+            else:
+                point.site_id = SITE_ID_FREE
+                point.yaw_ddeg = YAW_UNSPECIFIED_DDEG
         if point.type == POINT_TYPE_START and self.project.path_mode == PATH_MODE_FIXED_8:
             self._apply_fixed_site_to_point(point, 0)
         self.updating_ui = True
@@ -2279,8 +2303,17 @@ class MainWindow(QMainWindow):
                 self._apply_fixed_site_to_point(point, 0)
         elif self.project.path_mode == PATH_MODE_FIXED_8 and point.type == POINT_TYPE_ARRIVAL:
             site_id = int(value)
+            if site_id == SITE_ID_FREE:
+                point.site_id = SITE_ID_FREE
+                point.yaw_ddeg = YAW_UNSPECIFIED_DDEG
+                self.updating_ui = True
+                self.refresh_point_table(row)
+                self.updating_ui = False
+                self.schedule_plan()
+                self.refresh_field(row)
+                return
             if not 1 <= site_id < len(self.project.fixed_sites):
-                self.update_status("半自动模式的 ARRIVAL 必须选择 1-7 号固定点")
+                self.update_status("半自动模式的 ARRIVAL 请选择0xFF未选择或1-7号固定点")
                 self.refresh_point_table(row)
                 return
             self._apply_fixed_site_to_point(point, site_id)

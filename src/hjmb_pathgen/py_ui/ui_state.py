@@ -96,8 +96,8 @@ class LoadedProjectState:
         }[mode]
         if not cases:
             return None
-        if traj_id is not None and traj_id in cases:
-            return cases[traj_id]
+        if traj_id is not None:
+            return cases.get(traj_id)
         return cases[sorted(cases)[0]]
 
 

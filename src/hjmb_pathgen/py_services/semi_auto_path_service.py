@@ -19,6 +19,7 @@ from hjmb_pathgen.py_domain.semi_path import SemiPathV40
 from hjmb_pathgen.py_planning.dynamics.time_parameterization import TimeParameterizationResult
 
 from .manual_path_service import retime_path, trajectory_from_deterministic_timing
+from .competition_task_config_service import default_competition_task_config
 
 
 @dataclass(frozen=True)
@@ -55,15 +56,54 @@ def resolve_semi_path(case: CaseManifestV40, project: ProjectV40) -> dict[str, A
                 raise CompileError(f"SEMI_AUTO point {index} references missing project site {point.site_key}")
             if not bool(raw.get("configured", False)):
                 raise CompileError(f"SEMI_AUTO point {index} references unconfigured project site {point.site_key}")
-            item: dict[str, Any] = {
+            x_mm = int(raw["x_mm"])
+            y_mm = int(raw["y_mm"])
+            yaw_ddeg = int(raw["yaw_ddeg"])
+            hints: dict[str, Any] = {
+                "site_key": point.site_key,
+                "state_id": point.state_id or point.site_key,
+            }
+            if point.point_type == ManualPathPointType.ARRIVAL and point.site_key.startswith("P_DROP_"):
+                use_profiles = bool(
+                    project.planner_profiles.get("default", {}).get(
+                        "use_unload_pose_profiles", False
+                    )
+                )
+                if point.unload_pose_profile_id:
+                    config = default_competition_task_config()
+                    spec = config.unload_pose_catalog.get(point.unload_pose_profile_id)
+                    if not isinstance(spec, dict):
+                        raise CompileError(
+                            f"SEMI_AUTO point {index} has unknown unload pose profile "
+                            f"{point.unload_pose_profile_id}"
+                        )
+                    if str(spec.get("station_site")) != point.site_key:
+                        raise CompileError(
+                            f"SEMI_AUTO point {index} profile {point.unload_pose_profile_id} "
+                            f"belongs to {spec.get('station_site')}, not {point.site_key}"
+                        )
+                    profile = project.unload_pose_profiles.get(point.unload_pose_profile_id)
+                    if not isinstance(profile, dict) or not bool(profile.get("configured", False)):
+                        raise CompileError(
+                            f"SEMI_AUTO point {index} references unconfigured unload pose "
+                            f"{point.unload_pose_profile_id}"
+                        )
+                    x_mm += int(profile.get("dx_mm", 0))
+                    y_mm += int(profile.get("dy_mm", 0))
+                    yaw_ddeg = int(profile["yaw_ddeg"])
+                    hints["unload_pose_profile_id"] = point.unload_pose_profile_id
+                elif use_profiles:
+                    raise CompileError(
+                        f"SEMI_AUTO point {index} ({point.site_key}) must select an unload "
+                        "pose profile while unload-angle selection is enabled"
+                    )
+            item = {
                 "type": point.point_type.value,
-                "x_mm": int(raw["x_mm"]),
-                "y_mm": int(raw["y_mm"]),
-                # 0xFFFF is intentionally preserved here.  The deterministic yaw
-                # planner interprets it as an unconstrained arrival direction.
-                "yaw_ddeg": int(raw["yaw_ddeg"]),
+                "x_mm": x_mm,
+                "y_mm": y_mm,
+                "yaw_ddeg": yaw_ddeg,
                 "exact_pass": True,
-                "hints": {"site_key": point.site_key, "state_id": point.state_id or point.site_key},
+                "hints": hints,
             }
         else:
             item = {
@@ -188,5 +228,7 @@ def semi_case_with_derived_arrivals(case: CaseManifestV40) -> CaseManifestV40:
             "type": "PICK" if point.site_key.startswith("P_PICK_") else "DROP",
             "site_key": point.site_key,
         }
+        if point.unload_pose_profile_id:
+            item["unload_pose_profile_id"] = point.unload_pose_profile_id
         arrivals.append(item)
     return replace(case, arrival_states=tuple(arrivals), leg_refs=())

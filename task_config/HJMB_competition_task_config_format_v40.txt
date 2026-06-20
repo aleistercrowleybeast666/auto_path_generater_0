@@ -1,0 +1,214 @@
+HJMB Competition Task Configuration JSON V4.0
+============================================================
+
+文件路径：
+
+    task_config/competition_task_config.json
+
+format：
+
+    HJMB_COMPETITION_TASK_CONFIG_JSON_V40
+
+config_version：
+
+    1
+
+本文件用于保存稳定的竞赛业务规则和 traj_id 生成规则。正常 V4 工作流
+不再依赖中文 traj_id.csv。route_case_table.json 由本文件确定性生成，仍保留
+source_csv/source_csv_sha256 字段只是为了兼容已有 V4.0 JSON 结构，其中
+source_csv 的值实际为 task_config/competition_task_config.json。
+
+测量得到的八个固定点、车辆参数和具体倒货角度不写在本文件中，仍写入
+project.json。
+
+
+一、traj_id 映射
+------------------------------------------------------------
+
+    traj_id = bean_code * 60 + drop_code
+
+bean_code 共 6 种，按以下顺序表示 PICK_1、PICK_2、PICK_3 内的豆类：
+
+    0  YELLOW, GREEN, WHITE
+    1  YELLOW, WHITE, GREEN
+    2  GREEN, YELLOW, WHITE
+    3  GREEN, WHITE, YELLOW
+    4  WHITE, YELLOW, GREEN
+    5  WHITE, GREEN, YELLOW
+
+drop_code 共 60 种。程序对 F_DROP_4、F_DROP_5、F_DROP_6、F_DROP_7、
+F_DROP_8 做“取 3 个且顺序有关”的字典序排列：
+
+    label 1 的位置 = 排列第 1 项
+    label 2 的位置 = 排列第 2 项
+    label 3 的位置 = 排列第 3 项
+
+固定标签含义：
+
+    label 1 = YELLOW（黄豆）
+    label 2 = GREEN（绿豆）
+    label 3 = WHITE（白芸豆）
+    label 4 = EMPTY
+    label 5 = EMPTY
+
+label 4 与 label 5 都是空箱，交换二者不改变任务语义。生成器只为保持旧
+route_case_table.json 结构完整，按剩余物理位置升序确定性填入 label 4、5；
+动作、储箱分配、路线选择和 source_row_hash 均不依赖 4、5 的互换。
+
+
+二、三个逻辑倒货位
+------------------------------------------------------------
+
+    P_DROP_3 对应物理箱 F_DROP_4、F_DROP_5 的直角位置
+    P_DROP_2 对应物理箱 F_DROP_6
+    P_DROP_1 对应物理箱 F_DROP_7、F_DROP_8 的直角位置
+
+project.json 中 P_DROP_1、P_DROP_2、P_DROP_3 保存倒货位基准 x/y。
+启用倒货角度选择后，这三个固定点的 yaw_ddeg 必须保存为 0xFFFF，表示固定
+点本身不约束实际到达角度。实际到达 yaw 来自具体倒货姿态配置。
+
+
+三、车载储箱可达性硬约束
+------------------------------------------------------------
+
+    F_DROP_4 只能由 BIN_1 倒货
+    F_DROP_5 可由 BIN_1 或 BIN_2 倒货
+    F_DROP_6 可由 BIN_1、BIN_2 或 BIN_3 倒货
+    F_DROP_7 可由 BIN_2 或 BIN_3 倒货
+    F_DROP_8 只能由 BIN_3 倒货
+
+任务编译器枚举 YELLOW/GREEN/WHITE 到 BIN_1/BIN_2/BIN_3 的 6 种一一对应
+分配，删除不满足上述可达性的方案。
+
+
+四、允许的 11 种倒货姿态
+------------------------------------------------------------
+
+单箱倒货：
+
+    DROP_F4_BIN_1   P_DROP_3：F_DROP_4 <- BIN_1
+    DROP_F5_BIN_1   P_DROP_3：F_DROP_5 <- BIN_1
+    DROP_F5_BIN_2   P_DROP_3：F_DROP_5 <- BIN_2
+
+    DROP_F6_BIN_1   P_DROP_2：F_DROP_6 <- BIN_1
+    DROP_F6_BIN_2   P_DROP_2：F_DROP_6 <- BIN_2
+    DROP_F6_BIN_3   P_DROP_2：F_DROP_6 <- BIN_3
+
+    DROP_F7_BIN_2   P_DROP_1：F_DROP_7 <- BIN_2
+    DROP_F7_BIN_3   P_DROP_1：F_DROP_7 <- BIN_3
+    DROP_F8_BIN_3   P_DROP_1：F_DROP_8 <- BIN_3
+
+双箱倒货只有两种：
+
+    DROP_F45_BIN_12
+        P_DROP_3：F_DROP_4 <- BIN_1，同时 F_DROP_5 <- BIN_2
+        BIN 动作码：DROP_12
+
+    DROP_F78_BIN_23
+        P_DROP_1：F_DROP_7 <- BIN_2，同时 F_DROP_8 <- BIN_3
+        BIN 动作码：DROP_23
+
+不得把其他相邻箱或任意两个目标合并成双倒。
+
+competition_task_config.json 的 unload_pose_catalog 只定义“哪个操作对应哪些
+物理箱和储箱”。每个姿态的实测参数写在 project.json：
+
+    unload_pose_profiles.<profile_id>.configured
+    unload_pose_profiles.<profile_id>.yaw_ddeg
+    unload_pose_profiles.<profile_id>.dx_mm
+    unload_pose_profiles.<profile_id>.dy_mm
+    unload_pose_profiles.<profile_id>.estimated_action_time_ms
+
+具体倒货姿态的 yaw_ddeg 不能为 0xFFFF。未标定的姿态必须 configured=false，
+规划器不得猜测其角度。旧项目的单箱角度会从 BIN_1/BIN_2/BIN_3 配置迁移为
+初始值；DROP_F45_BIN_12、DROP_F78_BIN_23 必须人工标定后启用。
+
+
+五、左右路线
+------------------------------------------------------------
+
+左路线 PICK_1_TO_3：
+
+    P_START -> P_PICK_1 -> P_PICK_2L -> P_PICK_3
+    倒货位顺序 P_DROP_3 -> P_DROP_2 -> P_DROP_1
+    连续倒货 yaw 方向 CW_ONLY（顺时针）
+
+右路线 PICK_3_TO_1：
+
+    P_START -> P_PICK_3 -> P_PICK_2R -> P_PICK_1
+    倒货位顺序 P_DROP_1 -> P_DROP_2 -> P_DROP_3
+    连续倒货 yaw 方向 CCW_ONLY（逆时针）
+
+程序先最小化实际倒货停车次数。达到最少停车次数的左、右路线都必须进入
+几何规划，并比较完整可行方案的预计总时间（底盘运动与机械动作重叠后的总时间）。
+不得在几何计时前按逻辑倒货位集合硬删掉其中一侧路线。
+
+station_set_route_rules 仅作为“完整预计总时间完全相同”时的确定性平局规则：
+
+    {P_DROP_1} 或 {P_DROP_1,P_DROP_2} -> 平局时优先右路线
+    {P_DROP_3} 或 {P_DROP_2,P_DROP_3} -> 平局时优先左路线
+    {P_DROP_2}、{P_DROP_1,P_DROP_3}、{P_DROP_1,P_DROP_2,P_DROP_3}
+        -> 平局时默认左路线
+
+如同一停车数下存在多个合法储箱分配，同样进入几何规划比较完整可行方案的
+预计总时间；不得使用违反可达性或双倒规则的分配。
+
+
+六、半自动模式
+------------------------------------------------------------
+
+半自动 Case 的 P_DROP ARRIVAL 可以增加：
+
+    unload_pose_profile_id
+
+例如：
+
+    {
+      "type": "ARRIVAL",
+      "site_key": "P_DROP_3",
+      "state_id": "DROP_STEP_1",
+      "unload_pose_profile_id": "DROP_F45_BIN_12"
+    }
+
+启用倒货角度选择时，每个使用到的 P_DROP ARRIVAL 必须从对应倒货位的下拉框
+选择一个已配置姿态。解析后实际轨迹节点写入具体 yaw，不把 0xFFFF 写进 BIN。
+
+
+七、P0000 示例
+------------------------------------------------------------
+
+P0000：
+
+    PICK_1 = YELLOW
+    PICK_2 = GREEN
+    PICK_3 = WHITE
+
+    YELLOW -> F_DROP_4
+    GREEN  -> F_DROP_5
+    WHITE  -> F_DROP_6
+
+唯一合法储箱分配：
+
+    YELLOW -> BIN_1
+    GREEN  -> BIN_2
+    WHITE  -> BIN_3
+
+最少停车方案：
+
+    P_DROP_3：DROP_F45_BIN_12 / DROP_12
+    P_DROP_2：DROP_F6_BIN_3  / DROP_3
+
+使用倒货位集合 {P_DROP_2,P_DROP_3} 时，左、右路线都进入完整几何计时；
+选择预计总时间更短的一侧。当前实测配置中 P0000 应选择右路线 PICK_3_TO_1；
+只有两侧预计总时间完全相同才按 station_set_route_rules 优先左路线。
+
+
+八、写入与验证
+------------------------------------------------------------
+
+- JSON 使用 UTF-8，无 BOM。
+- 未知字段拒绝。
+- format/config_version 必须精确匹配。
+- 固定标签含义、物理储箱可达性、11 种操作和左右路线规则必须通过校验。
+- 程序启动或打开项目时，由本 JSON 重新生成 360 行 route_case_table.json。
+- traj_id.csv 仅保留为旧工程显式迁移或回归比对输入，不参与正常规划。

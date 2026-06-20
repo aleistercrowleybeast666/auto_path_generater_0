@@ -8,7 +8,6 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from hjmb_pathgen.py_io.codecs.csv_codec import load_traj_id_csv
 from hjmb_pathgen.py_io.codecs.json_codec import load_case, load_leg_library, load_project
 from hjmb_pathgen.py_services.collision_config_service import validate_collision_config
 from hjmb_pathgen.py_domain.enums import GenerationMode
@@ -57,6 +56,7 @@ from hjmb_pathgen.py_io.layout.project_layout import ProjectLayout
 from hjmb_pathgen.py_services.route_assembler import transition_requirements_from_case
 from hjmb_pathgen.py_services.site_preset_service import apply_site_pose_preset, export_site_pose_preset, import_site_pose_preset_preview
 from hjmb_pathgen.py_services.traj_table_service import write_route_case_table
+from hjmb_pathgen.py_services.competition_task_config_service import load_competition_task_config
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -80,7 +80,10 @@ def main(argv: list[str] | None = None) -> int:
     protocol_report_parser.add_argument("--output")
     create_example_parser = subparsers.add_parser("create-example-project")
     create_example_parser.add_argument("--output", required=True)
-    create_example_parser.add_argument("--source-traj", default="traj_id.csv")
+    create_example_parser.add_argument(
+        "--source-traj",
+        help="deprecated legacy argument; normal V4 projects use task_config/competition_task_config.json",
+    )
     create_example_parser.add_argument("--generate-outputs", action="store_true")
     release_manifest_parser = subparsers.add_parser("phase9-release-manifest")
     release_manifest_parser.add_argument("--root", default=".")
@@ -229,8 +232,14 @@ def _dispatch(args: argparse.Namespace) -> dict[str, Any]:
         return report
     layout = ProjectLayout.open(Path(args.project), create_dirs=False)
     if args.command == "validate-traj-table":
-        table = load_traj_id_csv(layout.traj_id_csv)
-        return {"row_count": len(table.rows), "source_csv_sha256": table.source_csv_sha256}
+        config = load_competition_task_config(layout.competition_task_config_json)
+        result = write_route_case_table(layout)
+        return {
+            "source_kind": result.source_kind,
+            "task_config_format": config.format,
+            "row_count": len(result.route_case_table.cases),
+            "source_sha256": result.route_case_table.source_csv_sha256,
+        }
     if args.command == "validate-project-config":
         report = validate_project_site_configuration(load_project(layout.project_json))
         return report.to_dict()

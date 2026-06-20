@@ -1,0 +1,238 @@
+{
+  "automatic_selection": {
+    "primary_objective": "MIN_UNLOAD_STOP_COUNT",
+    "station_set_route_rules": {
+      "1": "PICK_3_TO_1",
+      "1,2": "PICK_3_TO_1",
+      "1,2,3": "PICK_1_TO_3",
+      "1,3": "PICK_1_TO_3",
+      "2": "PICK_1_TO_3",
+      "2,3": "PICK_1_TO_3",
+      "3": "PICK_1_TO_3"
+    },
+    "tie_default": "PICK_1_TO_3"
+  },
+  "bin_reachability": {
+    "F_DROP_4": [
+      "BIN_1"
+    ],
+    "F_DROP_5": [
+      "BIN_1",
+      "BIN_2"
+    ],
+    "F_DROP_6": [
+      "BIN_1",
+      "BIN_2",
+      "BIN_3"
+    ],
+    "F_DROP_7": [
+      "BIN_2",
+      "BIN_3"
+    ],
+    "F_DROP_8": [
+      "BIN_3"
+    ]
+  },
+  "config_version": 1,
+  "drop_stations": {
+    "P_DROP_1": {
+      "physical_sites": [
+        "F_DROP_7",
+        "F_DROP_8"
+      ],
+      "station_number": 1
+    },
+    "P_DROP_2": {
+      "physical_sites": [
+        "F_DROP_6"
+      ],
+      "station_number": 2
+    },
+    "P_DROP_3": {
+      "physical_sites": [
+        "F_DROP_4",
+        "F_DROP_5"
+      ],
+      "station_number": 3
+    }
+  },
+  "format": "HJMB_COMPETITION_TASK_CONFIG_JSON_V40",
+  "label_semantics": {
+    "1": "YELLOW",
+    "2": "GREEN",
+    "3": "WHITE",
+    "4": "EMPTY",
+    "5": "EMPTY"
+  },
+  "route_families": {
+    "PICK_1_TO_3": {
+      "display_name": "LEFT",
+      "drop_station_order": [
+        "P_DROP_3",
+        "P_DROP_2",
+        "P_DROP_1"
+      ],
+      "pickup_arrival_state_order": [
+        "P_PICK_1",
+        "P_PICK_2L",
+        "P_PICK_3"
+      ],
+      "pickup_position_order": [
+        "PICK_1",
+        "PICK_2",
+        "PICK_3"
+      ],
+      "yaw_direction": "CW_ONLY"
+    },
+    "PICK_3_TO_1": {
+      "display_name": "RIGHT",
+      "drop_station_order": [
+        "P_DROP_1",
+        "P_DROP_2",
+        "P_DROP_3"
+      ],
+      "pickup_arrival_state_order": [
+        "P_PICK_3",
+        "P_PICK_2R",
+        "P_PICK_1"
+      ],
+      "pickup_position_order": [
+        "PICK_3",
+        "PICK_2",
+        "PICK_1"
+      ],
+      "yaw_direction": "CCW_ONLY"
+    }
+  },
+  "traj_id_mapping": {
+    "bean_code_permutations": [
+      [
+        "YELLOW",
+        "GREEN",
+        "WHITE"
+      ],
+      [
+        "YELLOW",
+        "WHITE",
+        "GREEN"
+      ],
+      [
+        "GREEN",
+        "YELLOW",
+        "WHITE"
+      ],
+      [
+        "GREEN",
+        "WHITE",
+        "YELLOW"
+      ],
+      [
+        "WHITE",
+        "YELLOW",
+        "GREEN"
+      ],
+      [
+        "WHITE",
+        "GREEN",
+        "YELLOW"
+      ]
+    ],
+    "drop_code_generation": "ORDERED_TARGET_PLACEMENT_LEXICOGRAPHIC",
+    "empty_label_assignment": "REMAINING_SITES_ASCENDING_TO_LABEL_4_THEN_5",
+    "expected_case_count": 360,
+    "formula": "traj_id = bean_code * 60 + drop_code",
+    "physical_drop_site_order": [
+      "F_DROP_4",
+      "F_DROP_5",
+      "F_DROP_6",
+      "F_DROP_7",
+      "F_DROP_8"
+    ],
+    "pickup_slot_order": [
+      "PICK_1",
+      "PICK_2",
+      "PICK_3"
+    ]
+  },
+  "unload_pose_catalog": {
+    "DROP_F45_BIN_12": {
+      "assignments": {
+        "F_DROP_4": "BIN_1",
+        "F_DROP_5": "BIN_2"
+      },
+      "station_site": "P_DROP_3",
+      "unload_mask": "BIN_12"
+    },
+    "DROP_F4_BIN_1": {
+      "assignments": {
+        "F_DROP_4": "BIN_1"
+      },
+      "station_site": "P_DROP_3",
+      "unload_mask": "BIN_1"
+    },
+    "DROP_F5_BIN_1": {
+      "assignments": {
+        "F_DROP_5": "BIN_1"
+      },
+      "station_site": "P_DROP_3",
+      "unload_mask": "BIN_1"
+    },
+    "DROP_F5_BIN_2": {
+      "assignments": {
+        "F_DROP_5": "BIN_2"
+      },
+      "station_site": "P_DROP_3",
+      "unload_mask": "BIN_2"
+    },
+    "DROP_F6_BIN_1": {
+      "assignments": {
+        "F_DROP_6": "BIN_1"
+      },
+      "station_site": "P_DROP_2",
+      "unload_mask": "BIN_1"
+    },
+    "DROP_F6_BIN_2": {
+      "assignments": {
+        "F_DROP_6": "BIN_2"
+      },
+      "station_site": "P_DROP_2",
+      "unload_mask": "BIN_2"
+    },
+    "DROP_F6_BIN_3": {
+      "assignments": {
+        "F_DROP_6": "BIN_3"
+      },
+      "station_site": "P_DROP_2",
+      "unload_mask": "BIN_3"
+    },
+    "DROP_F78_BIN_23": {
+      "assignments": {
+        "F_DROP_7": "BIN_2",
+        "F_DROP_8": "BIN_3"
+      },
+      "station_site": "P_DROP_1",
+      "unload_mask": "BIN_23"
+    },
+    "DROP_F7_BIN_2": {
+      "assignments": {
+        "F_DROP_7": "BIN_2"
+      },
+      "station_site": "P_DROP_1",
+      "unload_mask": "BIN_2"
+    },
+    "DROP_F7_BIN_3": {
+      "assignments": {
+        "F_DROP_7": "BIN_3"
+      },
+      "station_site": "P_DROP_1",
+      "unload_mask": "BIN_3"
+    },
+    "DROP_F8_BIN_3": {
+      "assignments": {
+        "F_DROP_8": "BIN_3"
+      },
+      "station_site": "P_DROP_1",
+      "unload_mask": "BIN_3"
+    }
+  }
+}

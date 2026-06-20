@@ -19,6 +19,7 @@ from hjmb_pathgen.py_domain.task_plan import TransitionRequirement
 from hjmb_pathgen.py_io.persistence.atomic_writer import atomic_write_bytes
 from hjmb_pathgen.py_io.layout.project_layout import ProjectLayout
 from hjmb_pathgen.py_services.task_compiler import CaseDraftBuildResult, build_case_draft
+from hjmb_pathgen.py_services.competition_task_config_service import ensure_competition_task_config
 from hjmb_pathgen.py_services.traj_table_service import write_route_case_table
 
 TASK_COMPILE_SUMMARY_CSV = "task_compile_summary.csv"
@@ -64,6 +65,7 @@ def generate_case_draft(
     layout.ensure_directories()
     project = load_project(layout.project_json)
     table = _ensure_route_case_table(layout)
+    task_config = ensure_competition_task_config(layout.competition_task_config_json)
     row = _row_by_traj_id(table, traj_id)
     case_path = layout.case_json_path_for_mode(traj_id, GenerationMode.FULL_AUTO)
     existing_case = _load_existing_case(case_path)
@@ -73,6 +75,7 @@ def generate_case_draft(
         existing_case=existing_case,
         preferred_candidate_id=preferred_candidate_id,
         lock_selected=lock_selected,
+        task_config=task_config,
     )
     save_case(case_path, built.case)
     return _case_result(layout, built)
@@ -82,6 +85,7 @@ def generate_all_case_drafts(layout: ProjectLayout) -> CaseDraftBatchResult:
     layout.ensure_directories()
     project = load_project(layout.project_json)
     table = _ensure_route_case_table(layout)
+    task_config = ensure_competition_task_config(layout.competition_task_config_json)
     results: list[CaseDraftResult] = []
     failures: list[CaseDraftFailure] = []
     all_requirements: dict[str, TransitionRequirement] = {}
@@ -90,7 +94,7 @@ def generate_all_case_drafts(layout: ProjectLayout) -> CaseDraftBatchResult:
         try:
             case_path = layout.case_json_path_for_mode(row.traj_id, GenerationMode.FULL_AUTO)
             existing_case = _load_existing_case(case_path)
-            built = build_case_draft(row, project, existing_case=existing_case)
+            built = build_case_draft(row, project, existing_case=existing_case, task_config=task_config)
             save_case(case_path, built.case)
             result = _case_result(layout, built)
             results.append(result)

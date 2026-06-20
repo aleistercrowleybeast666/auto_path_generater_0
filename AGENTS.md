@@ -16,7 +16,9 @@
 - Case 逻辑锚点为上述 5 点和 `P_DROP_1/2/3`，共 8 点。
 - `P_PICK_2L/R` 是同一物理 PICK_2 的两个接近姿态。
 - 5 个物理放货箱只属于 `project.field_objects.drop_boxes`，不得伪装为路线 site。
-- `traj_id.csv` 是 360 映射的唯一权威。
+- `project.json.sites.P_DROP_1/2/3.yaw_ddeg=0xFFFF` 只表示固定倒货位不约束方向；实际倒货 yaw 必须来自 `unload_pose_profiles` 的 11 个已标定操作姿态。
+- 双倒仅允许 F4+F5/BIN_12 和 F7+F8/BIN_23。
+- `task_config/competition_task_config.json` 是正常工作流中 360 映射、储箱可达性、双倒组合和左右路线规则的唯一权威；`traj_id.csv` 仅允许显式旧工程迁移或回归比对。
 
 ## 模式规则
 

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import hashlib
 import math
-import shutil
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -43,7 +42,7 @@ ACTION_PROFILE_KEYS = (
 def create_synthetic_example_project(
     root: str | Path,
     *,
-    source_traj_csv: str | Path,
+    source_traj_csv: str | Path | None = None,
     generate_outputs: bool = False,
 ) -> dict[str, Any]:
     root = Path(root)
@@ -52,7 +51,9 @@ def create_synthetic_example_project(
     root.mkdir(parents=True, exist_ok=True)
     project = _example_project()
     layout = ProjectLayout.create(root, project)
-    shutil.copyfile(source_traj_csv, layout.traj_id_csv)
+    # source_traj_csv is kept as a deprecated API argument only.  Example
+    # projects use the deterministic English task JSON like normal projects.
+    del source_traj_csv
     table_result = write_route_case_table(layout)
     collection = collect_unique_legs(layout)
     library = _synthetic_leg_library(project, collection.to_dict()["requirements"])

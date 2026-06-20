@@ -121,7 +121,8 @@
     },
     "default": {
       "max_spacing_mm": 25,
-      "max_yaw_step_ddeg": 30
+      "max_yaw_step_ddeg": 30,
+      "use_unload_pose_profiles": true
     }
   },
   "protocol_version": 40,
@@ -144,6 +145,85 @@
       "gates": [],
       "profile_id": "S_RTL_DEFAULT",
       "transfer_profile_id": "S_RIGHT_TRANSFER"
+    }
+  },
+  "unload_pose_profiles": {
+    "DROP_F45_BIN_12": {
+      "configured": false,
+      "dx_mm": 0,
+      "dy_mm": 0,
+      "estimated_action_time_ms": 700,
+      "yaw_ddeg": 0
+    },
+    "DROP_F4_BIN_1": {
+      "configured": true,
+      "dx_mm": 0,
+      "dy_mm": 0,
+      "estimated_action_time_ms": 700,
+      "yaw_ddeg": 900
+    },
+    "DROP_F5_BIN_1": {
+      "configured": true,
+      "dx_mm": 0,
+      "dy_mm": 0,
+      "estimated_action_time_ms": 700,
+      "yaw_ddeg": 900
+    },
+    "DROP_F5_BIN_2": {
+      "configured": true,
+      "dx_mm": 0,
+      "dy_mm": 0,
+      "estimated_action_time_ms": 700,
+      "yaw_ddeg": 0
+    },
+    "DROP_F6_BIN_1": {
+      "configured": true,
+      "dx_mm": 0,
+      "dy_mm": 0,
+      "estimated_action_time_ms": 700,
+      "yaw_ddeg": 900
+    },
+    "DROP_F6_BIN_2": {
+      "configured": true,
+      "dx_mm": 0,
+      "dy_mm": 0,
+      "estimated_action_time_ms": 700,
+      "yaw_ddeg": 0
+    },
+    "DROP_F6_BIN_3": {
+      "configured": true,
+      "dx_mm": 0,
+      "dy_mm": 0,
+      "estimated_action_time_ms": 700,
+      "yaw_ddeg": -900
+    },
+    "DROP_F78_BIN_23": {
+      "configured": false,
+      "dx_mm": 0,
+      "dy_mm": 0,
+      "estimated_action_time_ms": 700,
+      "yaw_ddeg": 0
+    },
+    "DROP_F7_BIN_2": {
+      "configured": true,
+      "dx_mm": 0,
+      "dy_mm": 0,
+      "estimated_action_time_ms": 700,
+      "yaw_ddeg": 0
+    },
+    "DROP_F7_BIN_3": {
+      "configured": true,
+      "dx_mm": 0,
+      "dy_mm": 0,
+      "estimated_action_time_ms": 700,
+      "yaw_ddeg": -900
+    },
+    "DROP_F8_BIN_3": {
+      "configured": true,
+      "dx_mm": 0,
+      "dy_mm": 0,
+      "estimated_action_time_ms": 700,
+      "yaw_ddeg": -900
     }
   },
   "unload_profiles": {
