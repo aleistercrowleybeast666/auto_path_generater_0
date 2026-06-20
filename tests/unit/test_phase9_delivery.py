@@ -9,27 +9,27 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from hjmb_pathgen.codec.json_codec import load_case, save_case
-from hjmb_pathgen.models.enums import PathSource
-from hjmb_pathgen.services.example_project_service import create_synthetic_example_project
-from hjmb_pathgen.services.mode_output_service import export_final_bin
-from hjmb_pathgen.services.phase9_delivery_service import (
+from hjmb_pathgen.py_io.codecs.json_codec import load_case, save_case
+from hjmb_pathgen.py_domain.enums import GenerationMode
+from hjmb_pathgen.py_services.example_project_service import create_synthetic_example_project
+from hjmb_pathgen.py_services.mode_output_service import export_final_bin
+from hjmb_pathgen.py_services.phase9_delivery_service import (
     final_drop_audit_from_bin,
     generate_golden_manifest,
     output_layout_report,
     release_manifest,
     protocol_conformance_report,
 )
-from hjmb_pathgen.services.project_service import ProjectLayout
+from hjmb_pathgen.py_io.layout.project_layout import ProjectLayout
 
 from tests.unit.test_phase7_generation import (
     collect_unique_legs,
     manual_case_dict,
     populate_library_for_collection,
-    write_manual_free_outputs,
+    write_manual_outputs,
     write_one_row_project,
 )
-from hjmb_pathgen.services.phase7_generation_service import generate_one
+from hjmb_pathgen.py_services.phase7_generation_service import generate_one
 
 
 class Phase9DeliveryTest(unittest.TestCase):
@@ -58,27 +58,27 @@ class Phase9DeliveryTest(unittest.TestCase):
             collection = collect_unique_legs(layout)
             populate_library_for_collection(layout, collection.to_dict())
             generate_one(layout, 0)
-            task_path = layout.case_json_path_for_source(0, PathSource.TASK_COMPILED)
+            task_path = layout.case_json_path_for_mode(0, GenerationMode.FULL_AUTO)
             case = load_case(task_path)
             review = dict(case.review)
             review["approved"] = True
             save_case(task_path, replace(case, review=review))
 
-            output = export_final_bin(layout, 0, path_source=PathSource.TASK_COMPILED)
+            output = export_final_bin(layout, 0, generation_mode=GenerationMode.FULL_AUTO)
             self.assertEqual(output.bin_path, layout.final_bin_path(0))
             audit = final_drop_audit_from_bin(output.bin_path)
             self.assertTrue(audit["passed"], audit)
 
-    def test_output_layout_reports_path_source_mismatch(self):
+    def test_output_layout_reports_generation_mode_mismatch(self):
         with tempfile.TemporaryDirectory() as tmp:
             layout = write_one_row_project(Path(tmp))
-            wrong = layout.case_json_path_for_source(0, PathSource.TASK_COMPILED)
+            wrong = layout.case_json_path_for_mode(0, GenerationMode.FULL_AUTO)
             wrong.parent.mkdir(parents=True, exist_ok=True)
             save_case(wrong, load_case_dict(manual_case_dict()))
 
             report = output_layout_report(layout)
             self.assertFalse(report["passed"])
-            self.assertEqual(report["path_source_mismatch_count"], 1)
+            self.assertEqual(report["generation_mode_mismatch_count"], 1)
 
     def test_synthetic_example_project_has_360_route_table_and_unique_legs(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -108,7 +108,7 @@ class Phase9DeliveryTest(unittest.TestCase):
 
 
 def load_case_dict(data: dict):
-    from hjmb_pathgen.models.route_case import CaseManifestV40
+    from hjmb_pathgen.py_domain.route_case import CaseManifestV40
 
     return CaseManifestV40.from_dict(data)
 

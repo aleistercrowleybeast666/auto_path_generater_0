@@ -12,13 +12,14 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from hjmb_pathgen.codec.canonical_json import canonical_json_crc32_hex
-from hjmb_pathgen.codec.csv_codec import EXPECTED_TRAJ_HEADERS, load_traj_id_csv
-from hjmb_pathgen.codec.json_codec import load_case, save_project
-from hjmb_pathgen.cli.__main__ import main as cli_main
-from hjmb_pathgen.services.case_draft_service import generate_all_case_drafts, generate_case_draft
-from hjmb_pathgen.services.project_service import ProjectLayout
-from hjmb_pathgen.services.traj_table_service import write_route_case_table
+from hjmb_pathgen.py_io.codecs.canonical_json import canonical_json_crc32_hex
+from hjmb_pathgen.py_io.codecs.csv_codec import EXPECTED_TRAJ_HEADERS, load_traj_id_csv
+from hjmb_pathgen.py_io.codecs.json_codec import load_case, save_project
+from hjmb_pathgen.py_domain.enums import GenerationMode
+from hjmb_pathgen.py_app.cli_main import main as cli_main
+from hjmb_pathgen.py_services.case_draft_service import generate_all_case_drafts, generate_case_draft
+from hjmb_pathgen.py_io.layout.project_layout import ProjectLayout
+from hjmb_pathgen.py_services.traj_table_service import write_route_case_table
 
 from phase3_helpers import phase3_project, root_traj_csv_path
 
@@ -51,9 +52,17 @@ class Phase3OfficialTrajIdIntegrationTest(unittest.TestCase):
             self.assertGreater(batch.unique_transition_requirement_count, 0)
             self.assertEqual(list(layout.bin_dir.glob("P*.BIN")), [])
 
-            loaded_cases = [load_case(layout.case_json_path(traj_id)) for traj_id in range(360)]
+            loaded_cases = [
+                load_case(layout.case_json_path_for_mode(traj_id, GenerationMode.FULL_AUTO))
+                for traj_id in range(360)
+            ]
             self.assertEqual([case.traj_id for case in loaded_cases], list(range(360)))
-            self.assertEqual(canonical_json_crc32_hex(load_case(layout.case_json_path(0)).to_dict()), single_hash)
+            self.assertEqual(
+                canonical_json_crc32_hex(
+                    load_case(layout.case_json_path_for_mode(0, GenerationMode.FULL_AUTO)).to_dict()
+                ),
+                single_hash,
+            )
             self.assertTrue(all(case.storage_mode.value == "REFERENCED" for case in loaded_cases))
             self.assertTrue(all(not case.leg_refs for case in loaded_cases))
             self.assertTrue(all(case.actions["compiled"] == [] for case in loaded_cases))

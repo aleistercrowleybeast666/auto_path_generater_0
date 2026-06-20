@@ -8,7 +8,7 @@
       "key": {
         "from_state_key": "P_START@0",
         "to_state_key": "P_PICK_1@0",
-        "route_family": "MANUAL_FREE",
+        "route_family": "MANUAL",
         "topology_profile": "NONE"
       },
       "state": "VALID",

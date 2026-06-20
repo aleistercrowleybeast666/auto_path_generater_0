@@ -1,7 +1,7 @@
 # V4.0 JSON IO
 
 Phase 2 implements strict typed JSON codecs in
-`src/hjmb_pathgen/codec/json_codec.py`.
+`src/hjmb_pathgen/py_io/codecs/json_codec.py`.
 
 ## Supported Documents
 

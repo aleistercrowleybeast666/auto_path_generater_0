@@ -7,11 +7,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from hjmb_pathgen.models.errors import CompileError
-from hjmb_pathgen.models.route_case import RouteCaseRowV40
-from hjmb_pathgen.models.task_mapping import drop_targets_from_label_positions
-from hjmb_pathgen.services.task_compiler import build_case_draft, compile_task_candidates
-from hjmb_pathgen.utils.yaw_unwrap import unwrap_yaw_sequence
+from hjmb_pathgen.py_domain.errors import CompileError
+from hjmb_pathgen.py_domain.route_case import RouteCaseRowV40
+from hjmb_pathgen.py_domain.task_mapping import drop_targets_from_label_positions
+from hjmb_pathgen.py_services.task_compiler import build_case_draft, compile_task_candidates
+from hjmb_pathgen.py_utils.yaw_unwrap import unwrap_yaw_sequence
 
 from phase3_helpers import phase3_project, phase3_project_dict
 
@@ -128,6 +128,20 @@ class Phase3TaskCompilerTest(unittest.TestCase):
 
         locked = build_case_draft(row, project, preferred_candidate_id=candidate_id, lock_selected=True)
         self.assertTrue(locked.case.selected_plan["locked_by_user"])
+        self.assertEqual(
+            {item["point_id"] for item in locked.case.logical_points},
+            {"P_START", "P_PICK_1", "P_PICK_2L", "P_PICK_2R", "P_PICK_3", "P_DROP_1", "P_DROP_2", "P_DROP_3"},
+        )
+        self.assertEqual(len(locked.case.logical_points), 8)
+        drop_1 = next(item for item in locked.case.logical_points if item["point_id"] == "P_DROP_1")
+        drop_box = next(
+            item for item in project.field_objects["drop_boxes"]
+            if item["physical_drop_site"] == drop_1["physical_drop_site"]
+        )
+        self.assertNotEqual(
+            (drop_1["pose"]["x_mm"], drop_1["pose"]["y_mm"]),
+            (drop_box["center_x_mm"], drop_box["center_y_mm"]),
+        )
         rebuilt = build_case_draft(row, project, existing_case=locked.case)
         self.assertEqual(rebuilt.case.selected_plan["candidate_id"], candidate_id)
         self.assertTrue(rebuilt.case.selected_plan["locked_by_user"])

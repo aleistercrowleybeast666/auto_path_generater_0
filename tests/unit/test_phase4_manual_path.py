@@ -7,11 +7,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-from hjmb_pathgen.models.enums import HeaderFlag, NodeFlag
-from hjmb_pathgen.models.errors import V40ValidationError
-from hjmb_pathgen.models.project import ProjectV40
-from hjmb_pathgen.models.route_case import CaseManifestV40
-from hjmb_pathgen.services.manual_path_service import build_manual_spatial_path, plan_manual_case
+from hjmb_pathgen.py_domain.enums import HeaderFlag, NodeFlag
+from hjmb_pathgen.py_domain.errors import V40ValidationError
+from hjmb_pathgen.py_domain.project import ProjectV40
+from hjmb_pathgen.py_domain.route_case import CaseManifestV40
+from hjmb_pathgen.py_services.manual_path_service import build_manual_spatial_path, plan_manual_case
 
 FIXTURE_ROOT = Path(__file__).resolve().parents[1] / "fixtures" / "v40"
 
@@ -26,13 +26,13 @@ def manual_case_dict() -> dict:
     return {
         "format": "HJMB_ROUTE_CASE_JSON_V40",
         "storage_mode": "REFERENCED",
-        "path_source": "MANUAL_FREE",
+        "generation_mode": "MANUAL",
         "traj_id": 0,
         "bean_code": 0,
         "drop_code": 0,
         "source_mapping": {"manual": True},
         "selected_plan": {
-            "route_family": "MANUAL_FREE",
+            "route_family": "MANUAL",
             "vehicle_bin_assignment": {},
             "drop_targets": [],
             "unload_sequence": [],
@@ -46,6 +46,7 @@ def manual_case_dict() -> dict:
                 {"type": "ARRIVAL", "x_mm": 1000, "y_mm": 0, "yaw_ddeg": 0},
             ]
         },
+        "logical_points": [],
         "arrival_states": [],
         "leg_refs": [],
         "actions": {"source": [], "compiled": []},
@@ -80,13 +81,13 @@ class Phase4ManualPathTest(unittest.TestCase):
         self.assertEqual(result.trajectory.nodes[-1].wz_ddegps, 0)
         self.assertFalse(result.trajectory.nodes[-1].flags & int(NodeFlag.SAFE_END))
 
-    def test_task_compiled_case_rejects_manual_path_payload(self):
+    def test_full_auto_case_rejects_manual_path_payload(self):
         data = json.loads((FIXTURE_ROOT / "minimal_case.json").read_text(encoding="utf-8"))
         data["manual_path"] = manual_case_dict()["manual_path"]
-        with self.assertRaisesRegex(V40ValidationError, "TASK_COMPILED"):
+        with self.assertRaisesRegex(V40ValidationError, "FULL_AUTO"):
             CaseManifestV40.from_dict(data)
 
-    def test_manual_free_requires_override_reason(self):
+    def test_manual_requires_override_reason(self):
         data = manual_case_dict()
         data["review"]["override_reason"] = ""
         with self.assertRaisesRegex(V40ValidationError, "override_reason"):

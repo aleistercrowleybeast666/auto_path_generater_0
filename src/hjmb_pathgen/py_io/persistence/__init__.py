@@ -1,0 +1,1 @@
+"""Validated atomic persistence primitives."""

@@ -8,13 +8,13 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-from hjmb_pathgen.models.collision import CollisionStatus
-from hjmb_pathgen.models.project import ProjectV40
-from hjmb_pathgen.models.route_case import CaseManifestV40
-from hjmb_pathgen.planning.time_parameterization import GeometrySample
-from hjmb_pathgen.services.export_guard_service import check_formal_export_guard
-from hjmb_pathgen.services.manual_path_service import build_manual_spatial_path
-from hjmb_pathgen.services.path_validation_service import (
+from hjmb_pathgen.py_domain.collision import CollisionStatus
+from hjmb_pathgen.py_domain.project import ProjectV40
+from hjmb_pathgen.py_domain.route_case import CaseManifestV40
+from hjmb_pathgen.py_planning.dynamics.time_parameterization import GeometrySample
+from hjmb_pathgen.py_services.export_guard_service import check_formal_export_guard
+from hjmb_pathgen.py_services.manual_path_service import build_manual_spatial_path
+from hjmb_pathgen.py_services.path_validation_service import (
     case_with_collision_result,
     collision_result_is_stale,
     validate_case_collision,
@@ -32,13 +32,13 @@ def manual_case_dict() -> dict:
     return {
         "format": "HJMB_ROUTE_CASE_JSON_V40",
         "storage_mode": "REFERENCED",
-        "path_source": "MANUAL_FREE",
+        "generation_mode": "MANUAL",
         "traj_id": 0,
         "bean_code": 0,
         "drop_code": 0,
         "source_mapping": {"manual": True},
         "selected_plan": {
-            "route_family": "MANUAL_FREE",
+            "route_family": "MANUAL",
             "vehicle_bin_assignment": {},
             "drop_targets": [],
             "unload_sequence": [],
@@ -52,6 +52,7 @@ def manual_case_dict() -> dict:
                 {"type": "ARRIVAL", "x_mm": 1000, "y_mm": 0, "yaw_ddeg": 0},
             ]
         },
+        "logical_points": [],
         "arrival_states": [],
         "leg_refs": [],
         "actions": {"source": [], "compiled": []},
@@ -80,7 +81,7 @@ def project_with_center_cylinder() -> ProjectV40:
 
 
 class Phase5PathValidationTest(unittest.TestCase):
-    def test_manual_free_case_validation_passes_and_writes_report(self):
+    def test_manual_case_validation_passes_and_writes_report(self):
         project = ProjectV40.from_dict(project_dict())
         case = CaseManifestV40.from_dict(manual_case_dict())
         with tempfile.TemporaryDirectory() as tmp:
@@ -145,13 +146,13 @@ class Phase5PathValidationTest(unittest.TestCase):
         self.assertFalse(unchecked_guard.allowed)
         self.assertIn("collision_status=NOT_CHECKED", unchecked_guard.reasons)
 
-    def test_task_compiled_case_without_geometry_reports_no_geometry(self):
+    def test_full_auto_case_without_geometry_reports_no_geometry(self):
         project = ProjectV40.from_dict(project_dict())
         case = CaseManifestV40.from_dict(json.loads((FIXTURE_ROOT / "minimal_case.json").read_text(encoding="utf-8")))
         result = validate_case_collision(case, project)
         self.assertEqual(result.status, CollisionStatus.NO_GEOMETRY)
 
-    def test_task_compiled_case_with_manual_geometry_can_be_checked_without_optimization(self):
+    def test_full_auto_case_with_manual_geometry_can_be_checked_without_optimization(self):
         project = ProjectV40.from_dict(project_dict())
         case = CaseManifestV40.from_dict(json.loads((FIXTURE_ROOT / "minimal_case.json").read_text(encoding="utf-8")))
         samples = (

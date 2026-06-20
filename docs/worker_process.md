@@ -1,6 +1,6 @@
 # Worker Process
 
-Phase 8 introduces `hjmb_pathgen.services.worker_process`.
+Long-running jobs use `hjmb_pathgen.py_workers.worker_process`.
 
 Supported worker jobs:
 

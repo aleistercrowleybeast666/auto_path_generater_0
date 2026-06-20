@@ -1,7 +1,7 @@
 {
   "format": "HJMB_ROUTE_CASE_JSON_V40",
   "storage_mode": "REFERENCED",
-  "path_source": "TASK_COMPILED",
+  "generation_mode": "FULL_AUTO",
   "traj_id": 0,
   "bean_code": 0,
   "drop_code": 0,
@@ -19,6 +19,16 @@
     "locked_by_user": false
   },
   "manual_path": null,
+  "logical_points": [
+    {"point_id": "P_START", "type": "TASK_ANCHOR", "pose": {"x_mm": 0, "y_mm": 0, "yaw_ddeg": 0}},
+    {"point_id": "P_PICK_1", "type": "TASK_ANCHOR", "pose": {"x_mm": 100, "y_mm": 0, "yaw_ddeg": 0}},
+    {"point_id": "P_PICK_2L", "type": "TASK_ANCHOR", "pose": {"x_mm": 200, "y_mm": 0, "yaw_ddeg": 0}},
+    {"point_id": "P_PICK_2R", "type": "TASK_ANCHOR", "pose": {"x_mm": 300, "y_mm": 0, "yaw_ddeg": 0}},
+    {"point_id": "P_PICK_3", "type": "TASK_ANCHOR", "pose": {"x_mm": 400, "y_mm": 0, "yaw_ddeg": 0}},
+    {"point_id": "P_DROP_1", "type": "TASK_ANCHOR", "pose": {"x_mm": -1600, "y_mm": -700, "yaw_ddeg": 900}},
+    {"point_id": "P_DROP_2", "type": "TASK_ANCHOR", "pose": {"x_mm": -1450, "y_mm": -700, "yaw_ddeg": 0}},
+    {"point_id": "P_DROP_3", "type": "TASK_ANCHOR", "pose": {"x_mm": -1300, "y_mm": -700, "yaw_ddeg": -900}}
+  ],
   "arrival_states": [],
   "leg_refs": [],
   "actions": {

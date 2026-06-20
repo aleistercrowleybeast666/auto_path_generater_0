@@ -11,17 +11,18 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from hjmb_pathgen.codec.canonical_json import canonical_json_bytes, canonical_json_crc32_hex
-from hjmb_pathgen.codec.json_codec import load_case, load_leg_library, save_case, save_leg_library, save_route_case_table
-from hjmb_pathgen.models.enums import LegState, NodeFlag, PathSource
-from hjmb_pathgen.models.leg import LegLibraryV40, LegV40
-from hjmb_pathgen.models.route_case import CaseManifestV40, RouteCaseRowV40, RouteCaseTableV40
-from hjmb_pathgen.planning.leg_optimizer import PLANNER_ALGORITHM_VERSION
-from hjmb_pathgen.services.leg_clear_service import clear_optimized_leg_result
-from hjmb_pathgen.services.leg_library_service import show_leg
-from hjmb_pathgen.services.mode_output_service import write_manual_free_outputs
-from hjmb_pathgen.services.phase7_generation_service import collect_unique_legs, evaluate_case_candidates, generate_all, generate_one, validate_one
-from hjmb_pathgen.services.project_service import ProjectLayout
+from hjmb_pathgen.py_io.codecs.canonical_json import canonical_json_bytes, canonical_json_crc32_hex
+from hjmb_pathgen.py_io.codecs.json_codec import load_case, load_leg_library, save_case, save_leg_library, save_route_case_table
+from hjmb_pathgen.py_domain.enums import LegState, NodeFlag, GenerationMode
+from hjmb_pathgen.py_domain.leg import LegLibraryV40, LegV40
+from hjmb_pathgen.py_domain.route_case import CaseManifestV40, RouteCaseRowV40, RouteCaseTableV40
+from hjmb_pathgen.py_planning.optimization.leg_optimizer import PLANNER_ALGORITHM_VERSION
+from hjmb_pathgen.py_services.leg_clear_service import clear_optimized_leg_result
+from hjmb_pathgen.py_services.leg_library_service import show_leg
+from hjmb_pathgen.py_services.mode_output_service import write_manual_outputs
+from hjmb_pathgen.py_services.phase7_generation_service import collect_unique_legs, evaluate_case_candidates, generate_all, generate_one, validate_one
+from hjmb_pathgen.py_io.layout.project_layout import ProjectLayout
+from hjmb_pathgen.py_io.migration.old_v40_layout_migration import migrate_old_v40_layout
 
 from phase3_helpers import phase3_project
 
@@ -51,7 +52,14 @@ def synthetic_leg(requirement: dict, leg_id: str, planned_time_ms: int = 100) ->
     transition = requirement["transition"]
     start = transition["from_pose"]
     end = transition["to_pose"]
-    distance = max(1, round(math.hypot(float(end["x_mm"]) - float(start["x_mm"]), float(end["y_mm"]) - float(start["y_mm"]))))
+    waypoints = [(float(start["x_mm"]), float(start["y_mm"]), float(start["yaw_ddeg"]))]
+    if str(transition["to_state_id"]).startswith("DROP_STEP_"):
+        waypoints.append((-600.0, -500.0, float(start["yaw_ddeg"])))
+    waypoints.append((float(end["x_mm"]), float(end["y_mm"]), float(end["yaw_ddeg"])))
+    cumulative = [0]
+    for left, right in zip(waypoints, waypoints[1:]):
+        cumulative.append(cumulative[-1] + max(1, round(math.hypot(right[0] - left[0], right[1] - left[1]))))
+    distance = cumulative[-1]
     first_flags = int(NodeFlag.START) if transition["from_state_id"] == "P_START" else int(NodeFlag.ARRIVAL | NodeFlag.EXACT_PASS)
     first = {
         "local_s_mm": 0,
@@ -76,6 +84,21 @@ def synthetic_leg(requirement: dict, leg_id: str, planned_time_ms: int = 100) ->
         "flags": int(NodeFlag.ARRIVAL | NodeFlag.EXACT_PASS),
         "arrival_state_id": transition["to_state_id"],
     }
+    nodes = [first]
+    for point, local_s in zip(waypoints[1:-1], cumulative[1:-1]):
+        nodes.append(
+            {
+                "local_s_mm": local_s,
+                "x_mm": round(point[0]),
+                "y_mm": round(point[1]),
+                "yaw_ddeg": round(point[2]),
+                "vx_mmps": 0,
+                "vy_mmps": 0,
+                "wz_ddegps": 0,
+                "flags": 0,
+            }
+        )
+    nodes.append(last)
     leg = LegV40(
         leg_id=leg_id,
         key={"test_requirement_id": requirement["requirement_id"]},
@@ -84,7 +107,7 @@ def synthetic_leg(requirement: dict, leg_id: str, planned_time_ms: int = 100) ->
         topology_profile=transition["topology_profile"],
         control_points=(),
         yaw_profile={},
-        nodes=(first, last),
+        nodes=tuple(nodes),
         analysis={"planned_time_ms": planned_time_ms, "total_length_mm": distance},
         hashes={"dependency_hashes": {}, "planner_algorithm_version": PLANNER_ALGORITHM_VERSION},
         review={"approved": True, "locked": False, "state": "VALID", "notes": ""},
@@ -125,13 +148,13 @@ def manual_case_dict(traj_id: int = 0) -> dict:
     return {
         "format": "HJMB_ROUTE_CASE_JSON_V40",
         "storage_mode": "REFERENCED",
-        "path_source": "MANUAL_FREE",
+        "generation_mode": "MANUAL",
         "traj_id": traj_id,
         "bean_code": 0,
         "drop_code": traj_id,
         "source_mapping": {"manual": True},
         "selected_plan": {
-            "route_family": "MANUAL_FREE",
+            "route_family": "MANUAL",
             "vehicle_bin_assignment": {},
             "drop_targets": [],
             "unload_sequence": [],
@@ -145,9 +168,21 @@ def manual_case_dict(traj_id: int = 0) -> dict:
                 {"type": "ARRIVAL", "x_mm": 500, "y_mm": 0, "yaw_ddeg": 0},
             ]
         },
+        "logical_points": [],
         "arrival_states": [],
         "leg_refs": [],
-        "actions": {"source": [], "compiled": []},
+        "actions": {
+            "source": [
+                {
+                    "action": "DROP_1",
+                    "mode": "STOP_AND_WAIT",
+                    "arrival_point_id": 2,
+                    "timeout_ms": 1500,
+                    "post_wait_ms": 100,
+                }
+            ],
+            "compiled": [],
+        },
         "finish": {"mode": "AT_FINAL_DROP"},
         "estimates": {},
         "hashes": {},
@@ -181,14 +216,14 @@ class Phase7GenerationTest(unittest.TestCase):
             self.assertEqual(ready_collection.counts_by_status, {"REUSABLE": len(ready_collection.requirements)})
 
             single = generate_one(layout, 0)
-            task_bin = layout.bin_path_for_source(0, PathSource.TASK_COMPILED)
-            task_case = layout.case_json_path_for_source(0, PathSource.TASK_COMPILED)
+            task_bin = layout.bin_path_for_mode(0, GenerationMode.FULL_AUTO)
+            task_case = layout.case_json_path_for_mode(0, GenerationMode.FULL_AUTO)
             first_bytes = task_bin.read_bytes()
             case = load_case(task_case)
             self.assertFalse(case.review["approved"])
             self.assertTrue(case.actions["compiled"][-1]["action"].startswith("DROP_"))
             self.assertFalse(single.case.to_dict()["leg_refs"] == [])
-            self.assertFalse(layout.bin_path(0).exists())
+            self.assertFalse(layout.legacy_flat_bin_path(0).exists())
 
             validation = validate_one(layout, 0)
             self.assertTrue(validation["valid"])
@@ -208,26 +243,32 @@ class Phase7GenerationTest(unittest.TestCase):
             populate_library_for_collection(layout, collection.to_dict())
 
             manual_case = load_case_dict(manual_case_dict())
-            manual = write_manual_free_outputs(layout, manual_case)
+            manual = write_manual_outputs(layout, manual_case)
             task = generate_one(layout, 0)
 
-            self.assertEqual(manual.case_path, layout.case_json_path_for_source(0, PathSource.MANUAL_FREE))
-            self.assertEqual(task.output.case_path, layout.case_json_path_for_source(0, PathSource.TASK_COMPILED))
-            self.assertTrue(layout.bin_path_for_source(0, PathSource.MANUAL_FREE).exists())
-            self.assertTrue(layout.bin_path_for_source(0, PathSource.TASK_COMPILED).exists())
+            self.assertEqual(manual.case_path, layout.case_json_path_for_mode(0, GenerationMode.MANUAL))
+            self.assertEqual(task.output.case_path, layout.case_json_path_for_mode(0, GenerationMode.FULL_AUTO))
+            self.assertTrue(layout.bin_path_for_mode(0, GenerationMode.MANUAL).exists())
+            self.assertTrue(layout.bin_path_for_mode(0, GenerationMode.FULL_AUTO).exists())
 
-    def test_legacy_flat_manual_blocks_task_generation_without_replace_flag(self):
+    def test_legacy_flat_manual_requires_explicit_layout_migration(self):
         with tempfile.TemporaryDirectory() as tmp:
             layout = write_one_row_project(Path(tmp))
             collection = collect_unique_legs(layout)
             populate_library_for_collection(layout, collection.to_dict())
-            save_case(layout.case_json_path(0), load_case_dict(manual_case_dict()))
+            save_case(layout.legacy_flat_case_json_path(0), load_case_dict(manual_case_dict()))
 
-            with self.assertRaisesRegex(Exception, "replace-manual"):
-                generate_one(layout, 0)
+            preview = migrate_old_v40_layout(layout, dry_run=True)
+            self.assertEqual(preview.conflict_count, 0)
+            self.assertEqual(preview.unresolved_count, 0)
+            self.assertTrue(layout.legacy_flat_case_json_path(0).exists())
+            applied = migrate_old_v40_layout(layout, dry_run=False)
+            self.assertTrue(any(item.status == "MIGRATED" for item in applied.items))
+            self.assertFalse(layout.legacy_flat_case_json_path(0).exists())
+            self.assertTrue(layout.case_json_path_for_mode(0, GenerationMode.MANUAL).exists())
 
-            result = generate_one(layout, 0, replace_manual=True)
-            self.assertEqual(result.output.case_path, layout.case_json_path_for_source(0, PathSource.TASK_COMPILED))
+            result = generate_one(layout, 0)
+            self.assertEqual(result.output.case_path, layout.case_json_path_for_mode(0, GenerationMode.FULL_AUTO))
 
     def test_locked_candidate_is_preserved_when_complete(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -238,7 +279,7 @@ class Phase7GenerationTest(unittest.TestCase):
             self.assertGreaterEqual(len(evaluation.timings), 1)
             locked = evaluation.timings[-1]
             generate_one(layout, 0)
-            task_path = layout.case_json_path_for_source(0, PathSource.TASK_COMPILED)
+            task_path = layout.case_json_path_for_mode(0, GenerationMode.FULL_AUTO)
             case = load_case(task_path)
             selected_plan = dict(case.selected_plan)
             selected_plan["candidate_id"] = locked.candidate_id

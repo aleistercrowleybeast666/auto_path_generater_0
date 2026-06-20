@@ -1,0 +1,498 @@
+HJMB Path Generator V4.0
+三模式最终文件结构设计
+目标：保留V3.5成熟场地交互，但所有业务、JSON、BIN和规划均统一为V4.0
+
+==================================================
+一、设计结论
+==================================================
+
+最终软件只保留三个用户模式：
+
+1. 手动模式 MANUAL
+   - 用户设置全部路径点和机械动作
+   - 不优化几何
+   - 只进行确定性曲线构造、V4速度规划、碰撞验证和动作编译
+
+2. 半自动模式 SEMI_AUTO
+   - 用户设置8个逻辑任务点、顺序和机械动作
+   - 优化点之间的XY曲线和yaw
+   - 不移动用户锁定的任务锚点
+
+3. 全自动模式 FULL_AUTO
+   - 用户对单条路径只输入traj_id
+   - 自动生成任务点、动作和候选方案
+   - 自动优化缺失路段并选预计总时间最短的方案
+   - 支持生成当前ID或全部360
+   - 如需人工修改，显式“转为半自动编辑”
+
+V3.5只保留：
+- 场地图形交互参考；
+- 旧工程导入迁移器。
+
+主流程不再：
+- 输出V3.5 JSON；
+- 输出fixed_sites_v35.json；
+- 调用V3.5 planner；
+- 使用220 ms自动规划；
+- 使用旧V3.5 BIN；
+- 维护V3.5和V4两套按钮语义。
+
+==================================================
+二、8个逻辑任务点与场地物体
+==================================================
+
+当前Case中的8个逻辑任务点：
+
+    P_START
+    P_PICK_1
+    P_PICK_2L
+    P_PICK_2R
+    P_PICK_3
+    P_DROP_1
+    P_DROP_2
+    P_DROP_3
+
+说明：
+
+- P_PICK_2L和P_PICK_2R是同一个中间取货箱的两个接近姿态；
+- P_DROP_1、P_DROP_2、P_DROP_3是当前Case中三个目标的逻辑放货到达姿态；
+- 三个P_DROP根据traj_id和候选方案映射到五个物理放货箱；
+- 机械动作不是额外空间点。
+
+项目中的物理场地对象：
+
+    2个圆柱
+    3个物理取货箱
+    5个物理放货箱
+
+五个物理放货箱属于：
+
+    project.field_objects.drop_boxes
+
+不属于“10个路线固定点”。
+
+项目公共姿态可以保存：
+
+    P_START
+    P_PICK_1
+    P_PICK_2L
+    P_PICK_2R
+    P_PICK_3
+
+全自动模式根据：
+- 五个物理放货箱；
+- traj_id；
+- unload_profiles；
+- 候选的BIN分配；
+
+生成当前Case的P_DROP_1/2/3或组合放货到达状态。
+
+==================================================
+三、源码最终结构
+==================================================
+
+根目录只保留一个正式Python入口：
+
+HJMB_Path_Generator/
+├─ hjmb_path_editor.py                 # 唯一正式GUI入口，保持极薄
+├─ pyproject.toml
+├─ AGENTS.md
+├─ TARGET.md
+├─ README.md
+├─ VERSION
+├─ HJMB_path_file_protocol_v4.0.txt
+├─ traj_id.csv                         # 可作为导入模板，不是运行项目根
+├─ src/
+│  └─ hjmb_pathgen/
+│     ├─ __init__.py
+│     │
+│     ├─ py_app/                       # 应用入口和组合根
+│     │  ├─ __init__.py
+│     │  ├─ gui_main.py
+│     │  ├─ cli_main.py
+│     │  ├─ app_context.py
+│     │  └─ startup.py
+│     │
+│     ├─ py_ui/                        # 所有PySide6界面
+│     │  ├─ __init__.py
+│     │  ├─ main_window.py
+│     │  ├─ ui_state.py
+│     │  ├─ commands.py
+│     │  ├─ dialogs.py
+│     │  ├─ status_presenter.py
+│     │  │
+│     │  ├─ field/                     # 场地与图形交互
+│     │  │  ├─ __init__.py
+│     │  │  ├─ field_view.py
+│     │  │  ├─ scene_controller.py
+│     │  │  ├─ scene_layers.py
+│     │  │  ├─ coordinate_transform.py
+│     │  │  └─ graphics_items.py
+│     │  │
+│     │  ├─ pages/                     # 最终只保留两个核心页面
+│     │  │  ├─ __init__.py
+│     │  │  ├─ path_editor_page.py
+│     │  │  └─ optimization_batch_page.py
+│     │  │
+│     │  ├─ panels/                    # 页面中的可复用面板
+│     │  │  ├─ __init__.py
+│     │  │  ├─ mode_panel.py
+│     │  │  ├─ point_table_panel.py
+│     │  │  ├─ action_editor_panel.py
+│     │  │  ├─ route_summary_panel.py
+│     │  │  ├─ leg_table_panel.py
+│     │  │  ├─ candidate_panel.py
+│     │  │  ├─ progress_panel.py
+│     │  │  └─ validation_panel.py
+│     │  │
+│     │  └─ table_models/
+│     │     ├─ __init__.py
+│     │     ├─ point_table_model.py
+│     │     ├─ action_table_model.py
+│     │     ├─ leg_table_model.py
+│     │     ├─ candidate_table_model.py
+│     │     └─ batch_table_model.py
+│     │
+│     ├─ py_domain/                    # 纯业务模型，不依赖Qt
+│     │  ├─ __init__.py
+│     │  ├─ enums.py
+│     │  ├─ errors.py
+│     │  ├─ project.py
+│     │  ├─ generation_mode.py
+│     │  ├─ route_point.py
+│     │  ├─ route_case.py
+│     │  ├─ action.py
+│     │  ├─ leg.py
+│     │  ├─ task_mapping.py
+│     │  ├─ candidate_plan.py
+│     │  ├─ validation.py
+│     │  └─ protocol.py
+│     │
+│     ├─ py_planning/                  # 几何、优化、速度、碰撞
+│     │  ├─ __init__.py
+│     │  ├─ manual/                    # 手动模式：不搜索几何
+│     │  │  ├─ __init__.py
+│     │  │  ├─ deterministic_curve.py
+│     │  │  └─ manual_planner.py
+│     │  ├─ semi_auto/
+│     │  │  ├─ __init__.py
+│     │  │  ├─ anchor_leg_builder.py
+│     │  │  └─ semi_auto_planner.py
+│     │  ├─ full_auto/
+│     │  │  ├─ __init__.py
+│     │  │  ├─ task_candidate_builder.py
+│     │  │  └─ full_auto_planner.py
+│     │  ├─ geometry/
+│     │  │  ├─ bezier.py
+│     │  │  ├─ sampling.py
+│     │  │  ├─ topology_gates.py
+│     │  │  └─ initial_guess.py
+│     │  ├─ optimization/
+│     │  │  ├─ leg_optimizer.py
+│     │  │  ├─ optimizer_backend.py
+│     │  │  ├─ objective.py
+│     │  │  ├─ yaw_windows.py
+│     │  │  └─ profiles.py
+│     │  ├─ dynamics/
+│     │  │  ├─ time_parameterization.py
+│     │  │  ├─ mecanum_kinematics.py
+│     │  │  └─ wheel_limits.py
+│     │  └─ collision/
+│     │     ├─ primitives.py
+│     │     ├─ footprints.py
+│     │     ├─ obstacles.py
+│     │     ├─ continuous.py
+│     │     ├─ validator.py
+│     │     └─ diagnostics.py
+│     │
+│     ├─ py_services/                  # 用例/业务服务
+│     │  ├─ __init__.py
+│     │  ├─ project/
+│     │  │  ├─ project_service.py
+│     │  │  ├─ project_config_service.py
+│     │  │  └─ preset_service.py
+│     │  ├─ cases/
+│     │  │  ├─ case_service.py
+│     │  │  ├─ mode_conversion_service.py
+│     │  │  ├─ case_validation_service.py
+│     │  │  └─ case_generation_service.py
+│     │  ├─ legs/
+│     │  │  ├─ leg_library_service.py
+│     │  │  ├─ leg_optimization_service.py
+│     │  │  ├─ leg_stale_service.py
+│     │  │  └─ leg_clear_service.py
+│     │  ├─ tasks/
+│     │  │  ├─ traj_table_service.py
+│     │  │  ├─ task_compiler.py
+│     │  │  ├─ candidate_service.py
+│     │  │  └─ batch_generation_service.py
+│     │  ├─ actions/
+│     │  │  ├─ action_source_compiler.py
+│     │  │  └─ completion_service.py
+│     │  └─ export/
+│     │     ├─ output_service.py
+│     │     ├─ portable_service.py
+│     │     ├─ final_export_service.py
+│     │     └─ export_guard_service.py
+│     │
+│     ├─ py_io/                        # 文件与协议编解码
+│     │  ├─ __init__.py
+│     │  ├─ codecs/
+│     │  │  ├─ bin_codec.py
+│     │  │  ├─ json_codec.py
+│     │  │  ├─ csv_codec.py
+│     │  │  ├─ canonical_json.py
+│     │  │  └─ crc32.py
+│     │  ├─ layout/
+│     │  │  ├─ project_layout.py
+│     │  │  ├─ mode_paths.py
+│     │  │  └─ path_naming.py
+│     │  ├─ persistence/
+│     │  │  ├─ atomic_writer.py
+│     │  │  └─ repository.py
+│     │  └─ migration/
+│     │     ├─ v35_reader.py
+│     │     ├─ v35_to_manual.py
+│     │     ├─ v35_to_semi_auto.py
+│     │     └─ old_v40_layout_migration.py
+│     │
+│     ├─ py_workers/                   # 后台任务
+│     │  ├─ __init__.py
+│     │  ├─ worker_process.py
+│     │  ├─ worker_protocol.py
+│     │  ├─ cancellation.py
+│     │  └─ task_registry.py
+│     │
+│     ├─ py_utils/
+│     │  ├─ __init__.py
+│     │  ├─ hashing.py
+│     │  ├─ yaw.py
+│     │  ├─ numeric.py
+│     │  └─ logging.py
+│     │
+│     └─ py_legacy/                    # 只允许读取/迁移，不进入正式流程
+│        ├─ __init__.py
+│        └─ v35_import/
+│           ├─ __init__.py
+│           ├─ legacy_models.py
+│           └─ legacy_json_reader.py
+│
+├─ tests/
+│  ├─ unit/
+│  ├─ integration/
+│  ├─ gui/
+│  ├─ regression/
+│  └─ fixtures/
+├─ docs/
+├─ examples/
+└─ scripts/
+
+强制规则：
+
+- 根目录除hjmb_path_editor.py外不再保留业务.py文件；
+- batch_generator.py、path_models.py、trajectory_planner.py等根目录旧文件必须移动或删除；
+- src/hjmb_pathgen/legacy/v35旧整套业务不得继续被正式入口import；
+- 所有正式import改到py_*目录；
+- 不允许移动后在旧位置保留一套重复实现；
+- 如需短期兼容，只能保留薄shim并标记deprecated，最终测试不得走shim；
+- 每个文件职责单一，建议不超过约500行，超过需说明；
+- UI文件不得实现碰撞、优化、BIN编码；
+- planning不得依赖PySide6；
+- py_io不得依赖UI；
+- services协调各层，不复制算法。
+
+==================================================
+四、运行项目目录结构
+==================================================
+
+HJMB_Path_Project/
+├─ project.json
+├─ traj_id.csv
+├─ route_case_table.json
+├─ leg_library.json
+├─ presets/
+│  └─ *.site_poses.json
+├─ cases/
+│  ├─ manual/
+│  │  └─ Pxxxx.json
+│  ├─ semi_auto/
+│  │  └─ Pxxxx.json
+│  └─ full_auto/
+│     └─ Pxxxx.json
+├─ bin/
+│  ├─ manual/
+│  │  └─ Pxxxx.BIN
+│  ├─ semi_auto/
+│  │  └─ Pxxxx.BIN
+│  ├─ full_auto/
+│  │  └─ Pxxxx.BIN
+│  └─ final/
+│     └─ Pxxxx.BIN
+├─ portable/
+│  ├─ manual/
+│  ├─ semi_auto/
+│  └─ full_auto/
+├─ reports/
+│  ├─ cases/
+│  ├─ batch/
+│  ├─ optimization/
+│  └─ final/
+├─ drafts/
+├─ cache/
+└─ project.log
+
+目录语义：
+
+- manual：人工全部点和动作，不优化几何；
+- semi_auto：人工8点和动作，优化路段；
+- full_auto：只按traj_id自动生成；
+- final：用户明确选择某一模式并完整验证后的比赛文件。
+
+旧目录迁移：
+
+    manual_free   -> manual
+    task_compiled -> full_auto
+    cases/Pxxxx   -> 根据generation_mode显式迁移
+    bin/Pxxxx     -> 根据对应Case显式迁移
+
+不得静默猜测。
+
+==================================================
+五、两个核心GUI页面
+==================================================
+
+页面1：路径编辑
+
+- 保留V3.5成熟场地交互；
+- 顶部选择MANUAL/SEMI_AUTO/FULL_AUTO；
+- 同一画布显示当前模式；
+- 统一点表、动作表和路径预览；
+- FULL_AUTO结果默认只读；
+- 修改FULL_AUTO时提示转为SEMI_AUTO副本。
+
+页面2：最优路段与批量生成
+
+- 当前Case状态；
+- leg列表；
+- 优化当前/缺失/全部；
+- 清除当前最优leg；
+- 生成当前ID；
+- 生成全部360；
+- 验证当前/全部；
+- 进度和取消；
+- 报告。
+
+设置类内容通过：
+- 菜单；
+- 工具栏；
+- 对话框；
+- 可折叠Dock；
+
+不再建立大量空壳Tab。
+
+==================================================
+六、顶部工具栏统一语义
+==================================================
+
+建议按钮：
+
+    新建V4项目
+    打开V4项目
+    保存项目配置
+    打开Case
+    保存当前Case JSON
+    模式选择
+    traj_id
+    生成/更新当前路径
+    验证当前路径
+    导出当前BIN
+    设为最终版本
+    撤销
+    重做
+
+任何按钮不得输出V3.5。
+
+==================================================
+七、V4 JSON/BIN输出
+==================================================
+
+公共JSON：
+
+    project.json
+    route_case_table.json
+    leg_library.json
+    presets/*.site_poses.json
+
+Case JSON：
+
+    cases/manual/Pxxxx.json
+    cases/semi_auto/Pxxxx.json
+    cases/full_auto/Pxxxx.json
+
+BIN：
+
+    bin/manual/Pxxxx.BIN
+    bin/semi_auto/Pxxxx.BIN
+    bin/full_auto/Pxxxx.BIN
+    bin/final/Pxxxx.BIN
+
+Portable：
+
+    portable/manual/Pxxxx.portable.json
+    portable/semi_auto/Pxxxx.portable.json
+    portable/full_auto/Pxxxx.portable.json
+
+BIN结构不改变：
+
+    version=40
+    Header=104
+    Node=16
+    Segment=24
+    Action=22
+
+==================================================
+八、模式内部语义
+==================================================
+
+MANUAL：
+
+- 任意START/WAYPOINT/ARRIVAL；
+- 用户设置全部动作；
+- 不移动点、不搜索最短几何；
+- 确定性平滑、速度规划、碰撞、动作编译；
+- 可正式输出V4。
+
+SEMI_AUTO：
+
+- 8个逻辑任务锚点；
+- 用户设置顺序、yaw和动作；
+- 锚点不移动；
+- 优化锚点间曲线和yaw窗口；
+- 可加入人工初值/拓扑门；
+- 使用leg_library。
+
+FULL_AUTO：
+
+- 用户对单条只选择traj_id；
+- 根据项目场地和任务映射生成任务；
+- 自动候选、动作、路段优化和选择；
+- 支持当前ID/360；
+- 结果显示在第一页；
+- 人工修改时转为SEMI_AUTO副本。
+
+==================================================
+九、最终说明
+==================================================
+
+此结构是一次性重构目标，不建议继续在当前LegacyV4MainWindow上增加更多临时按钮。
+
+建议使用Codex完成，因为涉及：
+- 大量文件移动；
+- import重写；
+- 协议JSON语义调整；
+- 三种模式；
+- GUI重构；
+- 旧数据迁移；
+- 测试更新。
+
+直接逐文件输出容易漏改引用、测试和迁移逻辑。

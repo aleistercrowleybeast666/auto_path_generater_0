@@ -9,7 +9,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-from hjmb_pathgen.codec.canonical_json import canonical_json_bytes, canonical_json_crc32
+from hjmb_pathgen.py_io.codecs.canonical_json import canonical_json_bytes, canonical_json_crc32
 
 
 class CanonicalJsonTest(unittest.TestCase):

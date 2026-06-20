@@ -7,7 +7,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-from hjmb_pathgen.codec.binary_layout import (
+from hjmb_pathgen.py_io.codecs.binary_layout import (
     ACTION_FMT,
     CRC32_OFFSET,
     HEADER_FIELD_NAMES,
@@ -16,10 +16,10 @@ from hjmb_pathgen.codec.binary_layout import (
     decode_compiled_trajectory,
     encode_compiled_trajectory,
 )
-from hjmb_pathgen.codec.crc32 import crc32_ieee
-from hjmb_pathgen.codec.fixtures import minimal_compiled_trajectory, minimal_bin_bytes
-from hjmb_pathgen.models.errors import V40ValidationError
-from hjmb_pathgen.models.protocol import ACTION_SIZE, HEADER_SIZE, SEGMENT_SIZE
+from hjmb_pathgen.py_io.codecs.crc32 import crc32_ieee
+from hjmb_pathgen.py_io.codecs.fixtures import minimal_compiled_trajectory, minimal_bin_bytes
+from hjmb_pathgen.py_domain.errors import V40ValidationError
+from hjmb_pathgen.py_domain.protocol import ACTION_SIZE, HEADER_SIZE, SEGMENT_SIZE
 
 FIXTURE_ROOT = Path(__file__).resolve().parents[1] / "fixtures" / "v40"
 

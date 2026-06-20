@@ -1,187 +1,45 @@
-# AGENTS.md
+# HJMB Path Generator V4.0 项目约束
 
-## Purpose
+本仓库只实现 V4.0 桌面路径生成软件。BIN 协议保持 version 40，结构大小固定为 Header 104、Node 16、Segment 24、Action 22 字节。
 
-This repository builds the HJMB bean-carrying robot V4.0 offline path editor, optimizer, batch compiler, and BIN encoder.
-Codex must treat this file as persistent project instructions and use `TARGET.md` as the phased delivery plan.
+## 当前架构
 
-## Read first
+- 用户模式只有 `MANUAL`、`SEMI_AUTO`、`FULL_AUTO`。
+- 正式 Python 业务代码只放在 `src/hjmb_pathgen/py_*` 包中；根目录只允许薄入口 `hjmb_path_editor.py`。
+- 正式入口不得导入 `py_legacy`；旧 V3.5 仅允许作为显式迁移输入。
+- GUI 只有“路径编辑”和“最优路段与批量生成”两个核心页面。
+- 编辑只标记 `STALE`，不得自动运行耗时规划。
 
-Before changing code, read in this order:
+## 数据语义
 
-1. `AGENTS.md`
-2. `TARGET.md`
-3. `HJMB_path_file_protocol_v4.0.txt`
-4. current tests and repository README
-5. only then inspect implementation files
+- 项目公共姿态恰好为 `P_START`、`P_PICK_1`、`P_PICK_2L`、`P_PICK_2R`、`P_PICK_3`。
+- Case 逻辑锚点为上述 5 点和 `P_DROP_1/2/3`，共 8 点。
+- `P_PICK_2L/R` 是同一物理 PICK_2 的两个接近姿态。
+- 5 个物理放货箱只属于 `project.field_objects.drop_boxes`，不得伪装为路线 site。
+- `traj_id.csv` 是 360 映射的唯一权威。
 
-The V4.0 protocol is the source of truth. Do not silently change protocol fields, sizes, enum values, JSON formats, hashes, or semantics.
-If a protocol inconsistency is found, stop and report it before changing code.
+## 模式规则
 
-## Scope
+- `MANUAL`：点和动作由用户给出；不移动点、不搜索几何；仍执行确定性曲线、速度规划、碰撞、动作编译和完整验证。
+- `SEMI_AUTO`：保存完整 8 锚点；锚点锁定；优化锚点间曲线和 yaw，使用 `leg_library`。
+- `FULL_AUTO`：按 traj_id 生成任务、候选、动作和路段，选择总时间最短的可行方案；结果只读。
+- `FULL_AUTO -> SEMI_AUTO` 必须显式复制，保留来源 hash，绝不修改或覆盖原全自动 Case。
 
-Implement the desktop path-generation software only.
-Do not implement STM32 firmware in this repository.
-Firmware field-size compensation is only an interface/documentation concern here.
+## 输出目录
 
-## Baseline reality
+Case、BIN、portable 分别写入 `manual/`、`semi_auto/`、`full_auto/`。只有人工明确选择并通过完整验证与审批后，才写 `bin/final/`。旧平铺、`manual_free/`、`task_compiled/` 只由显式迁移器读取；迁移不得覆盖、不得猜测，必须支持 dry-run 和报告。
 
-The uploaded/current codebase may still be V3.3 even when newer design documents exist.
-Verify actual code before assuming a feature is implemented.
-Do not claim V4.0 support until tests prove it.
+## 完赛与动作
 
-## Non-negotiable behavior
+- START 速度为零，每个 ARRIVAL 必停。
+- 机械动作严格 FIFO；支持 STOP_AND_WAIT、ASYNC、KINEMATIC。
+- 最终动作必须是 DROP_1/2/3/12/23 的 STOP_AND_WAIT，并绑定最终唯一 `FINISH_ARM` ARRIVAL。
+- 正式输出中 `SAFE_END`、`FINISH_CLEAR` 和旧 finish 字段必须为零。
 
-- V4.0 is incompatible with V3.x JSON/BIN.
-- Reject legacy formats clearly; do not silently migrate them.
-- No CUT_IN runtime path.
-- START velocity is zero.
-- Every ARRIVAL is a full stop.
-- BIN `vx/vy/wz` are exact feedforward targets, never speed limits.
-- `ASYNC` actions have no trigger position.
-- `KINEMATIC` actions have no user window or expiry; only generated `check_start_s_mm` and `stable_time_ms`.
-- Mechanical actions are strict FIFO and complete by module `DONE` plus optional `post_wait_ms`.
-- Competition completion occurs at the final drop only: the last drop ARRIVAL is the unique `FINISH_ARM` point, and completion is emitted only after the final `DROP_*` STOP_AND_WAIT action reports `DONE`, its `post_wait_ms` has elapsed, the action FIFO is empty, and the chassis remains stopped.
-- Formal V4.0 competition output must not generate `SAFE_END`, `FINISH_CLEAR`, half-plane crossing, or a post-drop clearing segment.
-- Editing must never auto-run heavy planning. Mark results `STALE` and wait for an explicit user command.
-- A high candidate speed is not a global planning failure. Reduce speed, propagate constraints, subdivide, and retry.
-- `traj_id.csv` is the only authority for the 360 mappings.
-- Single-case and batch generation must use the same compiler and produce byte-identical BIN for the same case and inputs.
+## 修改与验证
 
-## Protocol constants
-
-Do not change without an explicit protocol revision:
-
-- Header V40: 104 bytes
-- Node V40: 16 bytes
-- Segment V40: 24 bytes
-- Action V40: 22 bytes
-- BIN version: 40
-- field nominal size: 4000 x 2000 mm
-- competition traj_id: 0..359
-
-Finish-related packed fields remain in place for binary-layout compatibility:
-
-- the only valid formal completion mode is `FINISH_MODE_AT_FINAL_DROP`
-- the old `SAFE_END` node flag is reserved and must be zero
-- the old `FINISH_CLEAR` segment flag is reserved and must be zero
-- legacy half-plane/braking finish fields remain packed but must be zero in formal V4.0 output
-
-Use the exact `struct` formats from the protocol and assert `struct.calcsize` in tests.
-
-## Project architecture target
-
-Prefer a package layout with separate concerns:
-
-- models
-- codec
-- task compilation
-- geometry
-- collision
-- planning
-- batch/cache/reporting
-- providers
-- UI/workers
-
-Do not keep adding unrelated behavior to one large Qt window module.
-Keep pure computation independent of PySide6 wherever possible.
-
-## Data ownership
-
-- `project.json`: shared manual configuration
-- `route_case_table.json`: normalized CSV mapping
-- `leg_library.json`: optimized reusable directed legs
-- `cases/Pxxxx.json`: compiled case manifests
-- `bin/Pxxxx.BIN`: final executable path
-
-Do not duplicate optimized dense legs into all referenced Case JSON files.
-Portable single-case JSON may embed resolved legs.
-
-## Geometry and collision
-
-Support all three footprint models:
-
-1. large circle for cylinders
-2. small circle for drop boxes
-3. truncated large circle for pickup boxes: `u^2 + v^2 <= R_large^2` and `u <= R_small`
-
-Collision checking must cover continuous segments, not only sampled nodes.
-S-shaped obstacle routing is enforced by ordered virtual topology gates.
-Virtual gates never appear in the BIN.
-
-## Route/task constraints
-
-Automatic pickup route families are limited to:
-
-- `PICK_1_TO_3`: START -> PICK_1 -> PICK_2L -> PICK_3
-- `PICK_3_TO_1`: START -> PICK_3 -> PICK_2R -> PICK_1
-
-Drop planning must account for physical drop site, vehicle bin mask, single/dual unload, and continuous yaw.
-Allowed unload masks: BIN_1, BIN_2, BIN_3, BIN_12, BIN_23.
-Never generate BIN_13 or BIN_123.
-
-The final task action must be one of `DROP_1`, `DROP_2`, `DROP_3`, `DROP_12`, or `DROP_23`, must use `STOP_AND_WAIT`, and must be bound to the final `FINISH_ARM` ARRIVAL. No motion segment or task action may follow it.
-
-## Planning rules
-
-- Optimize time, not distance or energy.
-- Reuse identical directed legs.
-- Keep START/ARRIVAL boundary velocities zero.
-- Prefer yaw rotation in low-speed windows, but collision and true total time decide the result.
-- Speed parameterization should operate on `z = v^2` with forward reachable and backward controllable propagation.
-- Final verification must check speed, total acceleration, lateral acceleration, angular velocity, angular acceleration, wheel rpm, topology, and collision.
-
-## UI and long-running jobs
-
-- No 220 ms or similar automatic replanning timer.
-- Long planning must run outside the Qt main thread, preferably in a worker process.
-- Provide progress, stage text, current item, best time, elapsed time, warnings, errors, and cancellation.
-- Never leave partially written JSON/BIN files.
-- Use temporary files and atomic replace after validation.
-
-## Testing requirements
-
-For each phase:
-
-- add or update tests before claiming completion
-- run the relevant tests
-- report exact commands and results
-- keep existing passing behavior unless the phase intentionally replaces it
-
-Mandatory eventual coverage:
-
-- all V40 struct sizes
-- CRC vector
-- JSON round trips
-- BIN round trips
-- legacy rejection
-- 360 CSV mapping validation
-- single vs batch byte identity
-- speed-planner no-false-failure properties
-- continuous collision cases
-- final-drop completion ordering and blocking behavior
-- rejection of nonzero reserved `SAFE_END` / `FINISH_CLEAR` bits and legacy finish modes
-- cancellation and atomic write behavior
-
-## Repository hygiene
-
-- Do not commit `.venv`, `__pycache__`, generated BIN/JSON batches, caches, logs, or build outputs.
-- Use official Windows x64 CPython 3.14 as the primary development environment; Python 3.13 compatibility is desirable. Do not use MSYS2/MinGW Python for the PySide6 environment.
-- Keep dependencies minimal and declared.
-- Do not vendor third-party packages.
-- Preserve UTF-8 without BOM for JSON/Markdown/Python source unless an external input requires BOM handling.
-
-## Working method
-
-Follow `TARGET.md` phase order.
-Do not attempt all phases in one unreviewable rewrite.
-At the start of a phase:
-
-1. inspect current implementation
-2. state the files to change
-3. identify protocol/test implications
-4. implement the smallest coherent slice
-5. run tests
-6. summarize completed, incomplete, and risks
-
-When a requirement is ambiguous, do not invent a hidden rule. Surface the ambiguity and use an explicit configuration or enum.
+- 保持纯计算层不依赖 PySide6，UI 不实现优化、碰撞或 BIN 编码。
+- 文件写入先验证再原子替换，不留下半写结果。
+- 新增或修改行为必须有测试；报告准确命令和结果。
+- 不提交缓存、生成的 Case/BIN、日志、build/dist/release。
+- 本轮不得运行 PyInstaller，不得生成 exe 或发布 zip。

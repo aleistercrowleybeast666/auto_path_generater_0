@@ -7,9 +7,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-from hjmb_pathgen.models.errors import V40ValidationError
-from hjmb_pathgen.models.project import ProjectV40
-from hjmb_pathgen.services.project_config_service import compute_project_functional_hashes, validate_project_site_configuration
+from hjmb_pathgen.py_domain.errors import V40ValidationError
+from hjmb_pathgen.py_domain.project import ProjectV40
+from hjmb_pathgen.py_services.project_config_service import compute_project_functional_hashes, validate_project_site_configuration
 
 FIXTURE_ROOT = Path(__file__).resolve().parents[1] / "fixtures" / "v40"
 
@@ -30,16 +30,25 @@ class Phase4ProjectConfigTest(unittest.TestCase):
         self.assertEqual(report.missing_unload_profiles, ())
         self.assertIn("site_config_hash", report.functional_hashes)
 
-    def test_sites_must_be_exact_ten_keys_and_drop_has_no_yaw(self):
+    def test_sites_are_exact_five_shared_poses_and_drop_boxes_are_objects(self):
         data = project_dict()
         data["sites"]["EXTRA"] = {"configured": True, "x_mm": 0, "y_mm": 0}
-        with self.assertRaisesRegex(V40ValidationError, "exactly the ten"):
+        with self.assertRaisesRegex(V40ValidationError, "exactly the five"):
             ProjectV40.from_dict(data)
 
         data = project_dict()
-        data["sites"]["F_DROP_4"]["yaw_ddeg"] = 0
-        with self.assertRaisesRegex(V40ValidationError, "unknown fields"):
+        data["sites"]["F_DROP_4"] = {"configured": True, "x_mm": 0, "y_mm": 0}
+        with self.assertRaisesRegex(V40ValidationError, "exactly the five"):
             ProjectV40.from_dict(data)
+
+        project = ProjectV40.from_dict(project_dict())
+        self.assertEqual(len(project.sites), 5)
+        self.assertEqual(len(project.field_objects["pickup_boxes"]), 3)
+        self.assertEqual(len(project.field_objects["drop_boxes"]), 5)
+        self.assertEqual(
+            [item["physical_pick_site"] for item in project.field_objects["pickup_boxes"]],
+            ["PICK_1", "PICK_2", "PICK_3"],
+        )
 
     def test_configured_false_is_explicit_not_zero_sentinel(self):
         data = project_dict()
@@ -49,7 +58,8 @@ class Phase4ProjectConfigTest(unittest.TestCase):
         project = ProjectV40.from_dict(data)
         report = validate_project_site_configuration(project)
         self.assertIn("P_PICK_1", report.missing_sites)
-        self.assertFalse(report.ready_for_manual_planning)
+        self.assertTrue(report.ready_for_manual_planning)
+        self.assertFalse(report.ready_for_full_360_planning)
 
     def test_functional_hash_ignores_notes(self):
         first = ProjectV40.from_dict(project_dict())

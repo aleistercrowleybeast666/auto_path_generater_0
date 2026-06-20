@@ -7,10 +7,10 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-from hjmb_pathgen.models.errors import V40ValidationError
-from hjmb_pathgen.models.leg import LegLibraryV40
-from hjmb_pathgen.models.project import ProjectV40
-from hjmb_pathgen.models.route_case import CaseManifestV40, PortableCaseV40, RouteCaseTableV40
+from hjmb_pathgen.py_domain.errors import V40ValidationError
+from hjmb_pathgen.py_domain.leg import LegLibraryV40
+from hjmb_pathgen.py_domain.project import ProjectV40
+from hjmb_pathgen.py_domain.route_case import CaseManifestV40, PortableCaseV40, RouteCaseTableV40
 
 FIXTURE_ROOT = Path(__file__).resolve().parents[1] / "fixtures"
 

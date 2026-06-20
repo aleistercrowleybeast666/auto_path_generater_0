@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 import sys
 import tempfile
 import unittest
@@ -10,111 +11,124 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QPushButton
 
-from hjmb_pathgen.services.example_project_service import create_synthetic_example_project
-from hjmb_pathgen.ui.field_view import FIELD_SCALE
-from hjmb_pathgen.ui.graphics_items import DragCommit, YawCommit
-from hjmb_pathgen.ui.main_window import V4MainWindow
+from hjmb_pathgen.py_domain.enums import GenerationMode
+from hjmb_pathgen.py_io.codecs.json_codec import load_case
+from hjmb_pathgen.py_io.layout.project_layout import ProjectLayout
+from hjmb_pathgen.py_services.case_draft_service import generate_case_draft
+from hjmb_pathgen.py_services.example_project_service import create_synthetic_example_project
+from hjmb_pathgen.py_services.mode_case_service import convert_full_auto_to_semi_auto
+from hjmb_pathgen.py_ui.field_view import FIELD_SCALE
+from hjmb_pathgen.py_ui.graphics_items import DragCommit, YawCommit
+from hjmb_pathgen.py_ui.main_window import V4MainWindow
 
 
 class V40GuiInteractionTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication([])
-        cls.source_traj = Path(__file__).resolve().parents[2] / "traj_id.csv"
+        cls._template_tmp = tempfile.TemporaryDirectory()
+        cls.template_root = Path(cls._template_tmp.name) / "template"
+        source_traj = Path(__file__).resolve().parents[2] / "traj_id.csv"
+        create_synthetic_example_project(
+            cls.template_root,
+            source_traj_csv=source_traj,
+            generate_outputs=False,
+        )
+        generate_case_draft(ProjectLayout.open(cls.template_root), 0)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._template_tmp.cleanup()
 
     def _window_with_project(self):
         tmp = tempfile.TemporaryDirectory()
         root = Path(tmp.name) / "project"
-        create_synthetic_example_project(root, source_traj_csv=self.source_traj, generate_outputs=False)
+        shutil.copytree(self.template_root, root)
         window = V4MainWindow(root)
         self.addCleanup(window.close)
         self.addCleanup(tmp.cleanup)
         return window
 
-    def test_open_project_populates_real_field_models(self):
+    def test_open_project_populates_two_page_v4_field(self):
         window = self._window_with_project()
-        self.assertEqual(window.tabs.count(), 9)
+        self.assertEqual(window.tabs.count(), 2)
         self.assertFalse(window.cancel_button.isEnabled())
         self.assertTrue(window.log_dock.isHidden())
-        self.assertEqual(window.project_sites_tab.model.rowCount(), 10)
-        self.assertEqual(window.route_leg_tab.model.rowCount(), 66)
-        self.assertEqual(window.task_cases_tab.model.rowCount(), 360)
-        view = window.project_sites_tab.field_view
+        self.assertEqual(len(window.context.state.project.sites), 5)
+        self.assertGreater(window.optimization_batch_page.leg_table.rowCount(), 0)
+
+        view = window.path_editor_page.field_view
         self.assertAlmostEqual(view.world_to_scene(-2000, 1000).x(), 0.0)
         self.assertAlmostEqual(view.world_to_scene(-2000, 1000).y(), 0.0)
         self.assertAlmostEqual(view.world_to_scene(2000, -1000).x(), 4000 * FIELD_SCALE)
         self.assertAlmostEqual(view.world_to_scene(2000, -1000).y(), 2000 * FIELD_SCALE)
         self.assertEqual(view.scene_to_world_int(view.world_to_scene(123, -456)), (123, -456))
-        scene_rect = view.scene_obj.sceneRect()
-        self.assertGreater(scene_rect.width(), 1000)
-        self.assertLess(scene_rect.width(), 1120)
-        self.assertGreater(scene_rect.width(), scene_rect.height() * 1.75)
-        dump = window.scene_dumps()["project_sites"]
+        dump = window.scene_dumps()["path_editor"]
         self.assertEqual(dump["field_boundary_count"], 1)
-        self.assertGreaterEqual(dump["grid_line_count"], 20)
         self.assertEqual(dump["cylinder_count"], 2)
         self.assertEqual(dump["pickup_box_count"], 3)
         self.assertEqual(dump["drop_box_count"], 5)
-        self.assertEqual(dump["site_count"], 10)
-        self.assertEqual(dump["site_yaw_handle_count"], 5)
 
-    def test_fixed_site_double_click_drag_yaw_and_no_worker(self):
+        button_texts = {button.text() for button in window.findChildren(QPushButton)}
+        for expected in (
+            "新建V4项目",
+            "打开V4项目",
+            "保存项目配置",
+            "保存当前Case JSON",
+            "生成/更新当前路径",
+            "验证当前路径",
+            "导出当前BIN",
+            "设为最终版本",
+        ):
+            self.assertIn(expected, button_texts)
+        self.assertFalse(any("V3.5" in text for text in button_texts))
+
+    def test_manual_sparse_path_drag_yaw_marks_stale_without_worker(self):
         window = self._window_with_project()
-        tab = window.project_sites_tab
-        tab.select_site("P_START")
-        tab.set_site_from_world("P_START", 123, 456)
-        site = window._state.project.sites["P_START"]  # noqa: SLF001 - interaction regression test.
-        self.assertEqual((site["x_mm"], site["y_mm"], site["configured"]), (123, 456, True))
+        page = window.path_editor_page
+        page.add_point("START", 0, 0)
+        page.add_point("WAYPOINT", 100, 100)
+        page.add_point("ARRIVAL", 200, 100)
+        self.assertEqual(len(page.points), 3)
+        dump = window.scene_dumps()["path_editor"]
+        self.assertEqual(dump["manual_point_count"], 3)
+        self.assertEqual(dump["manual_yaw_handle_count"], 2)
+
+        page._position_preview(1, 120, 130)  # noqa: SLF001
+        page._position_committed(DragCommit(1, 100, 100, 120, 130))  # noqa: SLF001
+        self.assertEqual((page.points[1].x_mm, page.points[1].y_mm), (120, 130))
+        page._yaw_preview(2, -450)  # noqa: SLF001
+        page._yaw_committed(YawCommit(2, 0, -450))  # noqa: SLF001
+        self.assertEqual(page.points[2].yaw_ddeg, -450)
         self.assertIsNone(window._worker)  # noqa: SLF001
         self.assertEqual(window.dirty_status.text(), "dirty / STALE")
 
-        tab._site_position_preview("P_START", 150, 470)  # noqa: SLF001
-        tab._site_position_committed(DragCommit("P_START", 123, 456, 150, 470))  # noqa: SLF001
-        self.assertEqual((site["x_mm"], site["y_mm"]), (150, 470))
-
-        tab._site_yaw_preview("P_START", 900)  # noqa: SLF001
-        tab._site_yaw_committed(YawCommit("P_START", 0, 900))  # noqa: SLF001
-        self.assertEqual(site["yaw_ddeg"], 900)
-        self.assertNotIn("F_DROP_4", tab.field_view.site_yaw_items)
-
-        tab.undo_stack.undo()
-        self.assertEqual(site["yaw_ddeg"], 0)
-        tab.undo_stack.redo()
-        self.assertEqual(site["yaw_ddeg"], 900)
-
-    def test_manual_free_sparse_path_interaction(self):
+    def test_full_auto_is_read_only_and_converts_to_semi_auto_copy(self):
         window = self._window_with_project()
-        tab = window.manual_free_tab
-        tab.add_point("START", 0, 0)
-        tab.add_point("WAYPOINT", 100, 100)
-        tab.add_point("ARRIVAL", 200, 100)
-        self.assertEqual(len(tab.points), 3)
-        dump = window.scene_dumps()["manual_free"]
-        self.assertEqual(dump["manual_point_count"], 3)
-        self.assertEqual(dump["manual_yaw_handle_count"], 2)
-        self.assertGreaterEqual(dump["sparse_path_count"], 2)
+        window._set_mode_combo(GenerationMode.FULL_AUTO)  # noqa: SLF001
+        window._sync_mode_and_traj()  # noqa: SLF001
+        page = window.path_editor_page
+        self.assertFalse(page.field_view.editable)
+        self.assertEqual(len(page.points), 8)
+        full_path = window.context.state.layout.case_json_path_for_mode(0, GenerationMode.FULL_AUTO)
+        full_before = full_path.read_bytes()
 
-        tab._position_preview(1, 120, 130)  # noqa: SLF001
-        tab._position_committed(DragCommit(1, 100, 100, 120, 130))  # noqa: SLF001
-        self.assertEqual((tab.points[1].x_mm, tab.points[1].y_mm), (120, 130))
-        tab._yaw_preview(2, -450)  # noqa: SLF001
-        tab._yaw_committed(YawCommit(2, 0, -450))  # noqa: SLF001
-        self.assertEqual(tab.points[2].yaw_ddeg, -450)
-        self.assertIsNone(window._worker)  # noqa: SLF001
+        converted = convert_full_auto_to_semi_auto(window.context.state.layout, 0)
+        self.assertEqual(converted.generation_mode, GenerationMode.SEMI_AUTO)
+        self.assertEqual(len(converted.logical_points), 8)
+        self.assertEqual(converted.derived_from["generation_mode"], "FULL_AUTO")
+        self.assertEqual(full_path.read_bytes(), full_before)
+        semi_path = window.context.state.layout.case_json_path_for_mode(0, GenerationMode.SEMI_AUTO)
+        self.assertTrue(semi_path.exists())
+        self.assertEqual(load_case(semi_path).review["state"], "STALE")
 
-    def test_route_leg_visualization_scene_dump(self):
-        window = self._window_with_project()
-        dump = window.scene_dumps()["route_leg"]
-        self.assertGreaterEqual(dump["dense_path_count"], 1)
-        self.assertGreaterEqual(dump["speed_overlay_count"], 1)
-        self.assertGreaterEqual(dump["collision_footprint_count"], 3)
-        selected = window.route_leg_tab.selected_leg()
-        self.assertIsNotNone(selected)
-        if selected is not None:
-            window.leg_library_tab.openLegRequested.emit(selected.leg_id)
-            self.assertEqual(window.tabs.currentWidget(), window.route_leg_tab)
+        window.load_project_path(window.context.state.layout.root)
+        window._set_mode_combo(GenerationMode.SEMI_AUTO)  # noqa: SLF001
+        window._sync_mode_and_traj()  # noqa: SLF001
+        self.assertTrue(window.path_editor_page.field_view.editable)
+        self.assertEqual(len(window.path_editor_page.points), 8)
 
 
 if __name__ == "__main__":

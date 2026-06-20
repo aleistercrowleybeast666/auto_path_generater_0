@@ -8,8 +8,8 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-from hjmb_pathgen.codec.binary_layout import ACTION_FMT, HEADER_FMT, NODE_FMT, SEGMENT_FMT
-from hjmb_pathgen.models.protocol import ACTION_SIZE, HEADER_SIZE, NODE_SIZE, SEGMENT_SIZE
+from hjmb_pathgen.py_io.codecs.binary_layout import ACTION_FMT, HEADER_FMT, NODE_FMT, SEGMENT_FMT
+from hjmb_pathgen.py_domain.protocol import ACTION_SIZE, HEADER_SIZE, NODE_SIZE, SEGMENT_SIZE
 
 
 class V40StructSizeTest(unittest.TestCase):

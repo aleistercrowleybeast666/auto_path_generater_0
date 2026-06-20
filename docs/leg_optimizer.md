@@ -3,13 +3,13 @@
 The public optimizer entry point is:
 
 ```python
-from hjmb_pathgen.planning.leg_optimizer import optimize_leg
+from hjmb_pathgen.py_planning.optimization.leg_optimizer import optimize_leg
 ```
 
 The service entry points are:
 
 ```python
-from hjmb_pathgen.services.leg_optimization_service import (
+from hjmb_pathgen.py_services.leg_optimization_service import (
     leg_request_from_transition,
     optimize_transition_leg,
     optimize_current_case_leg,
@@ -46,4 +46,3 @@ FINAL
 
 `QUICK_PREVIEW` produces `PREVIEW_VALID`; `STANDARD` and `FINAL` produce
 `VALID`.
-

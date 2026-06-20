@@ -10,8 +10,8 @@ Action    22 bytes
 ```
 
 The low-level struct implementation remains in
-`src/hjmb_pathgen/codec/binary_layout.py`. Public APIs are provided by
-`src/hjmb_pathgen/codec/bin_codec.py`:
+`src/hjmb_pathgen/py_io/codecs/binary_layout.py`. Public APIs are provided by
+`src/hjmb_pathgen/py_io/codecs/bin_codec.py`:
 
 ```text
 encode_trajectory(compiled)

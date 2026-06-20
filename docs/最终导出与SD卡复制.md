@@ -1,16 +1,5 @@
 # 最终导出与 SD 卡复制
 
-最终导出只写：
+先在当前模式完成生成、完整验证与审批，再点击“设为最终版本”。源 BIN 位于 `bin/manual`、`bin/semi_auto` 或 `bin/full_auto`，最终文件写入 `bin/final/Pxxxx.BIN`。
 
-```text
-bin/final/Pxxxx.BIN
-```
-
-命令：
-
-```powershell
-python -m hjmb_pathgen.cli export-final --project <project> --traj-id 0 --source TASK_COMPILED
-python -m hjmb_pathgen.cli export-final --project <project> --traj-id 0 --source MANUAL_FREE
-```
-
-导出前必须通过 export guard。未批准、STALE、FAILED、碰撞未通过、保留位非零或旧完赛模式都会阻止导出。
+final 导出会重新检查 Case 非 STALE、审批状态、源 manifest、BIN 回读和最终放货完赛条件。目标已存在时必须由用户确认覆盖。复制到 SD 卡前应以 `bin/final` 为唯一来源。

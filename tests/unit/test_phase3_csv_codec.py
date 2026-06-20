@@ -7,8 +7,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from hjmb_pathgen.codec.csv_codec import parse_traj_id_csv_bytes, reconstruct_semantic_row
-from hjmb_pathgen.models.errors import CsvFormatError, CsvValidationError
+from hjmb_pathgen.py_io.codecs.csv_codec import parse_traj_id_csv_bytes, reconstruct_semantic_row
+from hjmb_pathgen.py_domain.errors import CsvFormatError, CsvValidationError
 
 from phase3_helpers import make_valid_traj_csv_bytes
 

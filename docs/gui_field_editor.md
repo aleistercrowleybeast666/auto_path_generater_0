@@ -1,6 +1,6 @@
 # GUI Field Editor
 
-The V4 GUI now uses `hjmb_pathgen.ui.field_view.V4FieldView` for all field
+The V4 GUI now uses `hjmb_pathgen.py_ui.field_view.V4FieldView` for all field
 canvases.
 
 Core behavior:

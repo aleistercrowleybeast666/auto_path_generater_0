@@ -1,6 +1,6 @@
 # Phase 2 Atomic Writes
 
-`src/hjmb_pathgen/services/atomic_writer.py` implements same-directory atomic
+`src/hjmb_pathgen/py_io/persistence/atomic_writer.py` implements same-directory atomic
 writes for JSON, BIN, and report files.
 
 ## Write Sequence

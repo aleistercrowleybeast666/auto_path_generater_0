@@ -7,8 +7,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-from hjmb_pathgen.models.enums import NodeFlag
-from hjmb_pathgen.planning.time_parameterization import (
+from hjmb_pathgen.py_domain.enums import NodeFlag
+from hjmb_pathgen.py_planning.dynamics.time_parameterization import (
     GeometrySample,
     SpeedFailureCategory,
     TimeParameterizationLimits,

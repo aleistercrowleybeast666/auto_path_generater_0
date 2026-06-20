@@ -1,23 +1,19 @@
-"""Compatibility launcher for legacy imports and the V4 workflow UI."""
+"""Thin GUI launcher for HJMB Path Generator V4.0."""
 
+from __future__ import annotations
+
+import multiprocessing
 import sys
 from pathlib import Path
 
+
 _SRC = Path(__file__).resolve().parent / "src"
-if _SRC.exists():
+if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
-from hjmb_pathgen.legacy.v35.editor import *  # noqa: F401,F403
-
-
-def main() -> int:
-    from hjmb_pathgen.ui.legacy_shell import main as v4_main
-
-    return v4_main()
+from hjmb_pathgen.py_app.gui_main import main
 
 
 if __name__ == "__main__":
-    import multiprocessing
-
     multiprocessing.freeze_support()
-    main()
+    raise SystemExit(main())

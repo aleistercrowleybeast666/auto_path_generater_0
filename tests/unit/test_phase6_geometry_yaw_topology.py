@@ -7,11 +7,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-from hjmb_pathgen.geometry.bezier import BezierPath, Point2D
-from hjmb_pathgen.geometry.topology_gates import validate_ordered_topology_gates
-from hjmb_pathgen.models.enums import YawPolicy
-from hjmb_pathgen.models.topology import TopologyGate, TopologyGateDirection
-from hjmb_pathgen.planning.yaw_windows import YawWindowProfile, resolve_yaw_delta
+from hjmb_pathgen.py_planning.geometry.bezier import BezierPath, Point2D
+from hjmb_pathgen.py_planning.geometry.topology_gates import validate_ordered_topology_gates
+from hjmb_pathgen.py_domain.enums import YawPolicy
+from hjmb_pathgen.py_domain.topology import TopologyGate, TopologyGateDirection
+from hjmb_pathgen.py_planning.optimization.yaw_windows import YawWindowProfile, resolve_yaw_delta
 
 
 class Phase6GeometryYawTopologyTest(unittest.TestCase):

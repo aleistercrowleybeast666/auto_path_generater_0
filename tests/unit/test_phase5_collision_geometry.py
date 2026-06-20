@@ -8,16 +8,16 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-from hjmb_pathgen.collision.circle_rect import circle_rect_signed_distance
-from hjmb_pathgen.collision.diagnostics import classify_clearance
-from hjmb_pathgen.collision.footprints import clipped_disk_body_vertices, clipped_disk_chord_half_height, clipped_disk_world_vertices, is_convex_ccw
-from hjmb_pathgen.collision.primitives import Circle, OrientedRect, Point2
-from hjmb_pathgen.collision.transforms import body_to_world, rect_vertices, world_to_body
-from hjmb_pathgen.collision.validator import check_pose_collision
-from hjmb_pathgen.models.collision import ClearanceClass, CollisionStatus, RobotPose
-from hjmb_pathgen.models.errors import V40ValidationError
-from hjmb_pathgen.models.project import ProjectV40
-from hjmb_pathgen.services.collision_config_service import build_collision_world
+from hjmb_pathgen.py_planning.collision.circle_rect import circle_rect_signed_distance
+from hjmb_pathgen.py_planning.collision.diagnostics import classify_clearance
+from hjmb_pathgen.py_planning.collision.footprints import clipped_disk_body_vertices, clipped_disk_chord_half_height, clipped_disk_world_vertices, is_convex_ccw
+from hjmb_pathgen.py_planning.collision.primitives import Circle, OrientedRect, Point2
+from hjmb_pathgen.py_planning.collision.transforms import body_to_world, rect_vertices, world_to_body
+from hjmb_pathgen.py_planning.collision.validator import check_pose_collision
+from hjmb_pathgen.py_domain.collision import ClearanceClass, CollisionStatus, RobotPose
+from hjmb_pathgen.py_domain.errors import V40ValidationError
+from hjmb_pathgen.py_domain.project import ProjectV40
+from hjmb_pathgen.py_services.collision_config_service import build_collision_world
 
 FIXTURE_ROOT = Path(__file__).resolve().parents[1] / "fixtures" / "v40"
 

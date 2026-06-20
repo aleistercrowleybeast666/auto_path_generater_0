@@ -1,17 +1,5 @@
-# Output Mode Layout
+# 三模式输出布局
 
-Phase 8 separates working outputs by path source:
+正式输出按 generation_mode 隔离：`cases/<mode>`、`bin/<mode>`、`portable/<mode>`，mode 为 `manual`、`semi_auto`、`full_auto`。比赛选定文件单独写 `bin/final`。
 
-```text
-cases/task_compiled/Pxxxx.json
-cases/manual_free/Pxxxx.json
-bin/task_compiled/Pxxxx.BIN
-bin/manual_free/Pxxxx.BIN
-bin/final/Pxxxx.BIN
-portable/task_compiled/Pxxxx.portable.json
-portable/manual_free/Pxxxx.portable.json
-```
-
-The older flat paths are retained only for compatibility APIs and legacy files. New Phase 7/8 generation uses the mode directories.
-
-`bin/final/` is not a working directory. It is written only by explicit final export after the selected source case passes export guards.
+同 traj_id 三模式可共存且禁止互相覆盖。旧平铺和旧两模式布局只能通过显式迁移器处理。

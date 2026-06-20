@@ -18,8 +18,8 @@ a = Analysis(
     binaries=[],
     datas=datas,
     hiddenimports=[
-        "hjmb_pathgen.ui.main_window",
-        "hjmb_pathgen.cli.__main__",
+        "hjmb_pathgen.py_ui.main_window",
+        "hjmb_pathgen.py_app.cli_main",
         "PySide6.QtCore",
         "PySide6.QtGui",
         "PySide6.QtWidgets",

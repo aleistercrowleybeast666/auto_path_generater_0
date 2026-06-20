@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "hjmb-path-generator"
 version = "4.0.0"
-description = "HJMB V4.0 offline path generator, validator, and BIN encoder with legacy V3.5 compatibility."
+description = "HJMB V4.0 three-mode offline path generator, validator, and BIN encoder."
 readme = "README.md"
 requires-python = ">=3.13,<3.15"
 dependencies = [
@@ -16,8 +16,8 @@ dependencies = [
 test = []
 
 [project.scripts]
-hjmb-path-codec = "hjmb_pathgen.legacy.v35.path_codec_cli:main"
-hjmb-pathgen = "hjmb_pathgen.cli.__main__:main"
+hjmb-path-codec = "hjmb_pathgen.py_app.cli_main:main"
+hjmb-pathgen = "hjmb_pathgen.py_app.cli_main:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

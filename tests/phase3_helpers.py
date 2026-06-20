@@ -10,8 +10,8 @@ from typing import Callable
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from hjmb_pathgen.codec.csv_codec import EXPECTED_TRAJ_HEADERS
-from hjmb_pathgen.models.project import ProjectV40
+from hjmb_pathgen.py_io.codecs.csv_codec import EXPECTED_TRAJ_HEADERS
+from hjmb_pathgen.py_domain.project import ProjectV40
 
 FIXTURE_ROOT = Path(__file__).resolve().parent / "fixtures" / "v40"
 ROOT = Path(__file__).resolve().parents[1]

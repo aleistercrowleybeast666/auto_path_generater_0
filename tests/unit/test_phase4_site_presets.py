@@ -8,10 +8,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-from hjmb_pathgen.codec.json_codec import load_project
-from hjmb_pathgen.models.project import ProjectV40
-from hjmb_pathgen.services.project_service import ProjectLayout
-from hjmb_pathgen.services.site_preset_service import apply_site_pose_preset, export_site_pose_preset, import_site_pose_preset_preview
+from hjmb_pathgen.py_io.codecs.json_codec import load_project
+from hjmb_pathgen.py_domain.project import ProjectV40
+from hjmb_pathgen.py_io.layout.project_layout import ProjectLayout
+from hjmb_pathgen.py_services.site_preset_service import apply_site_pose_preset, export_site_pose_preset, import_site_pose_preset_preview
 
 FIXTURE_ROOT = Path(__file__).resolve().parents[1] / "fixtures" / "v40"
 

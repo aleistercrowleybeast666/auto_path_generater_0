@@ -12,7 +12,7 @@ Clearing a leg:
 Approved or locked legs require a matching confirmation token:
 
 ```bash
-python -m hjmb_pathgen.cli clear-leg-result --project <project> --leg-id <LEG_ID> --confirm-leg-id <LEG_ID>
+hjmb-pathgen clear-leg-result --project <project> --leg-id <LEG_ID> --confirm-leg-id <LEG_ID>
 ```
 
 After clearing, run missing-leg optimization explicitly. Clearing does not automatically replan cases.

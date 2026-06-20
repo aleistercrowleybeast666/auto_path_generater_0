@@ -7,7 +7,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-from hjmb_pathgen.codec.crc32 import crc32_ieee
+from hjmb_pathgen.py_io.codecs.crc32 import crc32_ieee
 
 
 class Crc32Test(unittest.TestCase):

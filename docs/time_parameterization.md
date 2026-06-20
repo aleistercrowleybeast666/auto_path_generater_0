@@ -1,6 +1,6 @@
 # Phase 4 Time Parameterization
 
-Phase 4 adds `hjmb_pathgen.planning.time_parameterization` for finite geometry
+V4 uses `hjmb_pathgen.py_planning.dynamics.time_parameterization` for finite geometry
 that is already defined by manual points or later optimizers.
 
 The module does not optimize geometry and does not perform collision checking.

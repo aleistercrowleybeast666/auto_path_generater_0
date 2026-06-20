@@ -7,13 +7,13 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-from hjmb_pathgen.models.enums import LegState, YawPolicy
-from hjmb_pathgen.models.leg_optimization import LegOptimizationProfileName, LegOptimizationRequest, Pose2D
-from hjmb_pathgen.models.project import ProjectV40
-from hjmb_pathgen.models.task_plan import TransitionRequirement
-from hjmb_pathgen.models.topology import TopologyGate, TopologyGateDirection
-from hjmb_pathgen.planning.leg_optimizer import optimize_leg
-from hjmb_pathgen.services.leg_optimization_service import leg_request_from_transition
+from hjmb_pathgen.py_domain.enums import LegState, YawPolicy
+from hjmb_pathgen.py_domain.leg_optimization import LegOptimizationProfileName, LegOptimizationRequest, Pose2D
+from hjmb_pathgen.py_domain.project import ProjectV40
+from hjmb_pathgen.py_domain.task_plan import TransitionRequirement
+from hjmb_pathgen.py_domain.topology import TopologyGate, TopologyGateDirection
+from hjmb_pathgen.py_planning.optimization.leg_optimizer import optimize_leg
+from hjmb_pathgen.py_services.leg_optimization_service import leg_request_from_transition
 
 FIXTURE_ROOT = Path(__file__).resolve().parents[1] / "fixtures" / "v40"
 
@@ -57,7 +57,7 @@ class Phase6LegOptimizerTest(unittest.TestCase):
             to_state_id="B",
             from_pose=Pose2D(0, 0, 0),
             to_pose=Pose2D(100, 0, 0),
-            route_family="MANUAL_FREE",
+            route_family="MANUAL",
             topology_profile="TEST",
             topology_gates=(gate,),
             profile_name=LegOptimizationProfileName.QUICK_PREVIEW,
@@ -76,7 +76,7 @@ class Phase6LegOptimizerTest(unittest.TestCase):
             to_state_id="B",
             from_pose=Pose2D(0, 0, 0),
             to_pose=Pose2D(100, 0, 0),
-            route_family="MANUAL_FREE",
+            route_family="MANUAL",
             topology_profile="TEST",
             topology_gates=(gate,),
             profile_name=LegOptimizationProfileName.QUICK_PREVIEW,
@@ -120,7 +120,7 @@ class Phase6LegOptimizerTest(unittest.TestCase):
             to_state_id="B",
             from_pose=Pose2D(0, 0, 0),
             to_pose=Pose2D(100, 0, 0),
-            route_family="MANUAL_FREE",
+            route_family="MANUAL",
             topology_profile="NONE",
             profile_name=LegOptimizationProfileName.STANDARD,
             cancel_check=cancel_after_first_batch_check,
@@ -140,7 +140,7 @@ class Phase6LegOptimizerTest(unittest.TestCase):
             to_state_id="B",
             from_pose=Pose2D(0, 0, 0),
             to_pose=Pose2D(100, 0, 0),
-            route_family="MANUAL_FREE",
+            route_family="MANUAL",
             topology_profile="NONE",
             profile_name=LegOptimizationProfileName.STANDARD,
         )

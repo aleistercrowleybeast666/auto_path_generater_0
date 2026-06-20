@@ -9,13 +9,13 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-from hjmb_pathgen.codec.json_codec import load_leg_library
-from hjmb_pathgen.models.enums import LegState
-from hjmb_pathgen.models.leg_optimization import LegOptimizationProfileName, LegOptimizationRequest, Pose2D
-from hjmb_pathgen.models.project import ProjectV40
-from hjmb_pathgen.planning.leg_optimizer import optimize_leg
-from hjmb_pathgen.services.leg_library_service import approve_leg, load_or_create_leg_library, save_leg_library_checked, show_leg, upsert_leg
-from hjmb_pathgen.services.leg_stale_service import mark_stale_legs
+from hjmb_pathgen.py_io.codecs.json_codec import load_leg_library
+from hjmb_pathgen.py_domain.enums import LegState
+from hjmb_pathgen.py_domain.leg_optimization import LegOptimizationProfileName, LegOptimizationRequest, Pose2D
+from hjmb_pathgen.py_domain.project import ProjectV40
+from hjmb_pathgen.py_planning.optimization.leg_optimizer import optimize_leg
+from hjmb_pathgen.py_services.leg_library_service import approve_leg, load_or_create_leg_library, save_leg_library_checked, show_leg, upsert_leg
+from hjmb_pathgen.py_services.leg_stale_service import mark_stale_legs
 
 FIXTURE_ROOT = Path(__file__).resolve().parents[1] / "fixtures" / "v40"
 
@@ -29,7 +29,7 @@ def optimized_leg():
             to_state_id="B",
             from_pose=Pose2D(0, 0, 0),
             to_pose=Pose2D(100, 0, 0),
-            route_family="MANUAL_FREE",
+            route_family="MANUAL",
             topology_profile="NONE",
             profile_name=LegOptimizationProfileName.STANDARD,
         )

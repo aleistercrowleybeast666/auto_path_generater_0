@@ -4,7 +4,7 @@ HJMB 搬运豆子机器人路径工程与执行文件协议 V4.0
 文档状态：正式设计稿
 协议版本：40
 JSON 版本：V40
-日期：2026-06-18
+日期：2026-06-20
 适用范围：路径生成上位机、离线路段优化器、360 Case 编译器、BIN 编解码器；
           STM32 固件后续按本协议实现运行时解析。
 
@@ -20,9 +20,9 @@ V4.0 同时定义：
 1. 公共项目配置 project.json；
 2. traj_id.csv 的规范化映射 route_case_table.json；
 3. 可复用有向优化路段库 leg_library.json；
-4. cases/P0000.json ~ cases/P0359.json；
-5. 单条便携 Case JSON；
-6. bin/P0000.BIN ~ bin/P0359.BIN；
+4. MANUAL、SEMI_AUTO、FULL_AUTO 三种 Case JSON；
+5. 三模式单条便携 Case JSON；
+6. 三模式 BIN 与人工选定的 bin/final；
 7. 单条生成、全 360 条生成、验证、回读和报告规则；
 8. 固定起点、ARRIVAL 必停、机械动作 FIFO；
 9. 三种车体碰撞包络和 S 型拓扑约束；
@@ -51,18 +51,10 @@ V4.0 同时定义：
     ├─ route_case_table.json
     ├─ traj_id.csv
     ├─ leg_library.json
-    ├─ cases/
-    │  ├─ P0000.json
-    │  ├─ P0001.json
-    │  ├─ ...
-    │  └─ P0359.json
-    ├─ bin/
-    │  ├─ P0000.BIN
-    │  ├─ P0001.BIN
-    │  ├─ ...
-    │  └─ P0359.BIN
-    ├─ portable/
-    │  └─ Pxxxx.portable.json
+    ├─ cases/{manual,semi_auto,full_auto}/Pxxxx.json
+    ├─ bin/{manual,semi_auto,full_auto}/Pxxxx.BIN
+    ├─ bin/final/Pxxxx.BIN
+    ├─ portable/{manual,semi_auto,full_auto}/Pxxxx.portable.json
     ├─ reports/
     │  ├─ batch_summary.csv
     │  ├─ validation_report.json
@@ -84,8 +76,7 @@ V4.0 同时定义：
 
 批量生成：
 
-- 必须生成 cases/ 中 360 个 JSON；
-- 必须生成 bin/ 中 360 个 BIN；
+- FULL_AUTO 批量必须生成 full_auto 目录中的 360 个 JSON/BIN；
 - 任一 Case 失败时不得写出未验证的 BIN；
 - 已验证文件必须原子写入，不留下半写文件。
 
@@ -677,32 +668,40 @@ V4.0 推荐“双低速窗口单调 yaw”模型：
 }
 
 
-九、每条路径 JSON：cases/Pxxxx.json
-----------------------------------
+九、每条路径 JSON：cases/<mode>/Pxxxx.json
+------------------------------------------
 
 格式：
 
     HJMB_ROUTE_CASE_JSON_V40
 
-9.1 两种存储模式
-~~~~~~~~~~~~~~~~
+9.1 生成模式与存储模式
+~~~~~~~~~~~~~~~~~~~~~~
+
+    generation_mode = MANUAL | SEMI_AUTO | FULL_AUTO
 
     REFERENCED：引用 leg_library.json，不重复嵌入节点；
     EMBEDDED：便携单条导出，在 embedded_legs 中嵌入全部依赖路段。
 
-cases/ 目录默认使用 REFERENCED。
-portable/Pxxxx.portable.json 使用 EMBEDDED。
+cases/<mode>/ 默认使用 REFERENCED。
+portable/<mode>/Pxxxx.portable.json 使用 EMBEDDED。
+
+旧值 MANUAL_FREE、TASK_COMPILED 和字段 path_source 不是正式 V4 写入格式，
+仅允许显式迁移器读取。STM32 不读取 generation_mode。
 
 9.2 必需内容
 ~~~~~~~~~~~~
 
     format
     storage_mode
+    generation_mode
     traj_id
     bean_code
     drop_code
     source_mapping
     selected_plan
+    logical_points
+    auxiliary_points
     arrival_states
     leg_refs
     actions
@@ -710,6 +709,18 @@ portable/Pxxxx.portable.json 使用 EMBEDDED。
     estimates
     hashes
     review
+
+SEMI_AUTO 与 FULL_AUTO 的 logical_points 必须恰好包含：
+
+    P_START, P_PICK_1, P_PICK_2L, P_PICK_2R, P_PICK_3,
+    P_DROP_1, P_DROP_2, P_DROP_3
+
+MANUAL 使用 manual_path 保存唯一 START、任意 WAYPOINT/ARRIVAL，logical_points 为空。
+SEMI_AUTO 可以保存辅助点，其策略为 LOCKED_PASS、INITIAL_GUESS 或 OPTIMIZABLE。
+FULL_AUTO 由项目、traj_id 和候选生成逻辑点，默认只读。
+
+FULL_AUTO 转成 SEMI_AUTO 时，副本使用 derived_from 保存来源 generation_mode、
+traj_id 和 Case hash；原 FULL_AUTO 文件不得修改。
 
 selected_plan 至少包含：
 
@@ -765,6 +776,7 @@ compiled 中允许包含：
 {
   "format": "HJMB_ROUTE_CASE_JSON_V40",
   "storage_mode": "REFERENCED",
+  "generation_mode": "FULL_AUTO",
   "traj_id": 0,
   "bean_code": 0,
   "drop_code": 0,
@@ -780,6 +792,8 @@ compiled 中允许包含：
     "yaw_direction": "CW_ONLY",
     "locked_by_user": false
   },
+  "logical_points": [],
+  "auxiliary_points": [],
   "arrival_states": [],
   "leg_refs": [],
   "actions": {
@@ -803,14 +817,14 @@ compiled 中允许包含：
 9.5 人工覆盖
 ~~~~~~~~~~~~
 
-人工修改某个 Case 的曲线后：
+人工修改 SEMI_AUTO Case 的曲线或 MANUAL 点列后：
 
     detached_from_library = true
 
 必须保存 override_reason。
 后续批量重生成不得静默覆盖，必须让用户选择：
 
-- 保留覆盖；
+- 保留当前模式；
 - 恢复公共路段；
 - 另存新方案。
 
@@ -1047,7 +1061,7 @@ Python struct：
 13.1 route_family
 ~~~~~~~~~~~~~~~~~
 
-#define ROUTE_FAMILY_MANUAL_FREE       0x00U
+#define ROUTE_FAMILY_MANUAL            0x00U
 #define ROUTE_FAMILY_PICK_1_TO_3       0x01U
 #define ROUTE_FAMILY_PICK_3_TO_1       0x02U
 
@@ -1511,9 +1525,9 @@ source_case_hash32/source_project_hash32：
 
 - 只编译当前 Case；
 - 只优化其缺失/过期 leg；
-- 输出 cases/Pxxxx.json；
-- 输出 bin/Pxxxx.BIN；
-- 可选输出 portable/Pxxxx.portable.json；
+- 输出 cases/<mode>/Pxxxx.json；
+- 输出 bin/<mode>/Pxxxx.BIN；
+- 可选输出 portable/<mode>/Pxxxx.portable.json；
 - 输出单条验证报告。
 
 23.2 全量
@@ -1714,21 +1728,24 @@ automatically start heavy planning.
 
 Site pose presets use `format = HJMB_SITE_POSE_PRESET_JSON_V40` and path
 `presets/<name>.site_poses.json`. A preset stores the MANUAL provider and the
-exact ten-site `sites` object. Import preview, apply, and export must use
+exact five-site `sites` object (`P_START`, `P_PICK_1`, `P_PICK_2L`,
+`P_PICK_2R`, `P_PICK_3`). Import preview, apply, and export must use
 validated JSON and atomic writes. Applying a preset changes site poses only; it
 must not change traj_id mappings, dynamics, action profiles, or route tables.
 
-6. manual free Case
--------------------
+6. three generation modes
+-------------------------
 
-`HJMB_ROUTE_CASE_JSON_V40` includes `path_source = TASK_COMPILED | MANUAL_FREE`
-and `manual_path = null | object`. `TASK_COMPILED` cases set `manual_path` to
-null. `MANUAL_FREE` cases require `selected_plan.route_family = MANUAL_FREE`,
-`review.detached_from_library = true`, a non-empty `review.override_reason`,
-and empty `leg_refs`. The generated BIN keeps version 40 and sets Header
-`route_family` to `MANUAL_FREE` and `FILE_FLAG_MANUAL_OVERRIDE`.
+`HJMB_ROUTE_CASE_JSON_V40` includes
+`generation_mode = MANUAL | SEMI_AUTO | FULL_AUTO` and
+`manual_path = null | object`. MANUAL requires `selected_plan.route_family =
+MANUAL`, `review.detached_from_library = true`, a non-empty
+`review.override_reason`, and empty `leg_refs`. SEMI_AUTO stores eight locked
+logical anchors and uses the shared leg library. FULL_AUTO derives its eight
+logical anchors and actions from project configuration, traj_id, and the chosen
+candidate. The generated BIN remains version 40; generation_mode is not packed.
 
-Manual path point types are `START`, `WAYPOINT`, and `ARRIVAL`. START is first
+MANUAL path point types are `START`, `WAYPOINT`, and `ARRIVAL`. START is first
 and unique, contains x/y/yaw, and has zero velocity. WAYPOINT contains x/y and
 must not define yaw. ARRIVAL contains x/y/yaw and is a full stop. No CUT_IN,
 Gate, trigger window, or runtime path unlock semantics are introduced.

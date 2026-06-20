@@ -9,8 +9,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-from hjmb_pathgen.codec.bin_codec import decode_trajectory, encode_trajectory, load_bin, save_bin
-from hjmb_pathgen.codec.json_codec import (
+from hjmb_pathgen.py_io.codecs.bin_codec import decode_trajectory, encode_trajectory, load_bin, save_bin
+from hjmb_pathgen.py_io.codecs.json_codec import (
     load_case,
     load_leg_library,
     load_portable_case,
@@ -22,12 +22,12 @@ from hjmb_pathgen.codec.json_codec import (
     save_project,
     save_route_case_table,
 )
-from hjmb_pathgen.models.errors import BinaryLayoutError, FilenameMismatchError, JsonFormatError
-from hjmb_pathgen.models.leg import LegLibraryV40
-from hjmb_pathgen.models.project import ProjectV40
-from hjmb_pathgen.models.route_case import CaseManifestV40, PortableCaseV40, RouteCaseTableV40
-from hjmb_pathgen.services.case_compiler import CaseCompileRequest, compile_case_to_trajectory
-from hjmb_pathgen.services.path_naming import bin_name, case_json_name, parse_bin_name, portable_name
+from hjmb_pathgen.py_domain.errors import BinaryLayoutError, FilenameMismatchError, JsonFormatError
+from hjmb_pathgen.py_domain.leg import LegLibraryV40
+from hjmb_pathgen.py_domain.project import ProjectV40
+from hjmb_pathgen.py_domain.route_case import CaseManifestV40, PortableCaseV40, RouteCaseTableV40
+from hjmb_pathgen.py_services.case_compiler import CaseCompileRequest, compile_case_to_trajectory
+from hjmb_pathgen.py_io.layout.path_naming import bin_name, case_json_name, parse_bin_name, portable_name
 
 FIXTURE_ROOT = Path(__file__).resolve().parents[1] / "fixtures" / "v40"
 
