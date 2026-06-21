@@ -18,6 +18,7 @@ from hjmb_pathgen.py_domain.errors import V40ValidationError
 from hjmb_pathgen.py_domain.project import ProjectV40
 
 EPSILON = 1.0e-9
+QUANTIZED_CHORD_TOLERANCE_MM = 3.0
 DDEG_TO_RAD = math.pi / 1800.0
 RAD_TO_DDEG = 1800.0 / math.pi
 
@@ -129,7 +130,9 @@ class TimeParameterizationLimits:
             lateral_accel_mmps2=self.lateral_accel_mmps2 * scale,
             max_wz_ddegps=self.max_wz_ddegps * scale,
             angular_accel_moving_ddegps2=self.angular_accel_moving_ddegps2 * scale,
-            wheel_plan_limit_rpm=self.wheel_plan_limit_rpm * scale,
+            # Wheel RPM is already a direct actuator limit.  Do not apply the
+            # generic dynamics margin a second time; use plan_limit_rpm exactly.
+            wheel_plan_limit_rpm=self.wheel_plan_limit_rpm,
         )
 
 
@@ -351,18 +354,10 @@ def _local_z_caps(samples: tuple[GeometrySample, ...], limits: TimeParameterizat
         effective_curvature = max(abs(item.curvature_1_per_mm) for item in neighborhood)
         if effective_curvature > EPSILON:
             caps.append(("lateral_accel", math.sqrt(limits.lateral_accel_mmps2 / effective_curvature)))
-        if abs(sample.yaw_ddeg_per_mm) > EPSILON:
-            caps.append(("yaw_rate", limits.max_wz_ddegps / abs(sample.yaw_ddeg_per_mm)))
-        # Even with zero tangential acceleration, beta contains q_prime*v^2.
-        # Treat that term as a local speed cap before reachable/controllable
-        # propagation.  Without this cap, evaluating acceleration at an
-        # unrealistically high initial z can collapse a feasible stop interval
-        # to zero and the monotone solver can never recover it.
-        if abs(sample.yaw_ddeg_per_mm2) > EPSILON:
-            caps.append((
-                "yaw_accel_profile",
-                math.sqrt(limits.angular_accel_moving_ddegps2 / abs(sample.yaw_ddeg_per_mm2)),
-            ))
+        # Do not impose separate yaw-rate or yaw-acceleration speed caps.
+        # Rotation is already included in the four-wheel kinematic coefficient
+        # below, so translation is reduced only when the actual combined wheel
+        # speed would exceed the configured planning limit.
         wheel_coeff = _wheel_rpm_per_mmps(sample, limits)
         if wheel_coeff > EPSILON:
             caps.append(("wheel_rpm", limits.wheel_plan_limit_rpm / wheel_coeff))
@@ -398,7 +393,6 @@ def _propagate_z(
                 samples[index],
                 samples[index + 1],
                 max(z[index], z[index + 1]),
-                z[index],
                 limits,
             )
             reachable = z[index] + 2.0 * a_pos * ds
@@ -414,7 +408,6 @@ def _propagate_z(
                 samples[index],
                 samples[index + 1],
                 max(z[index], z[index + 1]),
-                z[index + 1],
                 limits,
             )
             controllable = z[index + 1] + 2.0 * a_neg * ds
@@ -435,23 +428,17 @@ def _interval_accel_caps(
     left: GeometrySample,
     right: GeometrySample,
     z_lateral_estimate: float,
-    z_beta_estimate: float,
     limits: TimeParameterizationLimits,
 ) -> tuple[float, float]:
     mid_curvature = max(abs(left.curvature_1_per_mm), abs(right.curvature_1_per_mm))
-    # Total acceleration must be conservative over the whole interval, hence
-    # the larger endpoint speed estimate.  The q_prime beta residual instead
-    # uses the already reachable/controllable boundary state; using the
-    # unproven opposite endpoint can falsely collapse a feasible stop interval.
+    # Total translational acceleration must be conservative over the whole
+    # interval, hence the larger endpoint speed estimate.  Rotational demand is
+    # handled only by the combined wheel-RPM cap in _local_z_caps().
     lateral = mid_curvature * max(0.0, z_lateral_estimate)
     remaining_total = max(0.0, limits.linear_accel_mmps2 * limits.linear_accel_mmps2 - lateral * lateral)
     total_accel_cap = math.sqrt(remaining_total)
-    q = max(abs(left.yaw_ddeg_per_mm), abs(right.yaw_ddeg_per_mm))
-    q_prime = max(abs(left.yaw_ddeg_per_mm2), abs(right.yaw_ddeg_per_mm2))
-    beta_residual = max(0.0, limits.angular_accel_moving_ddegps2 - q_prime * max(0.0, z_beta_estimate))
-    beta_accel_cap = beta_residual / q if q > EPSILON else limits.angular_accel_moving_ddegps2
-    accel = min(limits.linear_accel_mmps2, total_accel_cap, beta_accel_cap)
-    braking = min(limits.braking_accel_mmps2, total_accel_cap, beta_accel_cap)
+    accel = min(limits.linear_accel_mmps2, total_accel_cap)
+    braking = min(limits.braking_accel_mmps2, total_accel_cap)
     return max(0.0, accel), max(0.0, braking)
 
 
@@ -532,8 +519,8 @@ def _first_metric_violation(max_metrics: dict[str, float], limits: TimeParameter
         "max_speed_mmps": limits.max_speed_mmps,
         "max_lateral_accel_mmps2": limits.lateral_accel_mmps2,
         "max_total_accel_mmps2": limits.linear_accel_mmps2,
-        "max_wz_ddegps": limits.max_wz_ddegps,
-        "max_beta_ddegps2": limits.angular_accel_moving_ddegps2,
+        # wz and beta remain diagnostic metrics only.  The combined wheel RPM
+        # limit is the sole rotational feasibility constraint.
         "max_wheel_rpm": limits.wheel_plan_limit_rpm,
     }
     for key, limit in checks.items():
@@ -544,7 +531,7 @@ def _first_metric_violation(max_metrics: dict[str, float], limits: TimeParameter
 
 def _tighten_for_violation(samples: tuple[GeometrySample, ...], z_caps: list[float], violation: str) -> list[float]:
     del samples
-    factor = 0.90 if violation in {"max_total_accel_mmps2", "max_beta_ddegps2"} else 0.95
+    factor = 0.90 if violation == "max_total_accel_mmps2" else 0.95
     return [cap * factor for cap in z_caps]
 
 
@@ -590,7 +577,25 @@ def _quantize_nodes(samples: tuple[TimeSample, ...]) -> tuple[tuple[NodeV40, ...
         max_velocity_error = max(max_velocity_error, abs(node.vx_mmps - sample.vx_mmps), abs(node.vy_mmps - sample.vy_mmps), abs(node.wz_ddegps - sample.wz_ddegps))
     if arrival_id == 0:
         raise V40ValidationError("TimeParameterization", "nodes", "at least one ARRIVAL node is required")
-    return tuple(nodes), {"max_position_error": max_position_error, "max_velocity_error": max_velocity_error}
+    max_chord_excess = 0.0
+    for index, (left, right) in enumerate(zip(nodes, nodes[1:])):
+        ds_mm = right.s_mm - left.s_mm
+        chord_mm = math.hypot(right.x_mm - left.x_mm, right.y_mm - left.y_mm)
+        excess_mm = chord_mm - ds_mm
+        max_chord_excess = max(max_chord_excess, excess_mm)
+        if excess_mm > QUANTIZED_CHORD_TOLERANCE_MM:
+            raise V40ValidationError(
+                "TimeParameterization",
+                f"nodes[{index}:{index + 2}]",
+                "quantized XY chord exceeds s increment",
+                actual={"chord_mm": chord_mm, "delta_s_mm": ds_mm, "excess_mm": excess_mm},
+                expected=f"excess <= {QUANTIZED_CHORD_TOLERANCE_MM:.1f} mm",
+            )
+    return tuple(nodes), {
+        "max_position_error": max_position_error,
+        "max_velocity_error": max_velocity_error,
+        "max_chord_excess_mm": max_chord_excess,
+    }
 
 
 def _wheel_rpm(sample: GeometrySample, speed: float, limits: TimeParameterizationLimits) -> float:

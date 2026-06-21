@@ -13,7 +13,7 @@ from hjmb_pathgen.py_domain.project import ProjectV40
 from hjmb_pathgen.py_domain.task_plan import TransitionRequirement
 from hjmb_pathgen.py_domain.topology import TopologyGate, TopologyGateDirection
 from hjmb_pathgen.py_planning.optimization.leg_optimizer import optimize_leg
-from hjmb_pathgen.py_services.leg_optimization_service import leg_request_from_transition
+from hjmb_pathgen.py_services.leg_optimization_service import leg_request_from_transition, validate_leg
 
 FIXTURE_ROOT = Path(__file__).resolve().parents[1] / "fixtures" / "v40"
 
@@ -47,6 +47,43 @@ class Phase6LegOptimizerTest(unittest.TestCase):
         self.assertNotIn("arrival_id", leg.nodes[-1])
         self.assertIn("validity_hash", leg.hashes)
         self.assertIn("self_hash32", leg.hashes)
+
+
+    def test_saved_leg_audit_rejects_xy_chord_longer_than_local_s_increment(self):
+        project = minimal_project()
+        request = LegOptimizationRequest(
+            project=project,
+            from_state_id="P_START",
+            to_state_id="P_PICK_1",
+            from_pose=Pose2D(0, 0, 0),
+            to_pose=Pose2D(100, 0, 0),
+            route_family="PICK_1_TO_3",
+            topology_profile="NONE",
+            profile_name=LegOptimizationProfileName.QUICK_PREVIEW,
+        )
+        result = optimize_leg(request)
+        self.assertTrue(result.success, result.reason)
+        leg = result.leg
+        self.assertIsNotNone(leg)
+        nodes = [dict(item) for item in leg.nodes]
+        nodes[1]["local_s_mm"] = 10
+        nodes[1]["x_mm"] = 50
+        malformed = leg.__class__(
+            leg_id=leg.leg_id,
+            key=leg.key,
+            state=LegState.VALID,
+            source=leg.source,
+            topology_profile=leg.topology_profile,
+            control_points=leg.control_points,
+            yaw_profile=leg.yaw_profile,
+            nodes=tuple(nodes),
+            analysis=leg.analysis,
+            hashes=leg.hashes,
+            review=leg.review,
+        )
+        audit = validate_leg(project, malformed)
+        self.assertFalse(audit["endpoint"]["success"])
+        self.assertIn("XY chord", " ".join(audit["endpoint"]["errors"]))
 
     def test_topology_gate_failure_is_a_candidate_failure(self):
         project = minimal_project()

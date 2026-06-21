@@ -29,17 +29,37 @@ class Phase6GeometryYawTopologyTest(unittest.TestCase):
         self.assertAlmostEqual(first_end[0], second_start[0], places=6)
         self.assertAlmostEqual(first_end[1], second_start[1], places=6)
 
-    def test_two_low_speed_yaw_windows_are_policy_aware(self):
+
+    def test_arclength_sampling_does_not_jump_at_bezier_segment_join(self):
+        path = BezierPath.from_waypoints(
+            (
+                Point2D(0, 0),
+                Point2D(100, 500),
+                Point2D(1500, -500),
+                Point2D(1600, 0),
+            )
+        )
+        samples = path.sample_arclength(max_spacing_mm=25.0, oversample_per_segment=48)
+        for left, right in zip(samples, samples[1:]):
+            delta_s = right.s_mm - left.s_mm
+            chord = math.hypot(right.x_mm - left.x_mm, right.y_mm - left.y_mm)
+            self.assertLessEqual(chord, delta_s + 0.5)
+
+    def test_full_segment_uniform_yaw_is_policy_aware(self):
         self.assertEqual(resolve_yaw_delta(0, 900, YawPolicy.CW_ONLY), -2700)
         self.assertEqual(resolve_yaw_delta(0, -900, YawPolicy.CCW_ONLY), 2700)
         self.assertEqual(resolve_yaw_delta(0, 1900, YawPolicy.SHORTEST), -1700)
 
         profile = YawWindowProfile(0, 900, policy=YawPolicy.CCW_ONLY, alpha=0.5)
-        values = [profile.evaluate(s, 100.0).yaw_ddeg for s in (0.0, 25.0, 50.0, 75.0, 100.0)]
+        samples = [profile.evaluate(s, 100.0) for s in (0.0, 25.0, 50.0, 75.0, 100.0)]
+        values = [sample.yaw_ddeg for sample in samples]
         self.assertEqual(values[0], 0)
         self.assertAlmostEqual(values[-1], 900)
+        self.assertEqual(values, [0.0, 225.0, 450.0, 675.0, 900.0])
         self.assertTrue(all(right >= left for left, right in zip(values, values[1:])))
-        self.assertAlmostEqual(profile.evaluate(50.0, 100.0).yaw_ddeg_per_mm, 0.0)
+        self.assertTrue(all(abs(sample.yaw_ddeg_per_mm - 9.0) < 1.0e-9 for sample in samples))
+        self.assertTrue(all(sample.yaw_ddeg_per_mm2 == 0.0 for sample in samples))
+        self.assertEqual(profile.to_dict(total_length_mm=100.0)["model"], "MONOTONIC_BSPLINE")
 
     def test_ordered_topology_gate_direction(self):
         points = [{"x_mm": 0, "y_mm": 0}, {"x_mm": 100, "y_mm": 0}]

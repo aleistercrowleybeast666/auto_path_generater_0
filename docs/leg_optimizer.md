@@ -27,7 +27,7 @@ Candidate evaluation pipeline:
 initial XY guess
 -> piecewise cubic Bezier
 -> ordered topology gate validation
--> TWO_LOW_SPEED_WINDOWS yaw samples
+-> MONOTONIC_BSPLINE yaw samples (uniform over full arclength)
 -> Phase 5 continuous collision validation
 -> Phase 4 z=v^2 time parameterization
 -> quantized local nodes and metrics

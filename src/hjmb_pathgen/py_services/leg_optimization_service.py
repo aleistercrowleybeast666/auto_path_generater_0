@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import math
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -35,6 +36,9 @@ from hjmb_pathgen.py_planning.geometry.topology_gates import validate_ordered_to
 from hjmb_pathgen.py_services.project_config_service import compute_project_functional_hashes
 from hjmb_pathgen.py_io.layout.project_layout import ProjectLayout
 from hjmb_pathgen.py_services.route_assembler import transition_requirements_from_case
+
+
+LEG_NODE_CHORD_TOLERANCE_MM = 3.0
 
 
 def leg_request_from_transition(
@@ -295,10 +299,24 @@ def _validate_leg_endpoint_and_nodes(leg: LegV40) -> dict[str, Any]:
     if len(leg.nodes) < 2:
         errors.append("leg must contain at least two nodes")
     previous_s = -1
+    previous_node: dict[str, Any] | None = None
     for index, node in enumerate(leg.nodes):
         local_s = int(node.get("local_s_mm", node.get("s_mm", 0)))
         if local_s < previous_s:
             errors.append(f"node {index} local_s_mm is not monotonic")
+        if previous_node is not None:
+            previous_local_s = int(previous_node.get("local_s_mm", previous_node.get("s_mm", 0)))
+            delta_s_mm = local_s - previous_local_s
+            chord_mm = math.hypot(
+                int(node.get("x_mm", 0)) - int(previous_node.get("x_mm", 0)),
+                int(node.get("y_mm", 0)) - int(previous_node.get("y_mm", 0)),
+            )
+            if chord_mm - delta_s_mm > LEG_NODE_CHORD_TOLERANCE_MM:
+                errors.append(
+                    f"node {index - 1}->{index} XY chord {chord_mm:.3f} mm exceeds "
+                    f"delta_s {delta_s_mm} mm by more than {LEG_NODE_CHORD_TOLERANCE_MM:.1f} mm"
+                )
+        previous_node = dict(node)
         previous_s = local_s
     if leg.nodes:
         first = leg.nodes[0]

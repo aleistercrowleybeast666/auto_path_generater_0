@@ -37,7 +37,7 @@ from hjmb_pathgen.py_planning.dynamics.time_parameterization import (
 from hjmb_pathgen.py_planning.optimization.yaw_windows import YawWindowProfile
 from hjmb_pathgen.py_services.path_validation_service import validate_spatial_path_collision
 
-PLANNER_ALGORITHM_VERSION = "PHASE6_LEG_OPTIMIZER_V5_TIME_DOMINANT_GATE_PROJECTION"
+PLANNER_ALGORITHM_VERSION = "PHASE6_LEG_OPTIMIZER_V6_UNIFORM_YAW_WHEEL_LIMIT"
 
 
 @dataclass(frozen=True)
@@ -253,17 +253,20 @@ def _curve_quality_metrics(samples: tuple[object, ...]) -> dict[str, float]:
     }
 
 def _yaw_candidates(request: LegOptimizationRequest, profile: OptimizationProfile) -> tuple[YawWindowProfile, ...]:
-    return tuple(
+    del profile
+    # One deterministic, full-segment yaw schedule.  The profile class keeps
+    # legacy window fields for compatibility, but evaluate() now distributes
+    # yaw uniformly over arclength.  There is therefore no benefit in testing
+    # multiple low-speed window allocations.
+    return (
         YawWindowProfile(
             start_yaw_ddeg=request.from_pose.yaw_ddeg,
             finish_yaw_ddeg=request.to_pose.yaw_ddeg,
             policy=request.yaw_policy,
-            alpha=alpha,
-            start_window_end_s_ratio=start_end,
-            finish_window_start_s_ratio=finish_start,
-        )
-        for alpha in profile.yaw_alpha_values
-        for start_end, finish_start in profile.yaw_window_pairs
+            alpha=1.0,
+            start_window_end_s_ratio=1.0,
+            finish_window_start_s_ratio=1.0,
+        ),
     )
 
 

@@ -1,29 +1,24 @@
-# Phase 6 Yaw Window Optimization
+# V4.0 Continuous Yaw Distribution
 
-Yaw is generated with `TWO_LOW_SPEED_WINDOWS`.
+New paths no longer concentrate rotation into two low-speed windows.  The leg-library metadata uses the V4.0-reserved `MONOTONIC_BSPLINE` model with a degree-1 monotonic spline, which is exactly uniform in arclength.
 
-The model splits total yaw change by `alpha`:
-
-```text
-start window: 0 .. start_window_end_s_ratio
-middle:       constant yaw
-finish window: finish_window_start_s_ratio .. 1
-```
-
-Each window uses quintic smoothstep, so yaw rate is zero at the beginning and
-end of each low-speed window. The sampled geometry includes:
+For every START/ARRIVAL stop-to-stop leg, the resolved continuous yaw change is
+distributed uniformly over the complete XY arclength:
 
 ```text
-yaw_ddeg
-yaw_ddeg_per_mm
-yaw_ddeg_per_mm2
+yaw(s) = yaw_start + delta_yaw * s / total_length
+q = d(yaw)/ds = constant
+q_prime = 0
 ```
 
-Policies:
+Because chassis speed is zero at START and ARRIVAL, `wz = q * v` is also zero at
+both ends.  During motion, angular speed follows the same single acceleration and
+braking envelope as translational speed, avoiding repeated yaw acceleration and
+deceleration.
 
-```text
-CW_ONLY      resolved delta is non-positive
-CCW_ONLY     resolved delta is non-negative
-SHORTEST     resolved delta is in [-1800, 1800)
-```
+The time parameterizer records `wz` and `beta` for diagnostics but does not use
+them as independent speed caps.  Rotation feasibility is enforced through the
+combined four-wheel RPM calculation; translational speed is reduced only when an
+actual wheel would exceed `wheel.plan_limit_rpm`.
 
+Yaw policies remain `CW_ONLY`, `CCW_ONLY`, and `SHORTEST`.

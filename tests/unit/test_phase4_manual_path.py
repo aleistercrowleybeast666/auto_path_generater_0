@@ -81,6 +81,21 @@ class Phase4ManualPathTest(unittest.TestCase):
         self.assertEqual(result.trajectory.nodes[-1].wz_ddegps, 0)
         self.assertFalse(result.trajectory.nodes[-1].flags & int(NodeFlag.SAFE_END))
 
+
+    def test_manual_yaw_is_distributed_across_complete_stop_interval(self):
+        data = manual_case_dict()
+        data["manual_path"]["points"][-1]["yaw_ddeg"] = 900
+        case = CaseManifestV40.from_dict(data)
+        samples = build_manual_spatial_path(case.manual_path)
+        moving = [sample for sample in samples if 0.0 < sample.s_mm < samples[-1].s_mm]
+        self.assertTrue(moving)
+        q_values = {round(sample.yaw_ddeg_per_mm, 9) for sample in moving}
+        self.assertEqual(len(q_values), 1)
+        self.assertTrue(all(sample.yaw_ddeg_per_mm2 == 0.0 for sample in moving))
+        result = plan_manual_case(case, project())
+        self.assertTrue(result.timing.success, result.timing.reason)
+        self.assertGreater(result.timing.max_metrics["max_wz_ddegps"], 0.0)
+
     def test_full_auto_case_rejects_manual_path_payload(self):
         data = json.loads((FIXTURE_ROOT / "minimal_case.json").read_text(encoding="utf-8"))
         data["manual_path"] = manual_case_dict()["manual_path"]

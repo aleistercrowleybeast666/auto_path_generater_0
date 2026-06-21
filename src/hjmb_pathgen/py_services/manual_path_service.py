@@ -2,9 +2,8 @@
 
 The XY geometry is never searched or moved.  User points are preserved and only
 non-exact WAYPOINT corners are rounded with the mature local quadratic-Bezier
-constructor from the field editor.  Yaw is then distributed into two low-speed
-windows around every START/ARRIVAL stop and several deterministic window choices
-are retimed; the fastest feasible result is selected.
+constructor from the field editor.  Between every START/ARRIVAL stop, yaw is
+distributed continuously over the complete arclength and the path is timed once.
 """
 
 from __future__ import annotations
@@ -109,64 +108,45 @@ def retime_path(
     cancel_check: Callable[[], bool] | None = None,
     progress_callback: Callable[[dict[str, Any]], None] | None = None,
 ) -> TimeParameterizationResult:
-    """Try deterministic yaw-window variants and return the fastest feasible one."""
+    """Distribute yaw over each complete stop-to-stop leg and retime once."""
 
-    limits = TimeParameterizationLimits.from_project(project, profile_name=profile_name)
-    successes: list[tuple[int, float, float, TimeParameterizationResult]] = []
-    failures: list[TimeParameterizationResult] = []
-    # The candidate set is deliberately small and reproducible.  It covers a short,
-    # medium and long low-speed window plus three rotation allocations.
-    candidates = tuple(
-        (window_ratio, alpha_bias)
-        for window_ratio in (0.20, 0.30, 0.40)
-        for alpha_bias in (-0.20, 0.0, 0.20)
-    )
-    for candidate_index, (window_ratio, alpha_bias) in enumerate(candidates, start=1):
-        if cancel_check is not None and cancel_check():
-            raise RuntimeError("CANCELLED")
-        if progress_callback is not None:
-            progress_callback(
-                {
-                    "stage": "SEMI_YAW_OPTIMIZATION",
-                    "message": f"比较低速旋转分配 {candidate_index}/{len(candidates)}",
-                    "percent": 12 + round(70 * (candidate_index - 1) / len(candidates)),
-                    "completed_count": candidate_index - 1,
-                    "total_count": len(candidates),
-                    "candidate": candidate_index,
-                }
-            )
-        samples = build_manual_spatial_path(
-            manual_path,
-            project,
-            profile_name=profile_name,
-            yaw_policy=yaw_policy,
-            window_ratio=window_ratio,
-            alpha_bias=alpha_bias,
-        )
-        timing = time_parameterize(TimeParameterizationRequest(samples=samples, limits=limits))
-        if timing.success:
-            successes.append((timing.planned_time_ms, window_ratio, alpha_bias, timing))
-        else:
-            failures.append(timing)
+    if cancel_check is not None and cancel_check():
+        raise RuntimeError("CANCELLED")
     if progress_callback is not None:
         progress_callback(
             {
                 "stage": "SEMI_YAW_OPTIMIZATION",
-                "message": "低速旋转分配比较完成",
-                "percent": 82,
-                "completed_count": len(candidates),
-                "total_count": len(candidates),
+                "message": "生成全程连续 yaw 并计算速度",
+                "percent": 30,
+                "completed_count": 0,
+                "total_count": 1,
+                "candidate": 1,
             }
         )
-    if not successes:
-        if failures:
-            return failures[0]
-        raise CompileError("deterministic path planner produced no yaw candidate")
-    _, window_ratio, alpha_bias, best = min(successes, key=lambda item: (item[0], item[1], abs(item[2])))
+    limits = TimeParameterizationLimits.from_project(project, profile_name=profile_name)
+    samples = build_manual_spatial_path(
+        manual_path,
+        project,
+        profile_name=profile_name,
+        yaw_policy=yaw_policy,
+    )
+    timing = time_parameterize(TimeParameterizationRequest(samples=samples, limits=limits))
+    if progress_callback is not None:
+        progress_callback(
+            {
+                "stage": "SEMI_YAW_OPTIMIZATION",
+                "message": "全程连续 yaw 速度规划完成",
+                "percent": 82,
+                "completed_count": 1,
+                "total_count": 1,
+            }
+        )
+    if not timing.success:
+        return timing
     return replace(
-        best,
-        warnings=tuple(best.warnings)
-        + (f"selected low-speed yaw windows: ratio={window_ratio:.2f}, alpha_bias={alpha_bias:+.2f}",),
+        timing,
+        warnings=tuple(timing.warnings)
+        + ("yaw distributed uniformly over each complete stop-to-stop leg",),
     )
 
 
@@ -466,6 +446,9 @@ def _geometry_samples_with_yaw(
     alpha_bias: float,
 ) -> tuple[GeometrySample, ...]:
     samples = tuple(raw_samples)
+    # Kept in the public signature for compatibility with older callers.
+    # New planning intentionally ignores low-speed window tuning.
+    del window_ratio, alpha_bias
     boundary_indices = [
         index
         for index, point in enumerate(path.points)
@@ -478,15 +461,13 @@ def _geometry_samples_with_yaw(
         length = right_s - left_s
         if length <= _EPSILON:
             raise CompileError("manual_path contains a zero-length stop interval")
-        alpha = _curvature_weighted_alpha(samples, left_s, right_s, window_ratio)
-        alpha = min(0.95, max(0.05, alpha + alpha_bias))
         profile = YawWindowProfile(
             start_yaw_ddeg=boundary_yaw[segment_index],
             finish_yaw_ddeg=boundary_yaw[segment_index + 1],
             policy=yaw_policy,
-            alpha=alpha,
-            start_window_end_s_ratio=window_ratio,
-            finish_window_start_s_ratio=1.0 - window_ratio,
+            alpha=1.0,
+            start_window_end_s_ratio=1.0,
+            finish_window_start_s_ratio=1.0,
         )
         segment_profiles.append((left_s, right_s, profile))
 
@@ -551,24 +532,6 @@ def _resolved_boundary_yaws(path: ManualPathV40, boundary_indices: list[int], po
         # Unspecified means no orientation requirement: keep current yaw.
         resolved.append(current)
     return resolved
-
-
-def _curvature_weighted_alpha(samples: tuple[object, ...], left_s: float, right_s: float, window_ratio: float) -> float:
-    length = right_s - left_s
-    window = max(1.0, length * window_ratio)
-    start_values = [
-        abs(float(getattr(sample, "curvature_kappa_per_m", 0.0)))
-        for sample in samples
-        if left_s - 1.0e-7 <= float(sample.s_mm) <= left_s + window + 1.0e-7
-    ]
-    finish_values = [
-        abs(float(getattr(sample, "curvature_kappa_per_m", 0.0)))
-        for sample in samples
-        if right_s - window - 1.0e-7 <= float(sample.s_mm) <= right_s + 1.0e-7
-    ]
-    start_slow = 1.0 + (sum(start_values) / max(len(start_values), 1))
-    finish_slow = 1.0 + (sum(finish_values) / max(len(finish_values), 1))
-    return start_slow / (start_slow + finish_slow)
 
 
 def _sample_speed_hint(path: ManualPathV40, point_s_mm: dict[int, float], sample_s: float) -> float | None:

@@ -48,3 +48,12 @@ validation.
 Single-case output and partial batch output both call
 `compile_case_to_trajectory()` and `encode_trajectory()`. No GUI, batch, or
 portable path packs BIN structs independently.
+## Quantized node geometry guard
+
+Before a V4.0 BIN is written and again after it is read back, every adjacent
+node pair is checked so that the integer XY chord cannot exceed the integer
+`delta_s` by more than 3 mm of worst-case coordinate/arc-length rounding.
+This detects discontinuous curve sampling and prevents a CRC-correct but
+geometrically inconsistent BIN from reaching firmware.
+Saved leg-library nodes are checked by the same rule before reuse, so only
+actually malformed legacy legs become non-reusable and are regenerated.

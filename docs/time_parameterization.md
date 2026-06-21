@@ -27,3 +27,16 @@ Failure categories are explicit:
 
 A high candidate speed is treated as a reducible envelope problem, not a global
 path failure.
+
+
+## Rotational constraint policy
+
+Yaw rate and yaw acceleration are retained as generated feed-forward values and
+diagnostic metrics.  They are not independent speed-envelope constraints.  The
+combined mecanum wheel RPM, which already contains both translational and
+rotational components, is the sole rotational speed constraint.
+
+`wheel.plan_limit_rpm` is used directly and is not multiplied by
+`dynamic_margin_ratio`; it already represents the desired planning actuator
+limit.  The generic margin still applies to linear speed and acceleration
+limits.

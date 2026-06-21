@@ -174,9 +174,20 @@ class BezierPath:
             if right[0] < target_s:
                 continue
             span = max(right[0] - left[0], EPSILON)
-            ratio = (target_s - left[0]) / span
-            t = left[2] + (right[2] - left[2]) * ratio if left[1] == right[1] else right[2]
-            segment_index = right[1] if left[1] != right[1] else left[1]
+            ratio = min(1.0, max(0.0, (target_s - left[0]) / span))
+            if left[1] == right[1]:
+                segment_index = left[1]
+                t = left[2] + (right[2] - left[2]) * ratio
+            else:
+                # ``_dense_points`` omits t=0 for every segment after the
+                # first because that point is shared with the previous
+                # segment.  Therefore a target between the previous segment's
+                # endpoint and the next segment's first dense point must be
+                # interpolated from t=0 to ``right.t``.  Jumping directly to
+                # ``right.t`` makes the XY chord longer than the stored arc
+                # length increment and produces malformed V4.0 BIN nodes.
+                segment_index = right[1]
+                t = right[2] * ratio
             point = self.segments[segment_index].evaluate(t)
             return self._sample_at(segment_index, t, target_s, point)
         segment_index, t, point = dense[-1][1], dense[-1][2], dense[-1][3]

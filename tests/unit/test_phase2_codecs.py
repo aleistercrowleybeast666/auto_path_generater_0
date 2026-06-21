@@ -105,6 +105,16 @@ class Phase2CodecTest(unittest.TestCase):
         with self.assertRaisesRegex(BinaryLayoutError, "stable_time"):
             encode_trajectory(bad)
 
+
+    def test_codec_rejects_xy_chord_longer_than_s_increment(self):
+        _project, library, case, _portable = synthetic_models()
+        trajectory = compile_case_to_trajectory(CaseCompileRequest(case=case, leg_library=library))
+        bad_node = replace(trajectory.nodes[1], x_mm=trajectory.nodes[0].x_mm + 50, y_mm=trajectory.nodes[0].y_mm, s_mm=10)
+        bad_nodes = (trajectory.nodes[0], bad_node, *trajectory.nodes[2:])
+        bad = replace(trajectory, nodes=bad_nodes).normalized()
+        with self.assertRaisesRegex(BinaryLayoutError, "XY chord exceeds s increment"):
+            encode_trajectory(bad)
+
     def test_compiler_outputs_expected_segment_structure(self):
         _project, library, case, _portable = synthetic_models()
         trajectory = compile_case_to_trajectory(CaseCompileRequest(case=case, leg_library=library))

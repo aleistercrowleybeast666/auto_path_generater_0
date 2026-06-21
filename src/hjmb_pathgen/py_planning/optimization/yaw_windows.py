@@ -1,4 +1,11 @@
-"""Two-low-speed-window yaw profiles for Phase 6 leg optimization."""
+"""Continuous full-segment yaw profiles for V4.0 leg optimization.
+
+The public ``YawWindowProfile`` name and legacy fields are kept for project/JSON
+compatibility, but new trajectories distribute the resolved yaw change uniformly
+over the complete stop-to-stop arclength.  This avoids concentrating rotation in
+low-speed windows and lets the combined wheel-speed limit be the only rotational
+speed constraint during time parameterization.
+"""
 
 from __future__ import annotations
 
@@ -48,55 +55,36 @@ class YawWindowProfile:
         profile = self.validated()
         if total_length_mm <= EPSILON:
             raise ValueError("yaw profile total length must be positive")
+
+        # Uniform yaw per unit arclength is intentional.  Since translational
+        # speed is zero at START/ARRIVAL, wz is also zero at both ends even
+        # though d(yaw)/ds is constant.  During the leg, wz follows the same
+        # single acceleration/deceleration envelope as chassis speed instead
+        # of repeatedly starting and stopping inside two artificial windows.
         ratio = min(1.0, max(0.0, s_mm / total_length_mm))
         delta = profile.resolved_delta_ddeg
-        first_delta = delta * profile.alpha
-        second_delta = delta - first_delta
-        start_end = profile.start_window_end_s_ratio
-        finish_start = profile.finish_window_start_s_ratio
-        if ratio <= start_end and start_end > EPSILON:
-            smooth = _smoothstep5(ratio / start_end)
-            ds_ratio = 1.0 / (start_end * total_length_mm)
-            return YawSample(
-                yaw_ddeg=profile.start_yaw_ddeg + first_delta * smooth.value,
-                yaw_ddeg_per_mm=first_delta * smooth.first * ds_ratio,
-                yaw_ddeg_per_mm2=first_delta * smooth.second * ds_ratio * ds_ratio,
-            )
-        if ratio < finish_start:
-            return YawSample(yaw_ddeg=profile.start_yaw_ddeg + first_delta, yaw_ddeg_per_mm=0.0, yaw_ddeg_per_mm2=0.0)
-        finish_span = 1.0 - finish_start
-        if finish_span <= EPSILON:
-            return YawSample(yaw_ddeg=profile.resolved_finish_yaw_ddeg, yaw_ddeg_per_mm=0.0, yaw_ddeg_per_mm2=0.0)
-        u = (ratio - finish_start) / finish_span
-        smooth = _smoothstep5(u)
-        ds_ratio = 1.0 / (finish_span * total_length_mm)
+        yaw_per_mm = delta / total_length_mm
         return YawSample(
-            yaw_ddeg=profile.start_yaw_ddeg + first_delta + second_delta * smooth.value,
-            yaw_ddeg_per_mm=second_delta * smooth.first * ds_ratio,
-            yaw_ddeg_per_mm2=second_delta * smooth.second * ds_ratio * ds_ratio,
+            yaw_ddeg=profile.start_yaw_ddeg + delta * ratio,
+            yaw_ddeg_per_mm=yaw_per_mm,
+            yaw_ddeg_per_mm2=0.0,
         )
 
-    def to_dict(self, *, total_length_mm: float | None = None) -> dict[str, float | str]:
-        data: dict[str, float | str] = {
-            "model": "TWO_LOW_SPEED_WINDOWS",
+    def to_dict(self, *, total_length_mm: float | None = None) -> dict[str, object]:
+        data: dict[str, object] = {
+            "model": "MONOTONIC_BSPLINE",
             "direction": self.policy.value,
-            "alpha": self.alpha,
-            "start_window_end_s_ratio": self.start_window_end_s_ratio,
-            "finish_window_start_s_ratio": self.finish_window_start_s_ratio,
+            "degree": 1,
+            "normalized_knots": [0.0, 0.0, 1.0, 1.0],
+            "control_yaw_ddeg": [self.start_yaw_ddeg, self.resolved_finish_yaw_ddeg],
             "start_yaw_ddeg": self.start_yaw_ddeg,
             "finish_yaw_ddeg": self.resolved_finish_yaw_ddeg,
+            "yaw_distribution": "FULL_SEGMENT_UNIFORM_ARCLENGTH",
         }
         if total_length_mm is not None:
-            data["start_window_end_s_mm"] = total_length_mm * self.start_window_end_s_ratio
-            data["finish_window_start_s_mm"] = total_length_mm * self.finish_window_start_s_ratio
+            data["total_length_mm"] = total_length_mm
+            data["yaw_ddeg_per_mm"] = self.resolved_delta_ddeg / total_length_mm if total_length_mm > EPSILON else 0.0
         return data
-
-
-@dataclass(frozen=True)
-class _SmoothStep:
-    value: float
-    first: float
-    second: float
 
 
 def resolve_yaw_delta(start_yaw_ddeg: float, finish_yaw_ddeg: float, policy: YawPolicy | str) -> float:
@@ -113,11 +101,3 @@ def resolve_yaw_delta(start_yaw_ddeg: float, finish_yaw_ddeg: float, policy: Yaw
             delta += FULL_TURN_DDEG
         return delta
     raise ValueError(f"unsupported yaw policy: {policy}")
-
-
-def _smoothstep5(u: float) -> _SmoothStep:
-    clamped = min(1.0, max(0.0, u))
-    value = clamped**3 * (10.0 - 15.0 * clamped + 6.0 * clamped * clamped)
-    first = 30.0 * clamped * clamped * (clamped - 1.0) * (clamped - 1.0)
-    second = 60.0 * clamped * (2.0 * clamped * clamped - 3.0 * clamped + 1.0)
-    return _SmoothStep(value=value, first=first, second=second)

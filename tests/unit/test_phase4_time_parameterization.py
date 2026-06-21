@@ -72,20 +72,36 @@ class Phase4TimeParameterizationTest(unittest.TestCase):
         self.assertLessEqual(result.max_metrics["max_speed_mmps"], math.sqrt(800.0 / curvature) + 1.0)
         self.assertLessEqual(result.max_metrics["max_lateral_accel_mmps2"], 800.0 + 1.0e-6)
 
-    def test_yaw_rate_and_wheel_rpm_caps_are_enforced(self):
+    def test_yaw_metrics_are_diagnostic_and_combined_wheel_rpm_is_enforced(self):
         yaw_samples = (
             GeometrySample(0, 0, 0, 0, 1, 0, yaw_ddeg_per_mm=1.0, flags=int(NodeFlag.START)),
             GeometrySample(500, 500, 0, 500, 1, 0, yaw_ddeg_per_mm=1.0),
             GeometrySample(1000, 1000, 0, 1000, 1, 0, yaw_ddeg_per_mm=1.0, flags=int(NodeFlag.ARRIVAL)),
         )
-        yaw_result = time_parameterize(request(yaw_samples, max_wz_ddegps=100.0))
+        # A deliberately tiny standalone wz limit must no longer slow the path.
+        # The reported wz can exceed it; rotational feasibility is enforced by
+        # the combined four-wheel RPM limit instead.
+        yaw_result = time_parameterize(request(yaw_samples, max_wz_ddegps=100.0, wheel_plan_limit_rpm=1000.0))
         self.assertTrue(yaw_result.success, yaw_result.reason)
-        self.assertLessEqual(yaw_result.max_metrics["max_wz_ddegps"], 100.0 + 1.0e-6)
+        self.assertGreater(yaw_result.max_metrics["max_wz_ddegps"], 100.0)
 
-        straight = samples_from_points(((0, 0, 0), (1000, 0, 0)))
-        wheel_result = time_parameterize(request(straight, wheel_plan_limit_rpm=60.0))
+        wheel_result = time_parameterize(request(yaw_samples, max_wz_ddegps=10_000.0, wheel_plan_limit_rpm=60.0))
         self.assertTrue(wheel_result.success, wheel_result.reason)
         self.assertLessEqual(wheel_result.max_metrics["max_wheel_rpm"], 60.0 + 1.0e-6)
+
+    def test_dynamic_margin_does_not_reduce_direct_wheel_rpm_limit(self):
+        configured = limits(wheel_plan_limit_rpm=450.0, constraint_margin_ratio=0.10)
+        validated = configured.validated()
+        self.assertEqual(validated.wheel_plan_limit_rpm, 450.0)
+        self.assertEqual(validated.max_speed_mmps, 1800.0)
+
+    def test_zero_yaw_path_is_not_capped_by_angular_acceleration_setting(self):
+        straight = samples_from_points(((0, 0, 0), (1000, 0, 0)))
+        normal = time_parameterize(request(straight, angular_accel_moving_ddegps2=1200.0))
+        tiny_beta_limit = time_parameterize(request(straight, angular_accel_moving_ddegps2=1.0))
+        self.assertTrue(normal.success, normal.reason)
+        self.assertTrue(tiny_beta_limit.success, tiny_beta_limit.reason)
+        self.assertEqual(tiny_beta_limit.planned_time_ms, normal.planned_time_ms)
 
     def test_invalid_limits_and_structural_geometry_are_categorized(self):
         straight = samples_from_points(((0, 0, 0), (1000, 0, 0)))

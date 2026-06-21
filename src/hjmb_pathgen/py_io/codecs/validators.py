@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
+import math
+
 from hjmb_pathgen.py_domain.compiled import CompiledTrajectoryV40
 from hjmb_pathgen.py_domain.enums import ActionCode, ActionMode, FinishMode, HeaderFlag, NodeFlag, RouteFamily, SegmentFlag
 from hjmb_pathgen.py_domain.errors import BinaryLayoutError
+
+
+QUANTIZED_CHORD_TOLERANCE_MM = 3.0
 
 
 def _fail(field_path: str, message: str, *, actual: object | None = None, expected: object | None = None) -> None:
@@ -96,9 +101,22 @@ def _validate_nodes(trajectory: CompiledTrajectoryV40) -> None:
     finish_arm_indexes: list[int] = []
     safe_end_indexes: list[int] = []
     last_s = -1
+    previous_node = None
     for index, node in enumerate(nodes):
         if node.s_mm < last_s:
             _fail(f"nodes[{index}].s_mm", "s_mm must be monotonic nondecreasing", actual=node.s_mm, expected=f">={last_s}")
+        if previous_node is not None:
+            delta_s_mm = node.s_mm - previous_node.s_mm
+            chord_mm = math.hypot(node.x_mm - previous_node.x_mm, node.y_mm - previous_node.y_mm)
+            excess_mm = chord_mm - delta_s_mm
+            if excess_mm > QUANTIZED_CHORD_TOLERANCE_MM:
+                _fail(
+                    f"nodes[{index - 1}:{index + 1}]",
+                    "quantized XY chord exceeds s increment",
+                    actual={"chord_mm": chord_mm, "delta_s_mm": delta_s_mm, "excess_mm": excess_mm},
+                    expected=f"excess <= {QUANTIZED_CHORD_TOLERANCE_MM:.1f} mm",
+                )
+        previous_node = node
         last_s = node.s_mm
         if node.flags & int(NodeFlag.ARRIVAL):
             if not (node.flags & int(NodeFlag.EXACT_PASS)):
