@@ -246,7 +246,7 @@ def test_v40_virtual_gate_id_is_allowed_but_runtime_v3_gate_is_rejected() -> Non
         raise AssertionError("legacy runtime gate_id must still be rejected")
 
 
-def test_official_s_seed_is_compact_and_uses_ordered_gate_centres() -> None:
+def test_official_s_seed_prefers_shortest_gate_crossings_with_centre_fallback() -> None:
     data = phase3_project_dict()
     data["field_objects"]["cylinders"] = [
         {
@@ -282,18 +282,19 @@ def test_official_s_seed_is_compact_and_uses_ordered_gate_centres() -> None:
     )
 
     seeds = obstacle_aware_seeds(request)
-    assert len(seeds) == 1
-    seed = seeds[0]
-    assert seed.seed_id == "official_s_gate_seed"
-    assert len(seed.waypoints) == 6
-    assert (seed.waypoints[2].x_mm, seed.waypoints[2].y_mm) == gates[0].center
-    assert (seed.waypoints[3].x_mm, seed.waypoints[3].y_mm) == gates[1].center
+    assert len(seeds) == 2
+    shortest, fallback = seeds
+    assert shortest.seed_id == "official_s_gate_shortest_seed"
+    assert len(shortest.waypoints) == 4
+    assert fallback.seed_id == "official_s_gate_center_seed"
+    assert len(fallback.waypoints) == 6
+    assert (fallback.waypoints[2].x_mm, fallback.waypoints[2].y_mm) == gates[0].center
+    assert (fallback.waypoints[3].x_mm, fallback.waypoints[3].y_mm) == gates[1].center
 
-    def cross(a, b, c) -> float:
-        return (b.x_mm - a.x_mm) * (c.y_mm - a.y_mm) - (b.y_mm - a.y_mm) * (c.x_mm - a.x_mm)
-
-    assert abs(cross(*seed.waypoints[:3])) < 1.0e-6
-    assert abs(cross(*seed.waypoints[-3:])) < 1.0e-6
+    for point, gate in zip(shortest.waypoints[1:-1], gates):
+        assert min(gate.ax_mm, gate.bx_mm) - 1.0e-9 <= point.x_mm <= max(gate.ax_mm, gate.bx_mm) + 1.0e-9
+        assert min(gate.ay_mm, gate.by_mm) - 1.0e-9 <= point.y_mm <= max(gate.ay_mm, gate.by_mm) + 1.0e-9
+        assert (point.x_mm, point.y_mm) != gate.center
 
 
 def test_failed_leg_entries_are_retried_but_reusable_entries_are_not() -> None:

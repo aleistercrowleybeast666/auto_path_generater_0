@@ -37,7 +37,7 @@ from hjmb_pathgen.py_planning.dynamics.time_parameterization import (
 from hjmb_pathgen.py_planning.optimization.yaw_windows import YawWindowProfile
 from hjmb_pathgen.py_services.path_validation_service import validate_spatial_path_collision
 
-PLANNER_ALGORITHM_VERSION = "PHASE6_LEG_OPTIMIZER_V4_C2_CURVATURE"
+PLANNER_ALGORITHM_VERSION = "PHASE6_LEG_OPTIMIZER_V5_TIME_DOMINANT_GATE_PROJECTION"
 
 
 @dataclass(frozen=True)
@@ -518,6 +518,13 @@ def _random_midpoint_guesses(guess: InitialGuess, profile: OptimizationProfile, 
 
 
 def _seeded_variants(guess: InitialGuess, profile: OptimizationProfile, rng: random.Random, *, pass_index: int, step_mm: float) -> tuple[InitialGuess, ...]:
+    # The projected topology-gate seed already uses the closest legal crossing
+    # points to the direct line.  Moving those gate points normal to the path
+    # mostly makes the S wider and can multiply strict collision runtime.  Keep
+    # the centre-gate fallback in the initial batch, but do not perturb the
+    # selected shortest-gate geometry.
+    if guess.guess_id.startswith("official_s_gate_shortest_seed"):
+        return ()
     variants = list(perturb_waypoints(guess, pass_index=pass_index, step_mm=step_mm))
     if len(guess.waypoints) == 2:
         variants.extend(_random_midpoint_guesses(guess, profile, rng))

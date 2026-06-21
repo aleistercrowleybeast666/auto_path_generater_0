@@ -120,6 +120,7 @@
       "max_yaw_step_ddeg": 30
     },
     "default": {
+      "full_auto_leg_source_policy": "AUTO_ONLY",
       "max_spacing_mm": 25,
       "max_yaw_step_ddeg": 30,
       "use_unload_pose_profiles": true
@@ -149,7 +150,7 @@
   },
   "unload_pose_profiles": {
     "DROP_F45_BIN_12": {
-      "configured": false,
+      "configured": true,
       "dx_mm": 0,
       "dy_mm": 0,
       "estimated_action_time_ms": 700,
@@ -198,7 +199,7 @@
       "yaw_ddeg": -900
     },
     "DROP_F78_BIN_23": {
-      "configured": false,
+      "configured": true,
       "dx_mm": 0,
       "dy_mm": 0,
       "estimated_action_time_ms": 700,
@@ -269,8 +270,8 @@
       "field_boundary_footprint_profile": "LARGE_CIRCLE",
       "numerical_epsilon_mm": 1e-06,
       "pickup_arc_segments": 64,
-      "r_large_mm": 380.0,
-      "r_small_mm": 320.0,
+      "r_large_mm": 150.0,
+      "r_small_mm": 50.0,
       "strict_validation_resolution_mm": 5.0
     },
     "wheel": {

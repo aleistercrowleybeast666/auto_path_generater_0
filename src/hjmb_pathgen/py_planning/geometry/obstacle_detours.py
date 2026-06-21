@@ -56,13 +56,13 @@ def obstacle_aware_seeds(request: LegOptimizationRequest) -> tuple[DetourSeed, .
     if state_seed is not None:
         seeds.append(state_seed)
 
-    s_seed = _s_route_seed(request, start, finish)
-    if s_seed is not None:
-        seeds.append(s_seed)
+    s_seeds = _s_route_seeds(request, start, finish)
+    if s_seeds:
+        seeds.extend(s_seeds)
         # A pickup-to-drop transfer with ordered virtual gates has exactly one
         # legal route family.  Generic A* seeds do not preserve that ordered
         # S topology and are expensive to validate, so they must not displace
-        # the official gate seed from AUTOMATIC's small initial-guess budget.
+        # the official gate seeds from AUTOMATIC's small initial-guess budget.
         if request.topology_gates:
             return _deduplicate(seeds)
 
@@ -123,28 +123,37 @@ def _state_lane_seed(
     return None
 
 
-def _s_route_seed(
+def _s_route_seeds(
     request: LegOptimizationRequest,
     start: Point2D,
     finish: Point2D,
-) -> DetourSeed | None:
-    """Seed the official two-cylinder S traversal on pickup-to-drop legs."""
+) -> tuple[DetourSeed, ...]:
+    """Seed the official two-cylinder S traversal on pickup-to-drop legs.
+
+    A topology gate is a crossing interval, not a compulsory centre point.
+    Forcing every transfer through both gate centres creates an unnecessarily
+    wide S curve.  The primary seed therefore uses the point on each gate that
+    is closest to the direct start-finish line, clamped to a small interior
+    margin.  The centre-line seed is retained as a conservative fallback.
+    The optimizer still performs the authoritative ordered-gate and continuous
+    collision checks for both candidates.
+    """
 
     if not request.from_state_id.startswith("P_PICK_"):
-        return None
+        return ()
     if not request.to_state_id.startswith("DROP_STEP_"):
-        return None
+        return ()
 
     if request.topology_gates:
-        # The ordered gate centres define the official S route.  Use exactly
-        # one through point per gate, plus one collinear staging point at each
-        # stop endpoint.  The previous three-points-per-gate seed introduced
-        # unnecessary curvature reversals; the time parameterizer then found
-        # adjacent zero-speed samples and rejected otherwise collision-free
-        # FULL_AUTO transfers.
-        gate_points = [Point2D(*gate.center) for gate in request.topology_gates]
-        first = gate_points[0]
-        last = gate_points[-1]
+        projected = tuple(
+            _gate_point_near_direct_line(start, finish, gate, inset_mm=30.0)
+            for gate in request.topology_gates
+        )
+        shortest_points = _clean_points((start, *projected, finish))
+
+        gate_centres = tuple(Point2D(*gate.center) for gate in request.topology_gates)
+        first = gate_centres[0]
+        last = gate_centres[-1]
         start_mid = Point2D(
             (start.x_mm + first.x_mm) * 0.5,
             (start.y_mm + first.y_mm) * 0.5,
@@ -153,8 +162,21 @@ def _s_route_seed(
             (last.x_mm + finish.x_mm) * 0.5,
             (last.y_mm + finish.y_mm) * 0.5,
         )
-        points = _clean_points((start, start_mid, *gate_points, finish_mid, finish))
-        return DetourSeed("official_s_gate_seed", "TOPOLOGY_GATE_S", points, tension=1.0)
+        centre_points = _clean_points((start, start_mid, *gate_centres, finish_mid, finish))
+        return (
+            DetourSeed(
+                "official_s_gate_shortest_seed",
+                "TOPOLOGY_GATE_S",
+                shortest_points,
+                tension=0.75,
+            ),
+            DetourSeed(
+                "official_s_gate_center_seed",
+                "TOPOLOGY_GATE_S",
+                centre_points,
+                tension=1.0,
+            ),
+        )
 
     route_family = str(request.route_family)
     sign = -1.0 if route_family == "PICK_1_TO_3" else 1.0
@@ -169,8 +191,49 @@ def _s_route_seed(
             finish,
         )
     )
-    return DetourSeed("official_s_seed", "ROUTE_FAMILY_S", points, tension=1.0)
+    return (DetourSeed("official_s_seed", "ROUTE_FAMILY_S", points, tension=1.0),)
 
+
+def _gate_point_near_direct_line(
+    start: Point2D,
+    finish: Point2D,
+    gate: object,
+    *,
+    inset_mm: float,
+) -> Point2D:
+    """Return a safe point inside ``gate`` nearest the direct route line."""
+
+    ax = float(getattr(gate, "ax_mm"))
+    ay = float(getattr(gate, "ay_mm"))
+    bx = float(getattr(gate, "bx_mm"))
+    by = float(getattr(gate, "by_mm"))
+    gx = bx - ax
+    gy = by - ay
+    gate_length = math.hypot(gx, gy)
+    if gate_length <= 1.0e-9:
+        return Point2D(ax, ay)
+
+    dx = finish.x_mm - start.x_mm
+    dy = finish.y_mm - start.y_mm
+    denominator = _cross(dx, dy, gx, gy)
+    if abs(denominator) > 1.0e-9:
+        offset_x = ax - start.x_mm
+        offset_y = ay - start.y_mm
+        gate_ratio = _cross(offset_x, offset_y, dx, dy) / denominator
+    else:
+        # Parallel lines: choose the projection of the direct-line midpoint on
+        # the gate.  The ordered topology validator remains authoritative.
+        midpoint_x = (start.x_mm + finish.x_mm) * 0.5
+        midpoint_y = (start.y_mm + finish.y_mm) * 0.5
+        gate_ratio = ((midpoint_x - ax) * gx + (midpoint_y - ay) * gy) / (gate_length * gate_length)
+
+    inset_ratio = min(0.25, max(0.0, inset_mm / gate_length))
+    gate_ratio = max(inset_ratio, min(1.0 - inset_ratio, gate_ratio))
+    return Point2D(ax + gx * gate_ratio, ay + gy * gate_ratio)
+
+
+def _cross(ax: float, ay: float, bx: float, by: float) -> float:
+    return ax * by - ay * bx
 
 def _grid_detour(
     request: LegOptimizationRequest,

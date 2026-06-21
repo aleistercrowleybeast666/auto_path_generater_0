@@ -511,6 +511,7 @@ class LegTemplatePage(QWidget):
         if not 0 <= index < len(self.waypoint_draft):
             return
         self.waypoint_draft[index] = LegTemplateWaypointV40(float(x_mm), float(y_mm))
+        self._update_field_waypoint_cache(index, x_mm, y_mm)
         self.dirty = True
         self._update_waypoint_coordinate_cells(index)
         template = self._selected_template()
@@ -524,12 +525,29 @@ class LegTemplatePage(QWidget):
         self.waypoint_draft[index] = LegTemplateWaypointV40(
             float(commit.new_x_mm), float(commit.new_y_mm)
         )
+        self._update_field_waypoint_cache(index, commit.new_x_mm, commit.new_y_mm)
         self.dirty = True
         self.revision += 1
         self._update_waypoint_coordinate_cells(index)
         # Defer the scene rebuild until after QGraphicsItem.mouseReleaseEvent
         # returns; the 200 ms preview timer also coalesces rapid edits.
         self.preview_timer.start()
+
+    def _update_field_waypoint_cache(self, index: int, x_mm: float, y_mm: float) -> None:
+        """Keep the shared field model aligned with the dragged graphics item.
+
+        ``set_preview_xy()`` rebuilds the scene after mouse release.  The
+        graphics item itself has already moved, but a stale ``manual_points``
+        cache would recreate it at the old coordinate while drawing the curve
+        from the new draft.  Updating the cache in place preserves the active
+        item during dragging and makes the deferred rebuild reproduce the same
+        point position.
+        """
+        if not 0 <= index < len(self.field_view.manual_points):
+            return
+        point = self.field_view.manual_points[index]
+        point.x_mm = int(round(float(x_mm)))
+        point.y_mm = int(round(float(y_mm)))
 
     def _update_waypoint_coordinate_cells(self, row: int) -> None:
         if not 0 <= row < len(self.waypoint_draft):

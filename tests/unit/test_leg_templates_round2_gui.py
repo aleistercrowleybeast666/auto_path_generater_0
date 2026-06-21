@@ -108,6 +108,15 @@ class LegTemplateRound2GuiTest(unittest.TestCase):
         self.page.add_waypoint(300.0, 400.0)
         self.page._waypoint_drag_preview(0, 120, 220)  # noqa: SLF001
         self.page._waypoint_drag_committed(SimpleNamespace(key=0, new_x_mm=120, new_y_mm=220))  # noqa: SLF001
+        self.assertEqual(
+            (self.page.field_view.manual_points[0].x_mm, self.page.field_view.manual_points[0].y_mm),
+            (120, 220),
+        )
+        self.page._refresh_preview()  # noqa: SLF001
+        self.assertEqual(
+            (self.page.field_view.manual_points[0].x_mm, self.page.field_view.manual_points[0].y_mm),
+            (120, 220),
+        )
         self.page.move_waypoint(0, 1)
         self.assertEqual((self.page.waypoint_draft[1].x_mm, self.page.waypoint_draft[1].y_mm), (120.0, 220.0))
         self.assertEqual(self.page.field_view.scene_dump()["manual_point_count"], 2)

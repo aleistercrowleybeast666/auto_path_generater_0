@@ -186,3 +186,82 @@ def test_optimizer_local_nodes_never_keep_consecutive_quantized_xy_duplicates() 
         for left, right in zip(nodes, nodes[1:])
     )
     assert nodes[-1]["arrival_state_id"] == "DROP_STEP_1"
+
+
+def test_time_dominant_objective_does_not_reward_unnecessary_large_radius() -> None:
+    from hjmb_pathgen.py_domain.leg_optimization import CandidateEvaluation
+    from hjmb_pathgen.py_planning.optimization.objective import candidate_objective_key
+
+    faster = CandidateEvaluation(
+        candidate_id="FAST",
+        source="TEST",
+        success=True,
+        planned_time_ms=5000,
+        min_clearance_mm=100.0,
+        max_metrics={
+            "max_abs_curvature_1_per_mm": 1.0 / 200.0,
+            "max_curvature_jump_1_per_mm": 0.002,
+        },
+    )
+    wider_but_slower = CandidateEvaluation(
+        candidate_id="WIDE",
+        source="TEST",
+        success=True,
+        planned_time_ms=5100,
+        min_clearance_mm=100.0,
+        max_metrics={
+            "max_abs_curvature_1_per_mm": 1.0 / 1000.0,
+            "max_curvature_jump_1_per_mm": 0.0001,
+        },
+    )
+    assert candidate_objective_key(faster) < candidate_objective_key(wider_but_slower)
+
+    unsafe_cusp = CandidateEvaluation(
+        candidate_id="CUSP",
+        source="TEST",
+        success=True,
+        planned_time_ms=4500,
+        min_clearance_mm=100.0,
+        max_metrics={
+            "max_abs_curvature_1_per_mm": 1.0 / 80.0,
+            "max_curvature_jump_1_per_mm": 0.010,
+        },
+    )
+    assert candidate_objective_key(faster) < candidate_objective_key(unsafe_cusp)
+
+
+def test_transfer_gate_seed_uses_nearest_legal_crossings_not_gate_centres() -> None:
+    import json
+    from pathlib import Path
+
+    from hjmb_pathgen.py_domain.leg_optimization import LegOptimizationRequest, Pose2D
+    from hjmb_pathgen.py_domain.project import ProjectV40
+    from hjmb_pathgen.py_domain.topology import TopologyGate, TopologyGateDirection
+    from hjmb_pathgen.py_planning.geometry.obstacle_detours import obstacle_aware_seeds
+
+    fixture = Path(__file__).resolve().parents[1] / "fixtures" / "v40" / "minimal_project.json"
+    project = ProjectV40.from_dict(json.loads(fixture.read_text(encoding="utf-8")))
+    request = LegOptimizationRequest(
+        project=project,
+        from_state_id="P_PICK_3",
+        to_state_id="DROP_STEP_1",
+        from_pose=Pose2D(1342, -514, 0),
+        to_pose=Pose2D(-1455, 399, 900),
+        route_family="PICK_1_TO_3",
+        topology_profile="S_LEFT_TRANSFER",
+        topology_gates=(
+            TopologyGate("G1", 1000, -830, 1000, -266, TopologyGateDirection.POSITIVE),
+            TopologyGate("G2", -1000, 266, -1000, 830, TopologyGateDirection.POSITIVE),
+        ),
+    )
+    seeds = obstacle_aware_seeds(request)
+    assert [seed.seed_id for seed in seeds[:2]] == [
+        "official_s_gate_shortest_seed",
+        "official_s_gate_center_seed",
+    ]
+    shortest = seeds[0]
+    assert len(shortest.waypoints) == 4
+    assert abs(shortest.waypoints[1].y_mm - (-402.36)) < 1.0
+    assert shortest.waypoints[2].y_mm == 296.0
+    assert shortest.waypoints[1].y_mm != -548.0
+    assert shortest.waypoints[2].y_mm != 548.0

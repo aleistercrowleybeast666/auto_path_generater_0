@@ -34,7 +34,16 @@ initial XY guess
 ```
 
 The objective is planned motion time. Collision, topology, malformed geometry,
-and dynamics/time-parameterization failures are hard candidate failures.
+and dynamics/time-parameterization failures are hard candidate failures. Curvature
+quality is used as a safety guard and deterministic tie-break, not as a reason to
+prefer a longer route with an unnecessarily large radius. Near-cusp paths receive
+a strong penalty; otherwise the actual time-parameterized result remains dominant.
+
+For pickup-to-drop transfers, ordered virtual gates are crossing intervals rather
+than compulsory centre points. AUTOMATIC evaluates a primary seed through the
+nearest legal points on the ordered gates and retains the gate-centre S seed as a
+conservative fallback. Both candidates still pass the same ordered-gate,
+continuous-collision, curvature, wheel-speed, and time-parameterization checks.
 
 Profiles:
 

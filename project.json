@@ -80,7 +80,7 @@
     },
     "STORE": {
       "estimated_time_ms": 1500,
-      "mode": "STOP_AND_WAIT",
+      "mode": "ASYNC",
       "post_wait_ms": 0,
       "timeout_ms": 3500
     }

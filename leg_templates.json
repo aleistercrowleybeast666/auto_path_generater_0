@@ -2,7 +2,7 @@
   "config_version": 1,
   "dependency_hashes": {
     "collision_hash": "a3d06a97246389693eb15859edd58bda134a7b43a92bb308f0e86deabcd67c6c",
-    "planner_algorithm_hash": "7db8aa1e152a98be4966add63c55a3700440e4cef0de8d32642b36f78b6519b9",
+    "planner_algorithm_hash": "7fd66bb5f654f1edd5ad6bf1b03ebc5c949c78be41135b944d307d50b3ddfa38",
     "planning_hash": "51f9b917b2a936c92ad8d09753f11baccd2ac2849e7a9226ab9f5717dc0b157c",
     "project_pose_hash": "57e12a0f166acc35c98b97e400d9a78c07464c398676a484cafc17640dc2e6ff",
     "task_config_hash": "3d3931914d36ed60a08c4b515ff6d4b3179f19047ecb18017a2a0fe825341be9",
@@ -15,7 +15,7 @@
       "audit_messages": [],
       "dependency_hashes": {
         "collision_hash": "a3d06a97246389693eb15859edd58bda134a7b43a92bb308f0e86deabcd67c6c",
-        "planner_algorithm_hash": "7db8aa1e152a98be4966add63c55a3700440e4cef0de8d32642b36f78b6519b9",
+        "planner_algorithm_hash": "7fd66bb5f654f1edd5ad6bf1b03ebc5c949c78be41135b944d307d50b3ddfa38",
         "planning_hash": "51f9b917b2a936c92ad8d09753f11baccd2ac2849e7a9226ab9f5717dc0b157c",
         "project_pose_hash": "57e12a0f166acc35c98b97e400d9a78c07464c398676a484cafc17640dc2e6ff",
         "task_config_hash": "3d3931914d36ed60a08c4b515ff6d4b3179f19047ecb18017a2a0fe825341be9",
@@ -36,7 +36,7 @@
       "audit_messages": [],
       "dependency_hashes": {
         "collision_hash": "a3d06a97246389693eb15859edd58bda134a7b43a92bb308f0e86deabcd67c6c",
-        "planner_algorithm_hash": "7db8aa1e152a98be4966add63c55a3700440e4cef0de8d32642b36f78b6519b9",
+        "planner_algorithm_hash": "7fd66bb5f654f1edd5ad6bf1b03ebc5c949c78be41135b944d307d50b3ddfa38",
         "planning_hash": "51f9b917b2a936c92ad8d09753f11baccd2ac2849e7a9226ab9f5717dc0b157c",
         "project_pose_hash": "57e12a0f166acc35c98b97e400d9a78c07464c398676a484cafc17640dc2e6ff",
         "task_config_hash": "3d3931914d36ed60a08c4b515ff6d4b3179f19047ecb18017a2a0fe825341be9",
@@ -57,7 +57,7 @@
       "audit_messages": [],
       "dependency_hashes": {
         "collision_hash": "a3d06a97246389693eb15859edd58bda134a7b43a92bb308f0e86deabcd67c6c",
-        "planner_algorithm_hash": "7db8aa1e152a98be4966add63c55a3700440e4cef0de8d32642b36f78b6519b9",
+        "planner_algorithm_hash": "7fd66bb5f654f1edd5ad6bf1b03ebc5c949c78be41135b944d307d50b3ddfa38",
         "planning_hash": "51f9b917b2a936c92ad8d09753f11baccd2ac2849e7a9226ab9f5717dc0b157c",
         "project_pose_hash": "57e12a0f166acc35c98b97e400d9a78c07464c398676a484cafc17640dc2e6ff",
         "task_config_hash": "3d3931914d36ed60a08c4b515ff6d4b3179f19047ecb18017a2a0fe825341be9",
@@ -78,7 +78,7 @@
       "audit_messages": [],
       "dependency_hashes": {
         "collision_hash": "a3d06a97246389693eb15859edd58bda134a7b43a92bb308f0e86deabcd67c6c",
-        "planner_algorithm_hash": "7db8aa1e152a98be4966add63c55a3700440e4cef0de8d32642b36f78b6519b9",
+        "planner_algorithm_hash": "7fd66bb5f654f1edd5ad6bf1b03ebc5c949c78be41135b944d307d50b3ddfa38",
         "planning_hash": "51f9b917b2a936c92ad8d09753f11baccd2ac2849e7a9226ab9f5717dc0b157c",
         "project_pose_hash": "57e12a0f166acc35c98b97e400d9a78c07464c398676a484cafc17640dc2e6ff",
         "task_config_hash": "3d3931914d36ed60a08c4b515ff6d4b3179f19047ecb18017a2a0fe825341be9",
@@ -99,7 +99,7 @@
       "audit_messages": [],
       "dependency_hashes": {
         "collision_hash": "a3d06a97246389693eb15859edd58bda134a7b43a92bb308f0e86deabcd67c6c",
-        "planner_algorithm_hash": "7db8aa1e152a98be4966add63c55a3700440e4cef0de8d32642b36f78b6519b9",
+        "planner_algorithm_hash": "7fd66bb5f654f1edd5ad6bf1b03ebc5c949c78be41135b944d307d50b3ddfa38",
         "planning_hash": "51f9b917b2a936c92ad8d09753f11baccd2ac2849e7a9226ab9f5717dc0b157c",
         "project_pose_hash": "57e12a0f166acc35c98b97e400d9a78c07464c398676a484cafc17640dc2e6ff",
         "task_config_hash": "3d3931914d36ed60a08c4b515ff6d4b3179f19047ecb18017a2a0fe825341be9",
@@ -140,6 +140,33 @@
         "slot is no longer legal under the current competition task configuration",
         "slot is no longer legal under the current competition task configuration",
         "slot is no longer legal under the current competition task configuration",
+        "slot is no longer legal under the current competition task configuration",
+        "slot is no longer legal under the current competition task configuration",
+        "slot is no longer legal under the current competition task configuration",
+        "slot is no longer legal under the current competition task configuration",
+        "slot is no longer legal under the current competition task configuration",
+        "slot is no longer legal under the current competition task configuration",
+        "slot is no longer legal under the current competition task configuration",
+        "slot is no longer legal under the current competition task configuration",
+        "slot is no longer legal under the current competition task configuration",
+        "slot is no longer legal under the current competition task configuration",
+        "slot is no longer legal under the current competition task configuration",
+        "slot is no longer legal under the current competition task configuration",
+        "slot is no longer legal under the current competition task configuration",
+        "slot is no longer legal under the current competition task configuration",
+        "slot is no longer legal under the current competition task configuration",
+        "slot is no longer legal under the current competition task configuration",
+        "slot is no longer legal under the current competition task configuration",
+        "slot is no longer legal under the current competition task configuration",
+        "slot is no longer legal under the current competition task configuration",
+        "slot is no longer legal under the current competition task configuration",
+        "slot is no longer legal under the current competition task configuration",
+        "slot is no longer legal under the current competition task configuration",
+        "slot is no longer legal under the current competition task configuration",
+        "slot is no longer legal under the current competition task configuration",
+        "slot is no longer legal under the current competition task configuration",
+        "slot is no longer legal under the current competition task configuration",
+        "slot is no longer legal under the current competition task configuration",
         "slot is no longer legal under the current competition task configuration"
       ],
       "dependency_hashes": {
@@ -165,7 +192,7 @@
       "audit_messages": [],
       "dependency_hashes": {
         "collision_hash": "a3d06a97246389693eb15859edd58bda134a7b43a92bb308f0e86deabcd67c6c",
-        "planner_algorithm_hash": "7db8aa1e152a98be4966add63c55a3700440e4cef0de8d32642b36f78b6519b9",
+        "planner_algorithm_hash": "7fd66bb5f654f1edd5ad6bf1b03ebc5c949c78be41135b944d307d50b3ddfa38",
         "planning_hash": "51f9b917b2a936c92ad8d09753f11baccd2ac2849e7a9226ab9f5717dc0b157c",
         "project_pose_hash": "57e12a0f166acc35c98b97e400d9a78c07464c398676a484cafc17640dc2e6ff",
         "task_config_hash": "3d3931914d36ed60a08c4b515ff6d4b3179f19047ecb18017a2a0fe825341be9",
@@ -177,7 +204,7 @@
       "orphaned": false,
       "route_family": "PICK_1_TO_3",
       "state": "STALE",
-      "template_hash": "3836284a56d178f46bda363c3fe0181beba626692ee3a9ece3c9f147394c8bdb",
+      "template_hash": "61ae17870a8e93c4fced6172768ba5e9041cbd8b360da53ae371f781b19c5b91",
       "template_id": "LT_PICK_1_TO_3_P_PICK_3_TO_P_DROP_2",
       "to_site": "P_DROP_2",
       "waypoints": [
@@ -186,12 +213,12 @@
           "y_mm": -451.5
         },
         {
-          "x_mm": -761.4,
-          "y_mm": 424.3
+          "x_mm": -539.0,
+          "y_mm": 412.0
         },
         {
-          "x_mm": -1313.0,
-          "y_mm": 390.4
+          "x_mm": -1263.0,
+          "y_mm": 418.0
         }
       ]
     },
@@ -199,7 +226,7 @@
       "audit_messages": [],
       "dependency_hashes": {
         "collision_hash": "a3d06a97246389693eb15859edd58bda134a7b43a92bb308f0e86deabcd67c6c",
-        "planner_algorithm_hash": "7db8aa1e152a98be4966add63c55a3700440e4cef0de8d32642b36f78b6519b9",
+        "planner_algorithm_hash": "7fd66bb5f654f1edd5ad6bf1b03ebc5c949c78be41135b944d307d50b3ddfa38",
         "planning_hash": "51f9b917b2a936c92ad8d09753f11baccd2ac2849e7a9226ab9f5717dc0b157c",
         "project_pose_hash": "57e12a0f166acc35c98b97e400d9a78c07464c398676a484cafc17640dc2e6ff",
         "task_config_hash": "3d3931914d36ed60a08c4b515ff6d4b3179f19047ecb18017a2a0fe825341be9",
@@ -229,7 +256,7 @@
       "audit_messages": [],
       "dependency_hashes": {
         "collision_hash": "a3d06a97246389693eb15859edd58bda134a7b43a92bb308f0e86deabcd67c6c",
-        "planner_algorithm_hash": "7db8aa1e152a98be4966add63c55a3700440e4cef0de8d32642b36f78b6519b9",
+        "planner_algorithm_hash": "7fd66bb5f654f1edd5ad6bf1b03ebc5c949c78be41135b944d307d50b3ddfa38",
         "planning_hash": "51f9b917b2a936c92ad8d09753f11baccd2ac2849e7a9226ab9f5717dc0b157c",
         "project_pose_hash": "57e12a0f166acc35c98b97e400d9a78c07464c398676a484cafc17640dc2e6ff",
         "task_config_hash": "3d3931914d36ed60a08c4b515ff6d4b3179f19047ecb18017a2a0fe825341be9",
@@ -241,13 +268,13 @@
       "orphaned": false,
       "route_family": "PICK_1_TO_3",
       "state": "STALE",
-      "template_hash": "8740ef55911da47fb1f37a785bc8a2643124bac8fc8f50fb3e9aedf3ff29b1ba",
+      "template_hash": "3afb6e4ec29479a8ba50b4e6bcdec411f180d4373aca39f1fcf3d6778b84045f",
       "template_id": "LT_PICK_1_TO_3_P_START_TO_P_PICK_1",
       "to_site": "P_PICK_1",
       "waypoints": [
         {
-          "x_mm": 226.0,
-          "y_mm": 344.0
+          "x_mm": 298.0,
+          "y_mm": 356.0
         },
         {
           "x_mm": 826.5,
@@ -259,7 +286,7 @@
       "audit_messages": [],
       "dependency_hashes": {
         "collision_hash": "a3d06a97246389693eb15859edd58bda134a7b43a92bb308f0e86deabcd67c6c",
-        "planner_algorithm_hash": "7db8aa1e152a98be4966add63c55a3700440e4cef0de8d32642b36f78b6519b9",
+        "planner_algorithm_hash": "7fd66bb5f654f1edd5ad6bf1b03ebc5c949c78be41135b944d307d50b3ddfa38",
         "planning_hash": "51f9b917b2a936c92ad8d09753f11baccd2ac2849e7a9226ab9f5717dc0b157c",
         "project_pose_hash": "57e12a0f166acc35c98b97e400d9a78c07464c398676a484cafc17640dc2e6ff",
         "task_config_hash": "3d3931914d36ed60a08c4b515ff6d4b3179f19047ecb18017a2a0fe825341be9",
@@ -280,7 +307,7 @@
       "audit_messages": [],
       "dependency_hashes": {
         "collision_hash": "a3d06a97246389693eb15859edd58bda134a7b43a92bb308f0e86deabcd67c6c",
-        "planner_algorithm_hash": "7db8aa1e152a98be4966add63c55a3700440e4cef0de8d32642b36f78b6519b9",
+        "planner_algorithm_hash": "7fd66bb5f654f1edd5ad6bf1b03ebc5c949c78be41135b944d307d50b3ddfa38",
         "planning_hash": "51f9b917b2a936c92ad8d09753f11baccd2ac2849e7a9226ab9f5717dc0b157c",
         "project_pose_hash": "57e12a0f166acc35c98b97e400d9a78c07464c398676a484cafc17640dc2e6ff",
         "task_config_hash": "3d3931914d36ed60a08c4b515ff6d4b3179f19047ecb18017a2a0fe825341be9",
@@ -301,7 +328,7 @@
       "audit_messages": [],
       "dependency_hashes": {
         "collision_hash": "a3d06a97246389693eb15859edd58bda134a7b43a92bb308f0e86deabcd67c6c",
-        "planner_algorithm_hash": "7db8aa1e152a98be4966add63c55a3700440e4cef0de8d32642b36f78b6519b9",
+        "planner_algorithm_hash": "7fd66bb5f654f1edd5ad6bf1b03ebc5c949c78be41135b944d307d50b3ddfa38",
         "planning_hash": "51f9b917b2a936c92ad8d09753f11baccd2ac2849e7a9226ab9f5717dc0b157c",
         "project_pose_hash": "57e12a0f166acc35c98b97e400d9a78c07464c398676a484cafc17640dc2e6ff",
         "task_config_hash": "3d3931914d36ed60a08c4b515ff6d4b3179f19047ecb18017a2a0fe825341be9",
@@ -322,7 +349,7 @@
       "audit_messages": [],
       "dependency_hashes": {
         "collision_hash": "a3d06a97246389693eb15859edd58bda134a7b43a92bb308f0e86deabcd67c6c",
-        "planner_algorithm_hash": "7db8aa1e152a98be4966add63c55a3700440e4cef0de8d32642b36f78b6519b9",
+        "planner_algorithm_hash": "7fd66bb5f654f1edd5ad6bf1b03ebc5c949c78be41135b944d307d50b3ddfa38",
         "planning_hash": "51f9b917b2a936c92ad8d09753f11baccd2ac2849e7a9226ab9f5717dc0b157c",
         "project_pose_hash": "57e12a0f166acc35c98b97e400d9a78c07464c398676a484cafc17640dc2e6ff",
         "task_config_hash": "3d3931914d36ed60a08c4b515ff6d4b3179f19047ecb18017a2a0fe825341be9",
@@ -343,7 +370,7 @@
       "audit_messages": [],
       "dependency_hashes": {
         "collision_hash": "a3d06a97246389693eb15859edd58bda134a7b43a92bb308f0e86deabcd67c6c",
-        "planner_algorithm_hash": "7db8aa1e152a98be4966add63c55a3700440e4cef0de8d32642b36f78b6519b9",
+        "planner_algorithm_hash": "7fd66bb5f654f1edd5ad6bf1b03ebc5c949c78be41135b944d307d50b3ddfa38",
         "planning_hash": "51f9b917b2a936c92ad8d09753f11baccd2ac2849e7a9226ab9f5717dc0b157c",
         "project_pose_hash": "57e12a0f166acc35c98b97e400d9a78c07464c398676a484cafc17640dc2e6ff",
         "task_config_hash": "3d3931914d36ed60a08c4b515ff6d4b3179f19047ecb18017a2a0fe825341be9",
@@ -362,6 +389,33 @@
     },
     {
       "audit_messages": [
+        "slot is no longer legal under the current competition task configuration",
+        "slot is no longer legal under the current competition task configuration",
+        "slot is no longer legal under the current competition task configuration",
+        "slot is no longer legal under the current competition task configuration",
+        "slot is no longer legal under the current competition task configuration",
+        "slot is no longer legal under the current competition task configuration",
+        "slot is no longer legal under the current competition task configuration",
+        "slot is no longer legal under the current competition task configuration",
+        "slot is no longer legal under the current competition task configuration",
+        "slot is no longer legal under the current competition task configuration",
+        "slot is no longer legal under the current competition task configuration",
+        "slot is no longer legal under the current competition task configuration",
+        "slot is no longer legal under the current competition task configuration",
+        "slot is no longer legal under the current competition task configuration",
+        "slot is no longer legal under the current competition task configuration",
+        "slot is no longer legal under the current competition task configuration",
+        "slot is no longer legal under the current competition task configuration",
+        "slot is no longer legal under the current competition task configuration",
+        "slot is no longer legal under the current competition task configuration",
+        "slot is no longer legal under the current competition task configuration",
+        "slot is no longer legal under the current competition task configuration",
+        "slot is no longer legal under the current competition task configuration",
+        "slot is no longer legal under the current competition task configuration",
+        "slot is no longer legal under the current competition task configuration",
+        "slot is no longer legal under the current competition task configuration",
+        "slot is no longer legal under the current competition task configuration",
+        "slot is no longer legal under the current competition task configuration",
         "slot is no longer legal under the current competition task configuration",
         "slot is no longer legal under the current competition task configuration",
         "slot is no longer legal under the current competition task configuration",
@@ -396,7 +450,7 @@
       "audit_messages": [],
       "dependency_hashes": {
         "collision_hash": "a3d06a97246389693eb15859edd58bda134a7b43a92bb308f0e86deabcd67c6c",
-        "planner_algorithm_hash": "7db8aa1e152a98be4966add63c55a3700440e4cef0de8d32642b36f78b6519b9",
+        "planner_algorithm_hash": "7fd66bb5f654f1edd5ad6bf1b03ebc5c949c78be41135b944d307d50b3ddfa38",
         "planning_hash": "51f9b917b2a936c92ad8d09753f11baccd2ac2849e7a9226ab9f5717dc0b157c",
         "project_pose_hash": "57e12a0f166acc35c98b97e400d9a78c07464c398676a484cafc17640dc2e6ff",
         "task_config_hash": "3d3931914d36ed60a08c4b515ff6d4b3179f19047ecb18017a2a0fe825341be9",
@@ -430,7 +484,7 @@
       "audit_messages": [],
       "dependency_hashes": {
         "collision_hash": "a3d06a97246389693eb15859edd58bda134a7b43a92bb308f0e86deabcd67c6c",
-        "planner_algorithm_hash": "7db8aa1e152a98be4966add63c55a3700440e4cef0de8d32642b36f78b6519b9",
+        "planner_algorithm_hash": "7fd66bb5f654f1edd5ad6bf1b03ebc5c949c78be41135b944d307d50b3ddfa38",
         "planning_hash": "51f9b917b2a936c92ad8d09753f11baccd2ac2849e7a9226ab9f5717dc0b157c",
         "project_pose_hash": "57e12a0f166acc35c98b97e400d9a78c07464c398676a484cafc17640dc2e6ff",
         "task_config_hash": "3d3931914d36ed60a08c4b515ff6d4b3179f19047ecb18017a2a0fe825341be9",
@@ -451,7 +505,7 @@
       "audit_messages": [],
       "dependency_hashes": {
         "collision_hash": "a3d06a97246389693eb15859edd58bda134a7b43a92bb308f0e86deabcd67c6c",
-        "planner_algorithm_hash": "7db8aa1e152a98be4966add63c55a3700440e4cef0de8d32642b36f78b6519b9",
+        "planner_algorithm_hash": "7fd66bb5f654f1edd5ad6bf1b03ebc5c949c78be41135b944d307d50b3ddfa38",
         "planning_hash": "51f9b917b2a936c92ad8d09753f11baccd2ac2849e7a9226ab9f5717dc0b157c",
         "project_pose_hash": "57e12a0f166acc35c98b97e400d9a78c07464c398676a484cafc17640dc2e6ff",
         "task_config_hash": "3d3931914d36ed60a08c4b515ff6d4b3179f19047ecb18017a2a0fe825341be9",

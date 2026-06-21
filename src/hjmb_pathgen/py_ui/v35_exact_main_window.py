@@ -49,7 +49,7 @@ from hjmb_pathgen.py_domain.semi_path import (
     ROUTE_B_SITE_SEQUENCE,
     route_family_from_site_sequence,
 )
-from hjmb_pathgen.py_io.codecs.bin_codec import load_bin
+from hjmb_pathgen.py_io.codecs.bin_codec import load_bin, save_bin
 from hjmb_pathgen.py_io.codecs.json_codec import load_case, save_case, save_project
 from hjmb_pathgen.py_io.layout.project_layout import ProjectLayout
 from hjmb_pathgen.py_io.persistence.atomic_writer import atomic_write_bytes
@@ -1096,7 +1096,7 @@ class V35ExactV4MainWindow(legacy.MainWindow):
             )
 
     def export_bin(self) -> None:
-        """Copy the already generated working BIN without replanning it."""
+        """Atomically overwrite the authoritative mode BIN without replanning."""
 
         if not self._ensure_v4_workspace("导出当前BIN") or self._v4_state is None:
             return
@@ -1108,31 +1108,17 @@ class V35ExactV4MainWindow(legacy.MainWindow):
         except ValueError as exc:
             self._warn("导出当前BIN", str(exc))
             return
-        source = self._v4_state.layout.bin_path_for_mode(traj_id, self._generation_mode)
-        if not source.exists():
-            self._warn("导出当前BIN", f"尚未生成工作BIN：\n{source}\n请先生成当前路径。")
+        target = self._v4_state.layout.bin_path_for_mode(traj_id, self._generation_mode)
+        if not target.exists():
+            self._warn("导出当前BIN", f"尚未生成工作BIN：\n{target}\n请先生成当前路径。")
             return
         try:
-            load_bin(source)  # lightweight protocol/CRC validation; never replans.
+            compiled = load_bin(target)  # protocol/CRC/filename validation; never replans.
+            save_bin(target, compiled)  # validated same-path atomic replacement.
         except Exception as exc:  # noqa: BLE001 - UI boundary.
-            self._warn("导出当前BIN", f"现有BIN校验失败：{exc}")
+            self._warn("导出当前BIN", f"BIN校验或覆盖失败：{exc}")
             return
-        target_text, _ = QFileDialog.getSaveFileName(
-            self,
-            "导出当前BIN（不重新计算）",
-            str(self._v4_state.layout.root / f"P{traj_id:04d}.BIN"),
-            "BIN (*.BIN *.bin)",
-        )
-        if not target_text:
-            return
-        target = Path(target_text)
-        try:
-            if target.resolve(strict=False) != source.resolve(strict=False):
-                atomic_write_bytes(target, source.read_bytes())
-        except Exception as exc:  # noqa: BLE001 - UI boundary.
-            self._warn("导出当前BIN", str(exc))
-            return
-        self.update_status(f"已原样导出当前BIN（未重新规划）：{target}")
+        self.update_status(f"已覆盖当前模式BIN（未重新规划）：{target}")
 
     def open_bin(self) -> None:
         if self._v4_state is None:

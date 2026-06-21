@@ -5,22 +5,38 @@ from __future__ import annotations
 from hjmb_pathgen.py_domain.leg_optimization import CandidateEvaluation
 
 
-def candidate_objective_key(evaluation: CandidateEvaluation) -> tuple[int, float, str]:
+# The chassis is omnidirectional.  Curvature is therefore a tracking-quality
+# constraint, not a steering geometry objective.  The time parameterizer
+# already slows genuinely tight curves through the lateral-acceleration limit.
+# Keep only a small safety penalty for near-cusps; otherwise the measured
+# planned time must decide so a longer, overly broad S curve cannot beat a
+# shorter legal route merely because it has a larger radius.
+_SOFT_MIN_RADIUS_MM = 160.0
+_SEVERE_MIN_RADIUS_MM = 110.0
+_SOFT_MAX_CURVATURE_JUMP = 0.0040
+
+
+def candidate_objective_key(evaluation: CandidateEvaluation) -> tuple[int, float, float, str]:
     if not evaluation.success:
-        return (1, float("inf"), evaluation.candidate_id)
+        return (1, float("inf"), float("inf"), evaluation.candidate_id)
+
     metrics = evaluation.max_metrics or {}
-    curvature = float(metrics.get("max_abs_curvature_1_per_mm", 0.0))
-    curvature_jump = float(metrics.get("max_curvature_jump_1_per_mm", 0.0))
-    # Time remains the principal objective.  These soft penalties prevent a
-    # marginally shorter A* polyline from winning by introducing a near-cusp
-    # that forces the real chassis to brake hard.  Values below a roughly
-    # 250 mm radius and normal sampled curvature variation are unpenalized.
-    curvature_penalty = max(0.0, curvature - 1.0 / 250.0) * 45_000.0
-    jump_penalty = max(0.0, curvature_jump - 0.0015) * 30_000.0
-    clearance_penalty = (
-        0.0
-        if evaluation.min_clearance_mm is None
-        else -float(evaluation.min_clearance_mm) * 1.0e-6
-    )
-    score = float(evaluation.planned_time_ms) + curvature_penalty + jump_penalty + clearance_penalty
-    return (0, score, evaluation.candidate_id)
+    curvature = abs(float(metrics.get("max_abs_curvature_1_per_mm", 0.0)))
+    curvature_jump = abs(float(metrics.get("max_curvature_jump_1_per_mm", 0.0)))
+    radius = (1.0 / curvature) if curvature > 1.0e-12 else float("inf")
+
+    quality_penalty_ms = 0.0
+    if radius < _SEVERE_MIN_RADIUS_MM:
+        quality_penalty_ms += 10_000.0 + (_SEVERE_MIN_RADIUS_MM - radius) * 20.0
+    elif radius < _SOFT_MIN_RADIUS_MM:
+        quality_penalty_ms += (_SOFT_MIN_RADIUS_MM - radius) * 0.75
+    quality_penalty_ms += max(0.0, curvature_jump - _SOFT_MAX_CURVATURE_JUMP) * 5_000.0
+
+    score = float(evaluation.planned_time_ms) + quality_penalty_ms
+    # Smoothness is only a deterministic tie-break after the time-dominant
+    # score.  A tiny clearance preference avoids unstable exact ties without
+    # changing any whole-millisecond decision.
+    tie_break = curvature + curvature_jump
+    if evaluation.min_clearance_mm is not None:
+        tie_break -= min(float(evaluation.min_clearance_mm), 1000.0) * 1.0e-12
+    return (0, score, tie_break, evaluation.candidate_id)
