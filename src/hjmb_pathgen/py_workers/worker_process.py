@@ -332,7 +332,7 @@ def _run_job(
         ordered = sorted(
             initial.timings,
             key=lambda item: (
-                0 if item.complete else 1,
+                0 if item.route_rule_match else 1,
                 len(item.missing_leg_ids),
                 item.total_time_ms,
                 item.candidate_id,
@@ -343,22 +343,29 @@ def _run_job(
             "write_portable": bool(params.get("write_portable", False)),
             "dry_run": bool(params.get("dry_run", False)),
         }
-        if any(item.complete for item in ordered):
-            emit("PREPARED", f"P{traj_id:04d} already has a complete candidate", percent=78)
+        incomplete = [item for item in ordered if not item.complete]
+        prepared_candidate_ids = [item.candidate_id for item in ordered if item.complete]
+        if not incomplete:
+            emit(
+                "PREPARED",
+                f"P{traj_id:04d} already has all automatic candidates complete",
+                percent=78,
+            )
             return {
                 "phase": "PREPARED",
                 "optimization": [],
                 "candidate_evaluation": initial.to_dict(),
+                "prepared_candidate_ids": prepared_candidate_ids,
                 "followup": {"job": "compile-full-auto-one", "params": compile_params},
             }
 
         optimization_passes: list[dict[str, Any]] = []
-        for candidate_index, timing in enumerate(ordered):
+        for candidate_index, timing in enumerate(incomplete):
             _raise_if_cancelled(cancel_event)
             emit(
                 "OPTIMIZING",
                 f"optimizing candidate {timing.candidate_id}",
-                percent=max(1, round(72 * candidate_index / max(len(ordered), 1))),
+                percent=max(1, round(72 * candidate_index / max(len(incomplete), 1))),
                 candidate_id=timing.candidate_id,
                 missing_leg_count=len(timing.missing_leg_ids),
             )
@@ -392,24 +399,27 @@ def _run_job(
                 failures=optimization["failures"],
             )
             _raise_if_cancelled(cancel_event)
-
-            # All requirements belonging to this candidate were either
-            # reusable or optimized successfully.  Do not re-evaluate in this
-            # process; launch the clean compile process instead.
             if optimization_result.failure_count == 0:
-                emit(
-                    "PREPARED",
-                    f"candidate {timing.candidate_id} is ready for clean-process assembly",
-                    percent=78,
-                    candidate_id=timing.candidate_id,
-                )
-                return {
-                    "phase": "PREPARED",
-                    "optimization": optimization_passes,
-                    "candidate_evaluation": initial.to_dict(),
-                    "prepared_candidate_id": timing.candidate_id,
-                    "followup": {"job": "compile-full-auto-one", "params": compile_params},
-                }
+                prepared_candidate_ids.append(timing.candidate_id)
+
+        # FULL_AUTO is allowed to choose the faster route only after every
+        # minimum-stop candidate has had a preparation pass.  The old early
+        # return after the first successful route made the result depend on
+        # candidate ordering and prevented a real left-vs-right time compare.
+        if prepared_candidate_ids:
+            emit(
+                "PREPARED",
+                f"P{traj_id:04d} candidates are ready for clean-process comparison",
+                percent=78,
+                prepared_candidate_ids=prepared_candidate_ids,
+            )
+            return {
+                "phase": "PREPARED",
+                "optimization": optimization_passes,
+                "candidate_evaluation": initial.to_dict(),
+                "prepared_candidate_ids": prepared_candidate_ids,
+                "followup": {"job": "compile-full-auto-one", "params": compile_params},
+            }
 
         failure_reasons: list[str] = []
         for item in optimization_passes:

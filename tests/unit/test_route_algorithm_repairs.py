@@ -2,11 +2,15 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from hjmb_pathgen.py_domain.enums import RouteFamily, UnloadMask, YawPolicy
+from hjmb_pathgen.py_domain.leg_optimization import LegOptimizationRequest, Pose2D
+from hjmb_pathgen.py_domain.topology import topology_gates_from_profile
 from hjmb_pathgen.py_domain.project import ProjectV40
 from hjmb_pathgen.py_domain.errors import V40ValidationError
 from hjmb_pathgen.py_io.codecs.legacy_rejection import reject_deleted_fields
@@ -16,10 +20,12 @@ from hjmb_pathgen.py_planning.geometry.automatic_topology import (
     default_transfer_gates,
     topology_profile_for_transition,
 )
+from hjmb_pathgen.py_planning.geometry.obstacle_detours import obstacle_aware_seeds
 from hjmb_pathgen.py_services.execution_time_estimator import estimate_fifo_execution
 from hjmb_pathgen.py_services.phase7_generation_service import (
     CandidateTiming,
     _candidate_timing_sort_key,
+    _requires_optimization,
 )
 from hjmb_pathgen.py_services.task_compiler import (
     automatic_candidate_subset,
@@ -28,6 +34,8 @@ from hjmb_pathgen.py_services.task_compiler import (
     preferred_route_family_for_candidate,
     unload_stop_ranks,
 )
+
+from hjmb_pathgen.py_workers import worker_process
 
 from phase3_helpers import phase3_project, phase3_project_dict
 from unit.test_phase3_task_compiler import route_row
@@ -236,3 +244,136 @@ def test_v40_virtual_gate_id_is_allowed_but_runtime_v3_gate_is_rejected() -> Non
         pass
     else:
         raise AssertionError("legacy runtime gate_id must still be rejected")
+
+
+def test_official_s_seed_is_compact_and_uses_ordered_gate_centres() -> None:
+    data = phase3_project_dict()
+    data["field_objects"]["cylinders"] = [
+        {
+            "obstacle_id": "CYLINDER_PICKUP",
+            "center_x_mm": 1000,
+            "center_y_mm": 0,
+            "radius_mm": 51,
+            "configured": True,
+            "enabled": True,
+        },
+        {
+            "obstacle_id": "CYLINDER_DROP",
+            "center_x_mm": -1000,
+            "center_y_mm": 0,
+            "radius_mm": 51,
+            "configured": True,
+            "enabled": True,
+        },
+    ]
+    project = ProjectV40.from_dict(data)
+    gates = topology_gates_from_profile(
+        {"gates": list(default_transfer_gates(project, "PICK_3_TO_1"))}
+    )
+    request = LegOptimizationRequest(
+        project=project,
+        from_state_id="P_PICK_1",
+        to_state_id="DROP_STEP_1",
+        from_pose=Pose2D(1319, 511, 0),
+        to_pose=Pose2D(-1438, -408, 0),
+        route_family="PICK_3_TO_1",
+        topology_profile="S_RIGHT_TRANSFER",
+        topology_gates=gates,
+    )
+
+    seeds = obstacle_aware_seeds(request)
+    assert len(seeds) == 1
+    seed = seeds[0]
+    assert seed.seed_id == "official_s_gate_seed"
+    assert len(seed.waypoints) == 6
+    assert (seed.waypoints[2].x_mm, seed.waypoints[2].y_mm) == gates[0].center
+    assert (seed.waypoints[3].x_mm, seed.waypoints[3].y_mm) == gates[1].center
+
+    def cross(a, b, c) -> float:
+        return (b.x_mm - a.x_mm) * (c.y_mm - a.y_mm) - (b.y_mm - a.y_mm) * (c.x_mm - a.x_mm)
+
+    assert abs(cross(*seed.waypoints[:3])) < 1.0e-6
+    assert abs(cross(*seed.waypoints[-3:])) < 1.0e-6
+
+
+def test_failed_leg_entries_are_retried_but_reusable_entries_are_not() -> None:
+    assert _requires_optimization(
+        SimpleNamespace(reusable=False, status="FAILED"), include_stale=True
+    )
+    assert _requires_optimization(
+        SimpleNamespace(reusable=False, status="TIMEOUT"), include_stale=True
+    )
+    assert not _requires_optimization(
+        SimpleNamespace(reusable=False, status="STALE"), include_stale=False
+    )
+    assert not _requires_optimization(
+        SimpleNamespace(reusable=True, status="REUSABLE"), include_stale=True
+    )
+
+
+def test_full_auto_worker_prepares_both_routes_before_clean_compile() -> None:
+    preferred = CandidateTiming(
+        candidate_id="RIGHT",
+        semantic_hash="right",
+        route_family="PICK_3_TO_1",
+        complete=False,
+        motion_time_ms=0,
+        mechanism_time_ms=0,
+        mechanism_busy_time_ms=0,
+        total_time_ms=0,
+        leg_ids=("R",),
+        missing_leg_ids=("R",),
+        route_rule_match=True,
+    )
+    other = CandidateTiming(
+        candidate_id="LEFT",
+        semantic_hash="left",
+        route_family="PICK_1_TO_3",
+        complete=False,
+        motion_time_ms=0,
+        mechanism_time_ms=0,
+        mechanism_busy_time_ms=0,
+        total_time_ms=0,
+        leg_ids=("L",),
+        missing_leg_ids=("L",),
+        route_rule_match=False,
+    )
+    evaluation = SimpleNamespace(
+        timings=(other, preferred),
+        to_dict=lambda: {"timings": ["LEFT", "RIGHT"]},
+    )
+    optimized_ids: list[str] = []
+
+    class Result:
+        failure_count = 0
+
+        @staticmethod
+        def to_dict() -> dict[str, object]:
+            return {
+                "attempted_count": 1,
+                "optimized_count": 1,
+                "failure_count": 0,
+                "skipped_count": 0,
+                "failures": [],
+            }
+
+    def optimize_stub(*_args, **kwargs):
+        optimized_ids.append(str(kwargs["candidate_id"]))
+        return Result()
+
+    cancel = SimpleNamespace(is_set=lambda: False)
+    with (
+        patch.object(worker_process, "evaluate_case_candidates", return_value=evaluation),
+        patch.object(worker_process, "optimize_missing_legs", side_effect=optimize_stub),
+    ):
+        result = worker_process._run_job(
+            SimpleNamespace(),
+            "generate-full-auto-one",
+            {"traj_id": 32, "dry_run": True},
+            cancel,
+            lambda *_args, **_kwargs: None,
+        )
+
+    assert optimized_ids == ["RIGHT", "LEFT"]
+    assert result["prepared_candidate_ids"] == ["RIGHT", "LEFT"]
+    assert result["followup"]["job"] == "compile-full-auto-one"

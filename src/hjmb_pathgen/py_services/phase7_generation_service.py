@@ -346,7 +346,7 @@ def optimize_missing_legs(
     targets = [
         item
         for item in relevant_requirements
-        if item.status == "MISSING" or (include_stale and item.status == "STALE")
+        if _requires_optimization(item, include_stale=include_stale)
     ]
     if max_count is not None:
         targets = targets[: max(0, max_count)]
@@ -424,6 +424,24 @@ def optimize_missing_legs(
         failures=tuple(failures),
         library_path=layout.leg_library_json,
     )
+
+
+def _requires_optimization(
+    requirement: UniqueLegRequirement,
+    *,
+    include_stale: bool,
+) -> bool:
+    """Return whether a non-reusable library entry must be planned again.
+
+    FAILED/TIMEOUT/CANCELLED entries are retryable just like MISSING entries.
+    Only a caller that explicitly excludes STALE entries may skip one.
+    """
+
+    if requirement.reusable:
+        return False
+    if requirement.status == "STALE" and not include_stale:
+        return False
+    return True
 
 
 def optimize_leg_by_id(

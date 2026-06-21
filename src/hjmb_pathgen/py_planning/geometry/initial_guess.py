@@ -28,7 +28,8 @@ def build_initial_guesses(request: LegOptimizationRequest) -> tuple[InitialGuess
         guesses.append(_manual_guess(start, finish, request.initial_control_points, "MANUAL_CONTROL_POINTS"))
     if request.warm_start_leg is not None and request.warm_start_leg.control_points:
         guesses.append(_warm_start_guess(start, finish, request.warm_start_leg.control_points))
-    for seed in obstacle_aware_seeds(request):
+    obstacle_seeds = obstacle_aware_seeds(request)
+    for seed in obstacle_seeds:
         guesses.append(
             InitialGuess(
                 seed.seed_id,
@@ -37,6 +38,11 @@ def build_initial_guesses(request: LegOptimizationRequest) -> tuple[InitialGuess
                 tension=seed.tension,
             )
         )
+    if request.topology_gates and any(seed.source == "TOPOLOGY_GATE_S" for seed in obstacle_seeds):
+        # Ordered transfer gates already provide the complete legal S topology.
+        # Do not spend AUTOMATIC's four-guess budget on straight/A* candidates
+        # that necessarily violate one of the gates.
+        return _deduplicate_guesses(tuple(guesses))
     guesses.append(InitialGuess("straight", "STRAIGHT", (start, finish)))
     if request.topology_gates:
         guesses.append(InitialGuess("gate_center", "TOPOLOGY_GATE_CENTER", _gate_points(start, finish, request.topology_gates, offset_ratio=0.0)))

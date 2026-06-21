@@ -59,6 +59,12 @@ def obstacle_aware_seeds(request: LegOptimizationRequest) -> tuple[DetourSeed, .
     s_seed = _s_route_seed(request, start, finish)
     if s_seed is not None:
         seeds.append(s_seed)
+        # A pickup-to-drop transfer with ordered virtual gates has exactly one
+        # legal route family.  Generic A* seeds do not preserve that ordered
+        # S topology and are expensive to validate, so they must not displace
+        # the official gate seed from AUTOMATIC's small initial-guess budget.
+        if request.topology_gates:
+            return _deduplicate(seeds)
 
     for margin_index, margin in enumerate((30.0, 65.0)):
         grid = _grid_detour(request, start, finish, safety_margin_mm=margin)
@@ -129,28 +135,23 @@ def _s_route_seed(
         return None
 
     if request.topology_gates:
-        # Gates are the authoritative route topology.  Add short horizontal
-        # staging shoulders around each vertical gate; using only the two gate
-        # centres makes a cubic join too sharp and can collapse the start speed
-        # envelope to zero.  The shoulders also prevent the curve from rounding
-        # back across a cylinder after it has crossed a gate.
-        gate_points: list[Point2D] = []
-        for gate in request.topology_gates:
-            cx, cy = gate.center
-            gate_points.extend(
-                (
-                    Point2D(cx + 300.0, cy),
-                    Point2D(cx, cy),
-                    Point2D(cx - 300.0, cy),
-                )
-            )
-        # Make the first and last two chords collinear.  This gives both stop
-        # endpoints zero geometric curvature, avoiding a conservative lateral
-        # acceleration cap that otherwise leaves the first interval at v=0.
+        # The ordered gate centres define the official S route.  Use exactly
+        # one through point per gate, plus one collinear staging point at each
+        # stop endpoint.  The previous three-points-per-gate seed introduced
+        # unnecessary curvature reversals; the time parameterizer then found
+        # adjacent zero-speed samples and rejected otherwise collision-free
+        # FULL_AUTO transfers.
+        gate_points = [Point2D(*gate.center) for gate in request.topology_gates]
         first = gate_points[0]
         last = gate_points[-1]
-        start_mid = Point2D((start.x_mm + first.x_mm) * 0.5, (start.y_mm + first.y_mm) * 0.5)
-        finish_mid = Point2D((last.x_mm + finish.x_mm) * 0.5, (last.y_mm + finish.y_mm) * 0.5)
+        start_mid = Point2D(
+            (start.x_mm + first.x_mm) * 0.5,
+            (start.y_mm + first.y_mm) * 0.5,
+        )
+        finish_mid = Point2D(
+            (last.x_mm + finish.x_mm) * 0.5,
+            (last.y_mm + finish.y_mm) * 0.5,
+        )
         points = _clean_points((start, start_mid, *gate_points, finish_mid, finish))
         return DetourSeed("official_s_gate_seed", "TOPOLOGY_GATE_S", points, tension=0.18)
 
