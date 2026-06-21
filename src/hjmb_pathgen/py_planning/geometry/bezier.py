@@ -94,25 +94,32 @@ class BezierPath:
     segments: tuple[CubicBezier, ...]
 
     @classmethod
-    def from_waypoints(cls, points: Iterable[Point2D], *, tension: float = 0.75) -> "BezierPath":
+    def from_waypoints(cls, points: Iterable[Point2D], *, tension: float = 1.0) -> "BezierPath":
         point_list = tuple(points)
         if len(point_list) < 2:
             raise ValueError("Bezier path requires at least two waypoints")
         _reject_duplicate_waypoints(point_list)
-        tangents = _waypoint_tangents(point_list)
+        # Cubic Hermite interpolation over cumulative chord length.  A single
+        # physical derivative dP/ds is assigned to every interior waypoint,
+        # while each segment's Bezier handle is scaled by that segment's chord
+        # length.  This is C1 in the path parameter and avoids both failure
+        # modes seen in uneven A* polylines: unrelated handles at a join and
+        # handles that are far too short on a long neighboring segment.
+        chord_lengths = tuple(
+            math.hypot(right.x_mm - left.x_mm, right.y_mm - left.y_mm)
+            for left, right in zip(point_list, point_list[1:])
+        )
+        slopes = _natural_spline_slopes(point_list, chord_lengths, tension=tension)
         segments: list[CubicBezier] = []
         for index, (left, right) in enumerate(zip(point_list, point_list[1:])):
-            length = math.hypot(right.x_mm - left.x_mm, right.y_mm - left.y_mm)
-            if length <= EPSILON:
-                raise ValueError("Bezier path contains a zero-length segment")
-            handle = length * tension / 3.0
-            left_tangent = tangents[index]
-            right_tangent = tangents[index + 1]
+            length = chord_lengths[index]
+            left_local = (slopes[index][0] * length, slopes[index][1] * length)
+            right_local = (slopes[index + 1][0] * length, slopes[index + 1][1] * length)
             segments.append(
                 CubicBezier(
                     p0=left,
-                    p1=Point2D(left.x_mm + left_tangent[0] * handle, left.y_mm + left_tangent[1] * handle),
-                    p2=Point2D(right.x_mm - right_tangent[0] * handle, right.y_mm - right_tangent[1] * handle),
+                    p1=Point2D(left.x_mm + left_local[0] / 3.0, left.y_mm + left_local[1] / 3.0),
+                    p2=Point2D(right.x_mm - right_local[0] / 3.0, right.y_mm - right_local[1] / 3.0),
                     p3=right,
                 )
             )
@@ -191,6 +198,100 @@ class BezierPath:
 def point_from_dict(data: dict[str, object]) -> Point2D:
     return Point2D(x_mm=float(data["x_mm"]), y_mm=float(data["y_mm"]))
 
+
+
+def _natural_spline_slopes(
+    points: tuple[Point2D, ...],
+    chord_lengths: tuple[float, ...],
+    *,
+    tension: float,
+) -> tuple[tuple[float, float], ...]:
+    """Solve non-uniform cubic-spline dP/ds values at every waypoint.
+
+    With ``tension == 1`` the resulting piecewise cubic is C2 over cumulative
+    chord length, so curvature is continuous at waypoint joins.  Smaller
+    values remain supported for imported legacy drafts, but all current
+    automatic/manual-template seeds use the C2 value 1.0.
+    """
+
+    if not 0.25 <= tension <= 1.25:
+        raise ValueError("Bezier tension must be in [0.25, 1.25]")
+    if any(length <= EPSILON for length in chord_lengths):
+        raise ValueError("Bezier path contains a zero-length segment")
+    count = len(points)
+    if count == 2:
+        length = chord_lengths[0]
+        slope = (
+            (points[1].x_mm - points[0].x_mm) / length * tension,
+            (points[1].y_mm - points[0].y_mm) / length * tension,
+        )
+        return (slope, slope)
+
+    lower = [0.0] * count
+    diagonal = [0.0] * count
+    upper = [0.0] * count
+    rhs_x = [0.0] * count
+    rhs_y = [0.0] * count
+
+    first_dx = (points[1].x_mm - points[0].x_mm) / chord_lengths[0]
+    first_dy = (points[1].y_mm - points[0].y_mm) / chord_lengths[0]
+    diagonal[0] = 2.0
+    upper[0] = 1.0
+    rhs_x[0] = 3.0 * first_dx
+    rhs_y[0] = 3.0 * first_dy
+
+    for index in range(1, count - 1):
+        previous_h = chord_lengths[index - 1]
+        next_h = chord_lengths[index]
+        previous_dx = (points[index].x_mm - points[index - 1].x_mm) / previous_h
+        previous_dy = (points[index].y_mm - points[index - 1].y_mm) / previous_h
+        next_dx = (points[index + 1].x_mm - points[index].x_mm) / next_h
+        next_dy = (points[index + 1].y_mm - points[index].y_mm) / next_h
+        lower[index] = next_h
+        diagonal[index] = 2.0 * (previous_h + next_h)
+        upper[index] = previous_h
+        rhs_x[index] = 3.0 * (next_h * previous_dx + previous_h * next_dx)
+        rhs_y[index] = 3.0 * (next_h * previous_dy + previous_h * next_dy)
+
+    last_dx = (points[-1].x_mm - points[-2].x_mm) / chord_lengths[-1]
+    last_dy = (points[-1].y_mm - points[-2].y_mm) / chord_lengths[-1]
+    lower[-1] = 1.0
+    diagonal[-1] = 2.0
+    rhs_x[-1] = 3.0 * last_dx
+    rhs_y[-1] = 3.0 * last_dy
+
+    slopes_x = _solve_tridiagonal(lower, diagonal, upper, rhs_x)
+    slopes_y = _solve_tridiagonal(lower, diagonal, upper, rhs_y)
+    return tuple((x * tension, y * tension) for x, y in zip(slopes_x, slopes_y))
+
+
+def _solve_tridiagonal(
+    lower: list[float],
+    diagonal: list[float],
+    upper: list[float],
+    rhs: list[float],
+) -> tuple[float, ...]:
+    """Thomas solve with explicit singularity checks."""
+
+    count = len(diagonal)
+    c_prime = [0.0] * count
+    d_prime = [0.0] * count
+    pivot = diagonal[0]
+    if abs(pivot) <= EPSILON:
+        raise ValueError("Bezier spline system is singular")
+    c_prime[0] = upper[0] / pivot
+    d_prime[0] = rhs[0] / pivot
+    for index in range(1, count):
+        pivot = diagonal[index] - lower[index] * c_prime[index - 1]
+        if abs(pivot) <= EPSILON:
+            raise ValueError("Bezier spline system is singular")
+        c_prime[index] = upper[index] / pivot if index < count - 1 else 0.0
+        d_prime[index] = (rhs[index] - lower[index] * d_prime[index - 1]) / pivot
+    result = [0.0] * count
+    result[-1] = d_prime[-1]
+    for index in range(count - 2, -1, -1):
+        result[index] = d_prime[index] - c_prime[index] * result[index + 1]
+    return tuple(result)
 
 def _waypoint_tangents(points: tuple[Point2D, ...]) -> tuple[tuple[float, float], ...]:
     tangents: list[tuple[float, float]] = []

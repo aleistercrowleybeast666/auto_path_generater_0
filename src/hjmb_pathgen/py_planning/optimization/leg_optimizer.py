@@ -37,7 +37,7 @@ from hjmb_pathgen.py_planning.dynamics.time_parameterization import (
 from hjmb_pathgen.py_planning.optimization.yaw_windows import YawWindowProfile
 from hjmb_pathgen.py_services.path_validation_service import validate_spatial_path_collision
 
-PLANNER_ALGORITHM_VERSION = "PHASE6_LEG_OPTIMIZER_V2_S_GATES"
+PLANNER_ALGORITHM_VERSION = "PHASE6_LEG_OPTIMIZER_V4_C2_CURVATURE"
 
 
 @dataclass(frozen=True)
@@ -202,6 +202,9 @@ def _evaluate_xy_yaw(
         )
 
     nodes = _local_nodes_from_time_samples(time_result.samples)
+    quality_metrics = _curve_quality_metrics(samples)
+    combined_metrics = dict(time_result.max_metrics)
+    combined_metrics.update(quality_metrics)
     evaluation = CandidateEvaluation(
         candidate_id=_yaw_guess(guess, yaw_index).guess_id,
         source=guess.source,
@@ -212,7 +215,7 @@ def _evaluate_xy_yaw(
         topology=topology.to_dict(),
         collision=collision.to_dict(),
         time_parameterization=time_result.to_dict(),
-        max_metrics=dict(time_result.max_metrics),
+        max_metrics=combined_metrics,
     )
     return _EvaluatedCandidate(
         evaluation=evaluation,
@@ -223,6 +226,31 @@ def _evaluate_xy_yaw(
         local_nodes=nodes,
     )
 
+
+
+def _curve_quality_metrics(samples: tuple[object, ...]) -> dict[str, float]:
+    curvatures = [abs(float(getattr(sample, "curvature_1_per_mm", 0.0))) for sample in samples]
+    if not curvatures:
+        return {
+            "max_abs_curvature_1_per_mm": 0.0,
+            "min_curvature_radius_mm": float("inf"),
+            "max_curvature_jump_1_per_mm": 0.0,
+            "curvature_squared_integral_1_per_mm": 0.0,
+        }
+    maximum = max(curvatures)
+    jumps = [abs(right - left) for left, right in zip(curvatures, curvatures[1:])]
+    integral = 0.0
+    for left, right, left_sample, right_sample in zip(
+        curvatures, curvatures[1:], samples, samples[1:]
+    ):
+        ds = max(0.0, float(getattr(right_sample, "s_mm")) - float(getattr(left_sample, "s_mm")))
+        integral += 0.5 * (left * left + right * right) * ds
+    return {
+        "max_abs_curvature_1_per_mm": maximum,
+        "min_curvature_radius_mm": (1.0 / maximum) if maximum > 1.0e-12 else 1.0e12,
+        "max_curvature_jump_1_per_mm": max(jumps, default=0.0),
+        "curvature_squared_integral_1_per_mm": integral,
+    }
 
 def _yaw_candidates(request: LegOptimizationRequest, profile: OptimizationProfile) -> tuple[YawWindowProfile, ...]:
     return tuple(
@@ -300,7 +328,7 @@ def _analysis_dict(request: LegOptimizationRequest, profile: OptimizationProfile
     time_result = candidate.time_result
     if time_result is None:
         raise ValueError("candidate has no timing")
-    max_metrics = dict(time_result.max_metrics)
+    max_metrics = dict(candidate.evaluation.max_metrics or time_result.max_metrics)
     return {
         "planned_time_ms": candidate.evaluation.planned_time_ms,
         "total_length_mm": candidate.evaluation.total_length_mm,
@@ -379,7 +407,27 @@ def _local_nodes_from_time_samples(samples: tuple[object, ...]) -> tuple[dict[st
         arrival_state_id = str(getattr(sample, "arrival_state_id", ""))
         if arrival_state_id:
             node["arrival_state_id"] = arrival_state_id
-        nodes.append(node)
+
+        # Millimetre quantisation can map two neighbouring floating-point
+        # samples to the same XY coordinate while local_s/yaw still advance.
+        # Keeping both creates a zero-length tangent when a saved Leg is
+        # strictly revalidated.  Merge only consecutive quantisation duplicates;
+        # this does not alter the continuous path or its endpoint semantics.
+        if nodes and node["x_mm"] == nodes[-1]["x_mm"] and node["y_mm"] == nodes[-1]["y_mm"]:
+            previous = nodes[-1]
+            merged = dict(node)
+            merged["flags"] = int(previous.get("flags", 0)) | int(node.get("flags", 0))
+            if "arrival_state_id" not in merged and "arrival_state_id" in previous:
+                merged["arrival_state_id"] = previous["arrival_state_id"]
+            if int(previous.get("local_s_mm", 0)) == 0:
+                merged["local_s_mm"] = 0
+                merged["yaw_ddeg"] = previous.get("yaw_ddeg", merged["yaw_ddeg"])
+                merged["vx_mmps"] = 0
+                merged["vy_mmps"] = 0
+                merged["wz_ddegps"] = 0
+            nodes[-1] = merged
+        else:
+            nodes.append(node)
     if nodes:
         nodes[0]["local_s_mm"] = 0
         nodes[0]["vx_mmps"] = 0

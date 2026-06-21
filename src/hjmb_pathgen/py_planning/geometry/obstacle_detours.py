@@ -23,7 +23,7 @@ class DetourSeed:
     seed_id: str
     source: str
     waypoints: tuple[Point2D, ...]
-    tension: float = 0.24
+    tension: float = 1.0
 
 
 @dataclass(frozen=True)
@@ -74,7 +74,7 @@ def obstacle_aware_seeds(request: LegOptimizationRequest) -> tuple[DetourSeed, .
                     seed_id=f"grid_detour_{margin_index}",
                     source="OBSTACLE_ASTAR",
                     waypoints=grid,
-                    tension=0.20 if margin_index == 0 else 0.16,
+                    tension=1.0,
                 )
             )
 
@@ -89,21 +89,22 @@ def _state_lane_seed(
     from_id = request.from_state_id
     to_id = request.to_state_id
 
-    # The middle pickup box is approached from two sides.  A left-side aisle
-    # gives the planner a valid seed for 2L->3 and 2R->1 instead of cutting
-    # through PICKUP_BOX_2.
-    if from_id.startswith("P_PICK_") and to_id.startswith("P_PICK_"):
-        aisle_x = min(start.x_mm, finish.x_mm, 1120.0)
+    # Only the middle-to-opposite outer pickup transitions need a dedicated
+    # obstacle seed.  Use a normalized S through the open left aisle, matching
+    # the proven semi-auto geometry while adapting to calibrated endpoints.
+    if (from_id, to_id) in {("P_PICK_2L", "P_PICK_3"), ("P_PICK_2R", "P_PICK_1")}:
+        dy = finish.y_mm - start.y_mm
         points = _clean_points(
             (
                 start,
-                Point2D(aisle_x, start.y_mm),
-                Point2D(aisle_x, finish.y_mm),
+                Point2D(start.x_mm - 417.0, start.y_mm + 0.116 * dy),
+                Point2D(start.x_mm - 754.0, start.y_mm + 0.419 * dy),
+                Point2D(finish.x_mm - 706.0, start.y_mm + 0.852 * dy),
+                Point2D(finish.x_mm - 363.0, start.y_mm + 1.030 * dy),
                 finish,
             )
         )
-        if len(points) >= 3:
-            return DetourSeed("pickup_left_aisle", "STATE_SAFE_AISLE", points, tension=0.20)
+        return DetourSeed("pickup_s_aisle", "STATE_SAFE_AISLE", points, tension=1.0)
 
     # All five drop boxes are served from the open aisle on their right.  The
     # two staging points keep the cubic curve from rounding through a box.
@@ -118,7 +119,7 @@ def _state_lane_seed(
             )
         )
         if len(points) >= 3:
-            return DetourSeed("drop_right_aisle", "STATE_SAFE_AISLE", points, tension=0.16)
+            return DetourSeed("drop_right_aisle", "STATE_SAFE_AISLE", points, tension=1.0)
     return None
 
 
@@ -153,7 +154,7 @@ def _s_route_seed(
             (last.y_mm + finish.y_mm) * 0.5,
         )
         points = _clean_points((start, start_mid, *gate_points, finish_mid, finish))
-        return DetourSeed("official_s_gate_seed", "TOPOLOGY_GATE_S", points, tension=0.18)
+        return DetourSeed("official_s_gate_seed", "TOPOLOGY_GATE_S", points, tension=1.0)
 
     route_family = str(request.route_family)
     sign = -1.0 if route_family == "PICK_1_TO_3" else 1.0
@@ -168,7 +169,7 @@ def _s_route_seed(
             finish,
         )
     )
-    return DetourSeed("official_s_seed", "ROUTE_FAMILY_S", points, tension=0.18)
+    return DetourSeed("official_s_seed", "ROUTE_FAMILY_S", points, tension=1.0)
 
 
 def _grid_detour(
@@ -398,6 +399,36 @@ def _simplify(points: list[Point2D], rects: tuple[_Rect, ...], circles: tuple[_C
             candidate -= 1
         result.append(points[candidate])
         index = candidate
+    return _regularize_visible_polyline(result, rects, circles)
+
+
+def _regularize_visible_polyline(
+    points: list[Point2D],
+    rects: tuple[_Rect, ...],
+    circles: tuple[_Circle, ...],
+) -> list[Point2D]:
+    """Remove A* stair-step remnants and unsafe very short interior chords."""
+
+    result = list(points)
+    changed = True
+    while changed and len(result) > 2:
+        changed = False
+        for index in range(1, len(result) - 1):
+            previous, current, following = result[index - 1], result[index], result[index + 1]
+            left = math.hypot(current.x_mm - previous.x_mm, current.y_mm - previous.y_mm)
+            right = math.hypot(following.x_mm - current.x_mm, following.y_mm - current.y_mm)
+            if left <= 1.0e-9 or right <= 1.0e-9:
+                result.pop(index)
+                changed = True
+                break
+            ux, uy = (current.x_mm - previous.x_mm) / left, (current.y_mm - previous.y_mm) / left
+            vx, vy = (following.x_mm - current.x_mm) / right, (following.y_mm - current.y_mm) / right
+            turn_deg = math.degrees(math.acos(max(-1.0, min(1.0, ux * vx + uy * vy))))
+            removable = min(left, right) < 120.0 or turn_deg < 7.0
+            if removable and _line_clear(previous, following, rects, circles):
+                result.pop(index)
+                changed = True
+                break
     return result
 
 
@@ -448,6 +479,12 @@ def _append_endpoint_staging(
     if distance <= 5.0:
         if reverse:
             _append_unique(target, escape)
+        return
+    # Do not manufacture two tiny consecutive segments around a nearby
+    # endpoint.  They create large Bezier curvature even when the A* corridor
+    # itself is smooth.  A midpoint is useful only for a genuinely long escape.
+    if distance < 240.0:
+        _append_unique(target, escape)
         return
     midpoint = Point2D((endpoint.x_mm + escape.x_mm) * 0.5, (endpoint.y_mm + escape.y_mm) * 0.5)
     order = (escape, midpoint) if reverse else (midpoint, escape)

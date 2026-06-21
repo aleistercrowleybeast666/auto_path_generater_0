@@ -17,7 +17,7 @@ class InitialGuess:
     guess_id: str
     source: str
     waypoints: tuple[Point2D, ...]
-    tension: float = 0.75
+    tension: float = 1.0
 
 
 def build_initial_guesses(request: LegOptimizationRequest) -> tuple[InitialGuess, ...]:

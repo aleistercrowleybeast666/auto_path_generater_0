@@ -9,6 +9,11 @@ from typing import Callable, TypeVar
 
 from hjmb_pathgen.py_domain.errors import JsonFormatError, JsonValidationError, V40ValidationError, WriteBackValidationError
 from hjmb_pathgen.py_domain.leg import LegLibraryV40
+from hjmb_pathgen.py_domain.leg_template import (
+    LegTemplateInstancesV40,
+    LegTemplatesV40,
+    LegTemplateValidationReportV40,
+)
 from hjmb_pathgen.py_domain.project import ProjectV40
 from hjmb_pathgen.py_domain.route_case import CaseManifestV40, PortableCaseV40, RouteCaseTableV40
 from hjmb_pathgen.py_domain.site_preset import SitePosePresetV40
@@ -29,6 +34,18 @@ def load_route_case_table(path: str | Path) -> RouteCaseTableV40:
 
 def load_leg_library(path: str | Path) -> LegLibraryV40:
     return parse_leg_library_bytes(Path(path).read_bytes(), source=str(path))
+
+
+def load_leg_templates(path: str | Path) -> LegTemplatesV40:
+    return parse_leg_templates_bytes(Path(path).read_bytes(), source=str(path))
+
+
+def load_leg_template_instances(path: str | Path) -> LegTemplateInstancesV40:
+    return parse_leg_template_instances_bytes(Path(path).read_bytes(), source=str(path))
+
+
+def load_leg_template_validation_report(path: str | Path) -> LegTemplateValidationReportV40:
+    return parse_leg_template_validation_report_bytes(Path(path).read_bytes(), source=str(path))
 
 
 def load_case(path: str | Path, *, enforce_filename: bool = True) -> CaseManifestV40:
@@ -61,6 +78,20 @@ def parse_leg_library_bytes(data: bytes, *, source: str = "<bytes>") -> LegLibra
     return _parse_model(data, LegLibraryV40.from_dict, "LegLibraryV40", source)
 
 
+def parse_leg_templates_bytes(data: bytes, *, source: str = "<bytes>") -> LegTemplatesV40:
+    return _parse_model(data, LegTemplatesV40.from_dict, "LegTemplatesV40", source)
+
+
+def parse_leg_template_instances_bytes(data: bytes, *, source: str = "<bytes>") -> LegTemplateInstancesV40:
+    return _parse_model(data, LegTemplateInstancesV40.from_dict, "LegTemplateInstancesV40", source)
+
+
+def parse_leg_template_validation_report_bytes(
+    data: bytes, *, source: str = "<bytes>"
+) -> LegTemplateValidationReportV40:
+    return _parse_model(data, LegTemplateValidationReportV40.from_dict, "LegTemplateValidationReportV40", source)
+
+
 def parse_case_bytes(data: bytes, *, source: str = "<bytes>") -> CaseManifestV40:
     return _parse_model(data, CaseManifestV40.from_dict, "CaseManifestV40", source)
 
@@ -82,6 +113,18 @@ def dump_route_case_table_bytes(model: RouteCaseTableV40) -> bytes:
 
 
 def dump_leg_library_bytes(model: LegLibraryV40) -> bytes:
+    return _dump_model_bytes(model)
+
+
+def dump_leg_templates_bytes(model: LegTemplatesV40) -> bytes:
+    return _dump_model_bytes(model)
+
+
+def dump_leg_template_instances_bytes(model: LegTemplateInstancesV40) -> bytes:
+    return _dump_model_bytes(model)
+
+
+def dump_leg_template_validation_report_bytes(model: LegTemplateValidationReportV40) -> bytes:
     return _dump_model_bytes(model)
 
 
@@ -107,6 +150,24 @@ def save_route_case_table(path: str | Path, model: RouteCaseTableV40) -> None:
 
 def save_leg_library(path: str | Path, model: LegLibraryV40) -> None:
     _save_json(path, model, dump_leg_library_bytes, lambda data: parse_leg_library_bytes(data, source=str(path)))
+
+
+def save_leg_templates(path: str | Path, model: LegTemplatesV40) -> None:
+    _save_json(path, model, dump_leg_templates_bytes, lambda data: parse_leg_templates_bytes(data, source=str(path)))
+
+
+def save_leg_template_instances(path: str | Path, model: LegTemplateInstancesV40) -> None:
+    _save_json(
+        path, model, dump_leg_template_instances_bytes,
+        lambda data: parse_leg_template_instances_bytes(data, source=str(path)),
+    )
+
+
+def save_leg_template_validation_report(path: str | Path, model: LegTemplateValidationReportV40) -> None:
+    _save_json(
+        path, model, dump_leg_template_validation_report_bytes,
+        lambda data: parse_leg_template_validation_report_bytes(data, source=str(path)),
+    )
 
 
 def save_case(path: str | Path, model: CaseManifestV40) -> None:

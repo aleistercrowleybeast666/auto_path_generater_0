@@ -5,7 +5,7 @@ Phase 2 implements strict typed JSON codecs in
 
 ## Supported Documents
 
-The public APIs cover all five Phase 2 JSON classes:
+The public APIs cover the Phase 2 JSON classes and the independent round-1 leg-template documents:
 
 ```text
 load_project / save_project
@@ -13,6 +13,9 @@ load_route_case_table / save_route_case_table
 load_leg_library / save_leg_library
 load_case / save_case
 load_portable_case / save_portable_case
+load_leg_templates / save_leg_templates
+load_leg_template_instances / save_leg_template_instances
+load_leg_template_validation_report / save_leg_template_validation_report
 ```
 
 The loaded models are:
@@ -23,6 +26,9 @@ RouteCaseTableV40
 LegLibraryV40
 CaseManifestV40
 PortableCaseV40
+LegTemplatesV40
+LegTemplateInstancesV40
+LegTemplateValidationReportV40
 ```
 
 ## Strict Rules

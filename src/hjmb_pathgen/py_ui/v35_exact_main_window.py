@@ -33,6 +33,8 @@ from PySide6.QtWidgets import (
     QPushButton,
     QScrollArea,
     QSpinBox,
+    QSplitter,
+    QStackedWidget,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -56,8 +58,14 @@ from hjmb_pathgen.py_services.case_draft_service import generate_case_draft
 from hjmb_pathgen.py_services.project_bootstrap_service import bootstrap_v4_workspace
 from hjmb_pathgen.py_services.competition_task_config_service import default_competition_task_config
 from hjmb_pathgen.py_services.mode_case_service import convert_full_auto_to_semi_auto
+from hjmb_pathgen.py_services.full_auto_leg_source_service import (
+    FULL_AUTO_LEG_SOURCE_POLICY_KEY,
+    FullAutoLegSourcePolicy,
+)
 from hjmb_pathgen.py_ui.ui_state import LoadedProjectState
 from hjmb_pathgen.py_workers.worker_process import WorkerJobHandle, start_worker_job
+from hjmb_pathgen.py_ui.pages.leg_template_page import LegTemplatePage
+from hjmb_pathgen.py_ui.field_view import V4FieldView
 
 from .v35_base import editor as legacy
 from .v35_base.path_models import (
@@ -142,6 +150,8 @@ class V35ExactV4MainWindow(legacy.MainWindow):
         self._v4_current_job = ""
         self._v4_dirty = False
         self._v4_loading_case = False
+        self._leg_template_worker_token = ""
+        self._leg_template_worker_revision = 0
         self._draft_unload_pose_profiles: dict[str, dict[str, Any]] = {}
         super().__init__()
         self._v4_booting = False
@@ -166,14 +176,110 @@ class V35ExactV4MainWindow(legacy.MainWindow):
         self.traj_id_spin.editingFinished.connect(self._commit_traj_id_selection)
 
         self._replace_mode_combo()
+        self._install_shared_field_stack()
         self._rewire_toolbar()
         self._extend_fixed_site_tab()
         self._extend_parameter_tab()
+        self._install_leg_template_page()
         self._update_v4_mode_ui()
         self.update_status("请先打开一个 V4 项目目录；编辑不会自动规划")
 
         if project_root is not None:
             self.load_v4_project(project_root)
+
+    def _install_shared_field_stack(self) -> None:
+        """Use the original large field area for Leg-template editing.
+
+        The right-side Leg tab is a controller only.  Switching to it swaps the
+        main canvas to a dedicated V4 template view instead of embedding a
+        second miniature field inside the narrow side panel.
+        """
+
+        splitter = self.centralWidget()
+        if not isinstance(splitter, QSplitter):
+            raise RuntimeError("V4 main window requires the legacy horizontal splitter")
+        original_field = self.field
+        field_index = splitter.indexOf(original_field)
+        if field_index < 0:
+            raise RuntimeError("legacy field is not attached to the main splitter")
+        self._field_stack = QStackedWidget()
+        self._field_stack.setObjectName("v4_shared_field_stack")
+        detached = splitter.replaceWidget(field_index, self._field_stack)
+        if detached is not original_field:
+            raise RuntimeError("failed to detach the legacy field from the splitter")
+        self._field_stack.addWidget(original_field)
+        self._template_field = V4FieldView(mode="template", parent=self._field_stack)
+        self._template_field.setObjectName("v4_main_leg_template_field")
+        self._field_stack.addWidget(self._template_field)
+        self._field_stack.setCurrentWidget(original_field)
+        splitter.setStretchFactor(field_index, 1)
+
+    def _fit_active_field(self) -> None:
+        if hasattr(self, "_field_stack") and self._field_stack.currentWidget() is self._template_field:
+            self._template_field.fit_to_field()
+        else:
+            self.field.fit_to_field()
+
+    def _install_leg_template_page(self) -> None:
+        self.leg_template_page = LegTemplatePage(self, field_view=self._template_field)
+        fixed_index = self.right_tabs.indexOf(self.fixed_site_tab)
+        self.right_tabs.insertTab(fixed_index + 1, self.leg_template_page, "Leg 模板")
+        self.leg_template_page.validationRequested.connect(self._start_leg_template_validation)
+        self.leg_template_page.cancelRequested.connect(self._cancel_worker)
+        self.leg_template_page.statusMessage.connect(self.update_status)
+        self.leg_template_page.timeSummaryChanged.connect(self._leg_template_time_changed)
+        self.right_tabs.currentChanged.connect(self._right_tab_changed)
+
+    def _right_tab_changed(self, index: int) -> None:
+        if not hasattr(self, "leg_template_page"):
+            return
+        if self.right_tabs.widget(index) is self.leg_template_page:
+            if hasattr(self, "_field_stack"):
+                self._field_stack.setCurrentWidget(self._template_field)
+            if self._v4_state is not None:
+                same_project = (
+                    self.leg_template_page.layout_ref is not None
+                    and self.leg_template_page.layout_ref.root == self._v4_state.layout.root
+                )
+                if not same_project:
+                    self.leg_template_page.load_layout(self._v4_state.layout, synchronize=True)
+                elif not self.leg_template_page.active_job_token:
+                    self.leg_template_page.sync_from_project()
+            self.v4_total_time_label.setText(self.leg_template_page.current_time_summary())
+        else:
+            if hasattr(self, "_field_stack"):
+                self._field_stack.setCurrentWidget(self.field)
+            self.leg_template_page.save_current_draft()
+            self._update_total_time_display()
+
+    def _leg_template_time_changed(self, text: str) -> None:
+        if (
+            hasattr(self, "right_tabs")
+            and hasattr(self, "leg_template_page")
+            and self.right_tabs.currentWidget() is self.leg_template_page
+            and hasattr(self, "v4_total_time_label")
+        ):
+            self.v4_total_time_label.setText(text)
+
+    def _update_contextual_time_display(self) -> None:
+        if (
+            hasattr(self, "right_tabs")
+            and hasattr(self, "leg_template_page")
+            and self.right_tabs.currentWidget() is self.leg_template_page
+        ):
+            self.v4_total_time_label.setText(self.leg_template_page.current_time_summary())
+        else:
+            self._update_total_time_display()
+
+    def _start_leg_template_validation(self, job: str, params: dict[str, Any], token: str, revision: int) -> None:
+        if self._v4_worker is not None and self._v4_worker.is_alive():
+            self.leg_template_page.accept_worker_failure(token, "已有后台任务正在运行")
+            return
+        self._leg_template_worker_token = token
+        self._leg_template_worker_revision = revision
+        self._start_worker(job, params)
+        if self._v4_worker is None:
+            self.leg_template_page.accept_worker_failure(token, "后台验证任务启动失败")
 
     # ------------------------------------------------------------------
     # Keep V3.5 layout, replace only toolbar semantics.
@@ -187,7 +293,7 @@ class V35ExactV4MainWindow(legacy.MainWindow):
             "导出配置 JSON": ("另存当前Case JSON", self.save_json_as),
             "导出 BIN": ("导出当前BIN", self.export_bin),
             "打开 BIN": ("打开V4 Case", self.open_bin),
-            "适配场地": ("适配场地", self.field.fit_to_field),
+            "适配场地": ("适配场地", self._fit_active_field),
             "重新规划": ("生成/更新当前路径", self.plan_now),
             "校验": ("验证当前路径", self.validate_current_project),
         }
@@ -273,6 +379,24 @@ class V35ExactV4MainWindow(legacy.MainWindow):
             "固定8点 / 最优路段 / 批量",
         )
         root_layout = self.fixed_site_tab.layout()
+        source_group = QGroupBox("全自动 Leg 来源")
+        source_row = QHBoxLayout(source_group)
+        source_row.addWidget(QLabel("生成策略"))
+        self.full_auto_leg_source_combo = QComboBox()
+        self.full_auto_leg_source_combo.setMinimumWidth(220)
+        self.full_auto_leg_source_combo.addItem("仅自动规划", FullAutoLegSourcePolicy.AUTO_ONLY.value)
+        self.full_auto_leg_source_combo.addItem("仅人工模板", FullAutoLegSourcePolicy.MANUAL_ONLY.value)
+        self.full_auto_leg_source_combo.addItem("人工与自动择优", FullAutoLegSourcePolicy.BEST_AVAILABLE.value)
+        self.full_auto_leg_source_combo.setToolTip(
+            "仅自动：忽略人工模板；仅人工：缺少已验证实例即失败；"
+            "择优：每条Leg按同一套碰撞与时间指标选择更快来源。"
+        )
+        self.full_auto_leg_source_combo.currentIndexChanged.connect(self._full_auto_leg_source_changed)
+        source_row.addWidget(self.full_auto_leg_source_combo)
+        source_note = QLabel("人工模板必须启用且在当前配置下严格验证通过。")
+        source_note.setWordWrap(True)
+        source_row.addWidget(source_note, 1)
+        root_layout.insertWidget(0, source_group)
         for button in self.fixed_site_tab.findChildren(QPushButton):
             if button.text() == "导入固定点 JSON":
                 button.setText("从V4项目重新加载")
@@ -693,6 +817,15 @@ class V35ExactV4MainWindow(legacy.MainWindow):
         except Exception as exc:  # noqa: BLE001 - UI boundary.
             self._warn("导入规划参数失败", str(exc))
 
+    def _full_auto_leg_source_changed(self, _index: int) -> None:
+        if self.updating_ui or self._v4_booting:
+            return
+        self._v4_dirty = True
+        if self._generation_mode == GenerationMode.FULL_AUTO:
+            self._clear_displayed_trajectory("全自动 Leg 来源策略已修改，需重新生成")
+        label = self.full_auto_leg_source_combo.currentText()
+        self.update_status(f"全自动 Leg 来源已设为：{label}；保存/生成时写入 project.json")
+
     # ------------------------------------------------------------------
     # Disable V3.5 automatic planner.  Editing only marks V4 state stale.
     # ------------------------------------------------------------------
@@ -963,7 +1096,43 @@ class V35ExactV4MainWindow(legacy.MainWindow):
             )
 
     def export_bin(self) -> None:
-        self.plan_now()
+        """Copy the already generated working BIN without replanning it."""
+
+        if not self._ensure_v4_workspace("导出当前BIN") or self._v4_state is None:
+            return
+        if self._v4_dirty:
+            self._warn("导出当前BIN", "当前界面或配置有未重新生成的修改，请先点击“生成/更新当前路径”。")
+            return
+        try:
+            traj_id = self._current_traj_id()
+        except ValueError as exc:
+            self._warn("导出当前BIN", str(exc))
+            return
+        source = self._v4_state.layout.bin_path_for_mode(traj_id, self._generation_mode)
+        if not source.exists():
+            self._warn("导出当前BIN", f"尚未生成工作BIN：\n{source}\n请先生成当前路径。")
+            return
+        try:
+            load_bin(source)  # lightweight protocol/CRC validation; never replans.
+        except Exception as exc:  # noqa: BLE001 - UI boundary.
+            self._warn("导出当前BIN", f"现有BIN校验失败：{exc}")
+            return
+        target_text, _ = QFileDialog.getSaveFileName(
+            self,
+            "导出当前BIN（不重新计算）",
+            str(self._v4_state.layout.root / f"P{traj_id:04d}.BIN"),
+            "BIN (*.BIN *.bin)",
+        )
+        if not target_text:
+            return
+        target = Path(target_text)
+        try:
+            if target.resolve(strict=False) != source.resolve(strict=False):
+                atomic_write_bytes(target, source.read_bytes())
+        except Exception as exc:  # noqa: BLE001 - UI boundary.
+            self._warn("导出当前BIN", str(exc))
+            return
+        self.update_status(f"已原样导出当前BIN（未重新规划）：{target}")
 
     def open_bin(self) -> None:
         if self._v4_state is None:
@@ -1102,6 +1271,8 @@ class V35ExactV4MainWindow(legacy.MainWindow):
         self.v4_project_status.setText(
             f"{state.layout.status().status.value} | project.json已就绪"
         )
+        if hasattr(self, "leg_template_page"):
+            self.leg_template_page.load_layout(state.layout, synchronize=True)
         if result.created_project:
             self._append_log(f"已自动创建 {state.layout.project_json}")
         if result.created_route_table:
@@ -1110,6 +1281,8 @@ class V35ExactV4MainWindow(legacy.MainWindow):
 
     def load_v4_project(self, root: str | Path, *, create_if_missing: bool = False) -> bool:
         target = Path(root).resolve(strict=False)
+        if self._v4_worker is not None and self._v4_worker.is_alive():
+            self._cancel_worker()
         if not (target / "project.json").exists() and create_if_missing:
             self._v4_state = None
             self._v4_project_root = target
@@ -1132,6 +1305,8 @@ class V35ExactV4MainWindow(legacy.MainWindow):
         self._apply_project_common_sites()
         self._refresh_leg_combo()
         self._load_current_mode_case()
+        if hasattr(self, "leg_template_page"):
+            self.leg_template_page.load_layout(state.layout, synchronize=True)
         reasons = list(state.layout.status().reasons)
         self.v4_project_status.setText(
             f"{state.layout.status().status.value} | " + ("；".join(reasons) if reasons else "项目已加载")
@@ -1224,6 +1399,11 @@ class V35ExactV4MainWindow(legacy.MainWindow):
         planner_profiles = {key: dict(value) for key, value in base.planner_profiles.items()}
         default_planner = planner_profiles.setdefault("default", {})
         default_planner["use_unload_pose_profiles"] = self._unload_profiles_enabled()
+        if hasattr(self, "full_auto_leg_source_combo"):
+            default_planner[FULL_AUTO_LEG_SOURCE_POLICY_KEY] = str(
+                self.full_auto_leg_source_combo.currentData()
+                or FullAutoLegSourcePolicy.BEST_AVAILABLE.value
+            )
         project = replace(
             base,
             sites=sites,
@@ -1240,6 +1420,8 @@ class V35ExactV4MainWindow(legacy.MainWindow):
         self._v4_state.project = project
         self._draft_unload_pose_profiles = copy.deepcopy(unload_pose_profiles)
         self._append_log("project.json公共姿态、倒货姿态与规划参数已保存；没有自动规划")
+        if hasattr(self, "leg_template_page"):
+            self.leg_template_page.load_layout(self._v4_state.layout, synchronize=True)
         if show_message:
             self.update_status(f"已保存V4项目配置：{self._v4_state.layout.project_json}")
         return self._v4_state.layout.project_json
@@ -1747,6 +1929,17 @@ class V35ExactV4MainWindow(legacy.MainWindow):
             self.use_unload_pose_profiles_check.blockSignals(True)
             self.use_unload_pose_profiles_check.setChecked(enabled)
             self.use_unload_pose_profiles_check.blockSignals(False)
+        if hasattr(self, "full_auto_leg_source_combo"):
+            policy_value = str(
+                self._v4_state.project.planner_profiles.get("default", {}).get(
+                    FULL_AUTO_LEG_SOURCE_POLICY_KEY,
+                    FullAutoLegSourcePolicy.BEST_AVAILABLE.value,
+                )
+            )
+            index = self.full_auto_leg_source_combo.findData(policy_value)
+            blocked = self.full_auto_leg_source_combo.blockSignals(True)
+            self.full_auto_leg_source_combo.setCurrentIndex(max(0, index))
+            self.full_auto_leg_source_combo.blockSignals(blocked)
         self._refresh_unload_pose_table()
         footprint = dict(self._v4_state.project.vehicle.get("footprint", {}))
         profile = self.project.vehicle_profile
@@ -1826,6 +2019,14 @@ class V35ExactV4MainWindow(legacy.MainWindow):
         if not continuation:
             self._v4_followup = None
             self.v4_progress.setValue(0)
+        if job in {"validate-leg-template", "validate-all-leg-templates"}:
+            self.v4_total_time_label.setText("模板最佳时间：正在验证 | 当前实例：正在验证")
+        elif job.startswith("generate-") or job.startswith("compile-") or job in {
+            "optimize-missing-legs", "reoptimize-current-leg"
+        }:
+            self.v4_total_time_label.setText("底盘运动时间：正在生成 | 总时间：正在生成")
+        else:
+            self.v4_total_time_label.setText("底盘运动时间：正在处理 | 总时间：正在处理")
         self.v4_task_label.setText(f"任务：{job}")
         self._v4_poll_timer.start()
         prefix = "继续任务" if continuation else "启动任务"
@@ -1843,6 +2044,13 @@ class V35ExactV4MainWindow(legacy.MainWindow):
                 self.v4_task_label.setText(f"任务：{stage}")
                 self._append_log(f"[{payload.get('stage', 'PROGRESS')}] {payload.get('message', '')}")
             elif message.kind == "result":
+                if self._v4_current_job in {"validate-leg-template", "validate-all-leg-templates"}:
+                    self.leg_template_page.accept_worker_result(
+                        payload,
+                        str(payload.get("job_token", "")),
+                        int(payload.get("revision", -1)),
+                        str(payload.get("project_root", "")),
+                    )
                 followup = payload.get("followup")
                 if isinstance(followup, dict) and followup.get("job"):
                     self._v4_followup = (
@@ -1875,10 +2083,17 @@ class V35ExactV4MainWindow(legacy.MainWindow):
                 self._v4_worker_error = str(payload.get("error", payload))
                 self.v4_task_label.setText("任务：失败")
                 self._append_log(f"任务失败: {payload.get('error', payload)}")
+                if self._v4_current_job in {"validate-leg-template", "validate-all-leg-templates"}:
+                    self.leg_template_page.accept_worker_failure(
+                        self._leg_template_worker_token,
+                        str(payload.get("error", payload)),
+                    )
             elif message.kind == "cancelled":
                 self._v4_followup = None
                 self.v4_task_label.setText("任务：已停止")
                 self._append_log("任务已取消")
+                if self._v4_current_job in {"validate-leg-template", "validate-all-leg-templates"}:
+                    self.leg_template_page.accept_worker_failure(self._leg_template_worker_token, "已取消")
         if self._v4_worker.is_alive():
             return
 
@@ -1888,8 +2103,11 @@ class V35ExactV4MainWindow(legacy.MainWindow):
         self._reload_v4_state()
 
         if self._v4_worker_error:
-            self._clear_displayed_trajectory(self._v4_worker_error)
-            self.v4_total_time_label.setText("底盘运动时间：生成失败 | 总时间：生成失败")
+            if self._v4_current_job in {"validate-leg-template", "validate-all-leg-templates"}:
+                self._update_contextual_time_display()
+            else:
+                self._clear_displayed_trajectory(self._v4_worker_error)
+                self.v4_total_time_label.setText("底盘运动时间：生成失败 | 总时间：生成失败")
 
         followup = self._v4_followup
         self._v4_followup = None
@@ -1915,9 +2133,19 @@ class V35ExactV4MainWindow(legacy.MainWindow):
             self._v4_poll_timer.stop()
             self.v4_task_label.setText("任务：已停止")
             self._append_log("已立即终止worker")
+            if hasattr(self, "leg_template_page"):
+                self.leg_template_page.accept_worker_failure(self._leg_template_worker_token, "已取消")
             self._reload_v4_state()
+            self._update_contextual_time_display()
         else:
             self.v4_task_label.setText("任务：空闲")
+            self._update_contextual_time_display()
+
+    def closeEvent(self, event):  # type: ignore[override]
+        if hasattr(self, "leg_template_page"):
+            self.leg_template_page.save_current_draft()
+        self._cancel_worker()
+        super().closeEvent(event)
 
     def _reload_v4_state(self) -> None:
         if self._v4_state is None:
@@ -1928,7 +2156,7 @@ class V35ExactV4MainWindow(legacy.MainWindow):
             self._apply_project_common_sites()
             self._refresh_leg_combo()
             self._load_current_mode_case()
-            self._update_total_time_display()
+            self._update_contextual_time_display()
         except Exception as exc:  # noqa: BLE001
             self._append_log(f"任务后重新加载失败: {exc}")
 

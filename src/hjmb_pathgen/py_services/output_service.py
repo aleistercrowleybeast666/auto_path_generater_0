@@ -18,6 +18,7 @@ from hjmb_pathgen.py_domain.route_case import CaseManifestV40, PortableCaseV40
 from hjmb_pathgen.py_io.persistence.atomic_writer import atomic_write_bytes
 from .case_compiler import CaseCompileRequest, compile_case_to_trajectory
 from .export_guard_service import check_formal_export_guard
+from .full_auto_leg_source_service import effective_library_for_case_refs
 from .portable_service import export_portable_case
 from hjmb_pathgen.py_io.layout.project_layout import ProjectLayout
 
@@ -75,6 +76,13 @@ def write_case_outputs(
     )
     leg_library = request.leg_library or _load_library_if_present(layout)
     project = request.project or _load_project_if_present(layout)
+    if (
+        case.generation_mode == GenerationMode.FULL_AUTO
+        and leg_library is not None
+        and project is not None
+        and any(str(ref.get("selected_source", "")).upper() == "MANUAL_TEMPLATE" for ref in case.leg_refs)
+    ):
+        leg_library = effective_library_for_case_refs(layout, project, leg_library, case)
     effective_request = CaseCompileRequest(case=case, leg_library=leg_library, project=project)
 
     trajectory = None

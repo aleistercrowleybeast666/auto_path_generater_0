@@ -71,6 +71,7 @@ class V4FieldView(QGraphicsView):
     worldMouseMoved = Signal(float, float)
     zoomChanged = Signal(float)
     backgroundDoubleClicked = Signal(float, float)
+    backgroundClicked = Signal(float, float)
     siteSelected = Signal(str)
     sitePositionPreview = Signal(str, int, int)
     sitePositionCommitted = Signal(object)
@@ -97,6 +98,8 @@ class V4FieldView(QGraphicsView):
         self.project: ProjectV40 | None = None
         self.manual_points: list[ManualPointDraft] = []
         self.leg: LegV40 | None = None
+        self.preview_xy: tuple[tuple[float, float], ...] = ()
+        self.topology_gates_override: tuple[dict[str, Any], ...] | None = None
         self.editable = True
         self.selected_site: str | None = None
         self.selected_manual_index: int | None = None
@@ -137,6 +140,14 @@ class V4FieldView(QGraphicsView):
         self.leg = leg
         self.refresh()
 
+    def set_preview_xy(self, points: tuple[tuple[float, float], ...]) -> None:
+        self.preview_xy = tuple((float(x), float(y)) for x, y in points)
+        self.refresh()
+
+    def set_topology_gates_override(self, gates: tuple[dict[str, Any], ...] | None) -> None:
+        self.topology_gates_override = None if gates is None else tuple(dict(item) for item in gates)
+        self.refresh()
+
     def set_editable(self, editable: bool) -> None:
         self.editable = bool(editable)
         self.refresh()
@@ -175,13 +186,15 @@ class V4FieldView(QGraphicsView):
         if self.project is not None and self.layers.get("TOPOLOGY_GATES", True):
             self._draw_topology_gates(self.project)
         if (
-            self.mode in {"sites", "route"}
+            self.mode in {"sites", "route", "template"}
             and self.project is not None
             and self.layers.get("SITES", True)
         ):
             self._draw_sites(self.project)
-        if self.mode == "manual":
+        if self.mode in {"manual", "template"}:
             self._draw_manual_points()
+        if self.preview_xy:
+            self._draw_preview_curve()
         if self.leg is not None:
             self._draw_leg(self.leg)
         self.rebuilding = False
@@ -223,6 +236,7 @@ class V4FieldView(QGraphicsView):
             "pickup_box_count": counts.get("pickup_box", 0),
             "drop_box_count": counts.get("drop_box", 0),
             "dense_path_count": counts.get("dense_path", 0),
+            "preview_curve_count": counts.get("preview_curve", 0),
             "control_point_count": counts.get("control_point", 0),
             "topology_gate_count": counts.get("topology_gate", 0),
             "collision_footprint_count": counts.get("collision_footprint", 0),
@@ -324,6 +338,15 @@ class V4FieldView(QGraphicsView):
             self.setCursor(Qt.ClosedHandCursor)
             event.accept()
             return
+        if event.button() == Qt.LeftButton and self.mode == "template" and self.editable:
+            item = self.itemAt(event.position().toPoint())
+            kind = None if item is None else str(item.data(0) or "")
+            if kind in {"", "outside_field", "field_boundary", "grid_line", "start_zone"}:
+                x_mm, y_mm = self.scene_to_world_float(self.mapToScene(event.position().toPoint()))
+                if self._contains_world_point(x_mm, y_mm):
+                    self.backgroundClicked.emit(x_mm, y_mm)
+                    event.accept()
+                    return
         super().mousePressEvent(event)
 
     def mouseReleaseEvent(self, event):  # type: ignore[override]
@@ -525,7 +548,8 @@ class V4FieldView(QGraphicsView):
             color = "#f59e0b" if site_has_yaw(key) else "#10b981"
             selected = "#fef3c7" if site_has_yaw(key) else "#dcfce7"
             item = EditablePointItem(
-                self, key, radius=12.0, color=color, selected_color=selected
+                self, key, radius=12.0, color=color, selected_color=selected,
+                movable=self.editable and self.mode != "template",
             )
             item.setPos(self.world_to_scene(int(site["x_mm"]), int(site["y_mm"])))
             item.setToolTip(f"{key}\nx={site['x_mm']} y={site['y_mm']}")
@@ -568,6 +592,7 @@ class V4FieldView(QGraphicsView):
                     )
                 )
                 handle.setData(0, "site_yaw_handle")
+                handle.setEnabled(self.editable and self.mode != "template")
                 self.scene_obj.addItem(handle)
                 self.site_yaw_items[key] = handle
 
@@ -675,6 +700,19 @@ class V4FieldView(QGraphicsView):
                 float(node["x_mm"]), float(node["y_mm"]), int(node.get("yaw_ddeg", 0))
             )
 
+    def _draw_preview_curve(self) -> None:
+        if len(self.preview_xy) < 2:
+            return
+        path = QPainterPath(self.world_to_scene(*self.preview_xy[0]))
+        for point in self.preview_xy[1:]:
+            path.lineTo(self.world_to_scene(*point))
+        item = QGraphicsPathItem(path)
+        item.setPen(QPen(QColor("#0891b2"), 2.5, Qt.DashLine))
+        item.setZValue(55)
+        item.setData(0, "preview_curve")
+        item.setToolTip("轻量预览（未严格验证）")
+        self.scene_obj.addItem(item)
+
     def _draw_speed_overlay(self, nodes: list[dict[str, Any]]) -> None:
         for left, right in zip(nodes, nodes[1:]):
             speed = math.hypot(
@@ -739,14 +777,21 @@ class V4FieldView(QGraphicsView):
         self.scene_obj.addItem(item)
 
     def _draw_topology_gates(self, project: ProjectV40) -> None:
-        for profile in project.topology_profiles.values():
-            gates = profile.get("gates", []) if isinstance(profile, dict) else []
+        profiles: list[dict[str, Any]]
+        if self.topology_gates_override is not None:
+            profiles = [{"gates": list(self.topology_gates_override)}]
+        else:
+            profiles = [item for item in project.topology_profiles.values() if isinstance(item, dict)]
+        for profile in profiles:
+            gates = profile.get("gates", [])
             for index, gate in enumerate(gates):
                 try:
-                    x1 = float(gate.get("x1_mm", gate.get("start", {}).get("x_mm")))
-                    y1 = float(gate.get("y1_mm", gate.get("start", {}).get("y_mm")))
-                    x2 = float(gate.get("x2_mm", gate.get("end", {}).get("x_mm")))
-                    y2 = float(gate.get("y2_mm", gate.get("end", {}).get("y_mm")))
+                    start = gate.get("a", gate.get("start", {}))
+                    end = gate.get("b", gate.get("end", {}))
+                    x1 = float(gate.get("x1_mm", start.get("x_mm")))
+                    y1 = float(gate.get("y1_mm", start.get("y_mm")))
+                    x2 = float(gate.get("x2_mm", end.get("x_mm")))
+                    y2 = float(gate.get("y2_mm", end.get("y_mm")))
                 except (AttributeError, TypeError, ValueError):
                     continue
                 item = self._add_world_line(

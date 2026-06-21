@@ -6,7 +6,7 @@
 2. **三模式模型**：正式 Case 统一使用 `generation_mode=MANUAL|SEMI_AUTO|FULL_AUTO`，旧 `path_source` 值只允许迁移器读取。
 3. **8 点与物理对象**：项目 5 个公共取货侧姿态；Case 8 个逻辑点；场地保持 2 圆柱、3 取货箱、5 放货箱。
 4. **规划行为**：MANUAL 不搜索几何；SEMI_AUTO 锁定锚点并优化 leg；FULL_AUTO 支持当前 ID 与全部 360；编辑不自动规划。
-5. **GUI**：只有“路径编辑”“最优路段与批量生成”两页；工具栏统一 V4 JSON/BIN/final；全自动只读并可显式转半自动。
+5. **GUI**：Case 工作流保持“路径编辑”“最优路段与批量生成”两类核心功能；右侧另有不属于生成模式的 Leg 模板编辑标签；工具栏统一 V4 JSON/BIN/final；全自动只读并可显式转半自动。
 6. **输出与迁移**：三模式独立目录；同 traj_id 可共存；旧平铺和旧两模式目录显式、无覆盖、原子迁移；V3.5 动作可表达部分必须保留并报告不支持项。
 7. **协议与安全**：BIN packed 格式不变；连续碰撞、轮速、动作 FIFO、最终放货完赛、审批和 STALE 守卫保持有效。
 8. **验收**：目录/import、三模式、8 点、GUI、输出、规划、worker、codec、collision、optimizer、batch 和 final-drop 回归全部通过；不执行打包。

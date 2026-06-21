@@ -1,6 +1,6 @@
 # HJMB Path Generator V4.0
 
-HJMB V4.0 是离线路径编辑、路段优化、360 Case 编译、连续碰撞验证和 BIN 编码工具。当前正式界面采用三模式、两页面架构，V3.5 仅作为显式迁移输入。
+HJMB V4.0 是离线路径编辑、路段优化、360 Case 编译、连续碰撞验证和 BIN 编码工具。当前正式界面保持三种生成模式，并提供独立的 Leg 模板编辑标签；V3.5 仅作为显式迁移输入。
 
 ## 运行
 
@@ -28,10 +28,13 @@ python -m hjmb_pathgen.py_app.cli_main --help
 
 ## GUI
 
-界面只有两个核心页面：
+右侧主要标签包括：
 
-1. 路径编辑：模式与 traj_id、场地图元、点表、动作表、路径预览；FULL_AUTO 只读并支持“转为半自动编辑”。
-2. 最优路段与批量生成：Case 摘要、leg 表、当前/缺失路段优化、清除重算、验证、当前 ID/360 批量任务、进度和取消。
+1. 路径点与机械动作：模式与 traj_id、点表、动作表和路径预览；FULL_AUTO 只读并支持“转为半自动编辑”。
+2. 固定8点 / 最优路段 / 批量：公共姿态、倒货姿态、leg 和当前 ID/360 批量任务。
+3. Leg 模板：编辑不含 yaw 的人工 XY waypoint，显示18个逻辑槽位，并在“确定”后后台执行严格验证。该页不是第四种生成模式，也不绑定 traj_id。
+
+Leg 模板验证状态为 `PASSED`（全部实例通过）、`PARTIAL`（部分通过）或 `FAILED`（全部失败）。页面可输出源模板、精确实例和验证报告三个 JSON；当前尚未接入 FULL_AUTO 的人工/自动来源策略。
 
 顶部工具栏统一提供新建/打开 V4 项目、保存项目、打开/保存 Case、生成、验证、导出模式 BIN、设为 final、撤销和重做。编辑操作只标记 `STALE`，不会触发后台规划。
 
@@ -43,6 +46,8 @@ HJMB_Path_Project/
 ├─ traj_id.csv
 ├─ route_case_table.json
 ├─ leg_library.json
+├─ leg_templates.json
+├─ leg_template_instances.json
 ├─ presets/
 ├─ cases/{manual,semi_auto,full_auto}/
 ├─ bin/{manual,semi_auto,full_auto,final}/

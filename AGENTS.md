@@ -7,8 +7,9 @@
 - 用户模式只有 `MANUAL`、`SEMI_AUTO`、`FULL_AUTO`。
 - 正式 Python 业务代码只放在 `src/hjmb_pathgen/py_*` 包中；根目录只允许薄入口 `hjmb_path_editor.py`。
 - 正式入口不得导入 `py_legacy`；旧 V3.5 仅允许作为显式迁移输入。
-- GUI 只有“路径编辑”和“最优路段与批量生成”两个核心页面。
+- 当前真实入口 `v35_exact_main_window` 的右侧标签依次包含路径点、机械动作、固定8点/批量、Leg 模板和规划参数；Leg 模板是编辑页，不是第四种生成模式。
 - 编辑只标记 `STALE`，不得自动运行耗时规划。
+- Leg 模板页不得改写或旁路 traj_id 输入、下拉选择和刷新保持逻辑。
 
 ## 数据语义
 

@@ -37,6 +37,14 @@ from hjmb_pathgen.py_services.task_compiler import (
     preferred_route_family_for_candidate,
 )
 from hjmb_pathgen.py_services.execution_time_estimator import estimate_fifo_execution
+from hjmb_pathgen.py_services.full_auto_leg_source_service import (
+    EffectiveLegSelection,
+    FullAutoLegSourcePolicy,
+    choose_effective_leg,
+    effective_library_for_case_refs,
+    full_auto_leg_source_policy,
+    load_current_manual_template_legs,
+)
 from hjmb_pathgen.py_services.traj_table_service import write_route_case_table
 from hjmb_pathgen.py_services.competition_task_config_service import ensure_competition_task_config
 
@@ -126,6 +134,8 @@ class CandidateTiming:
     total_time_ms: int
     leg_ids: tuple[str, ...]
     missing_leg_ids: tuple[str, ...]
+    leg_sources: tuple[dict[str, Any], ...] = ()
+    automatic_missing_leg_ids: tuple[str, ...] = ()
     failure_reason: str = ""
     route_rule_match: bool = False
 
@@ -141,6 +151,8 @@ class CandidateTiming:
             "total_time_ms": self.total_time_ms,
             "leg_ids": list(self.leg_ids),
             "missing_leg_ids": list(self.missing_leg_ids),
+            "leg_sources": [dict(item) for item in self.leg_sources],
+            "automatic_missing_leg_ids": list(self.automatic_missing_leg_ids),
             "failure_reason": self.failure_reason,
             "route_rule_match": self.route_rule_match,
         }
@@ -358,7 +370,12 @@ def optimize_missing_legs(
         if cancel_check is not None and cancel_check():
             break
         attempted += 1
-        warm_start = _leg_by_id(library, target.leg_id)
+        existing_leg = _leg_by_id(library, target.leg_id)
+        warm_start = (
+            existing_leg
+            if existing_leg is not None and _active_leg_audit(project, existing_leg).reusable
+            else None
+        )
         try:
             result = optimize_transition_leg(
                 target.transition,
@@ -460,7 +477,12 @@ def optimize_leg_by_id(
     if target is None:
         raise CompileError(f"leg is not referenced by the current route table: {leg_id}")
     library = load_or_create_leg_library(layout.leg_library_json, project)
-    warm_start = _leg_by_id(library, leg_id)
+    existing_leg = _leg_by_id(library, leg_id)
+    warm_start = (
+        existing_leg
+        if existing_leg is not None and _active_leg_audit(project, existing_leg).reusable
+        else None
+    )
     result = optimize_transition_leg(
         target.transition,
         project,
@@ -479,7 +501,7 @@ def optimize_leg_by_id(
     updated = upsert_leg(
         library,
         result.leg,
-        replace_existing=warm_start is not None,
+        replace_existing=existing_leg is not None,
         force=force,
     )
     save_leg_library_checked(layout.leg_library_json, updated)
@@ -496,7 +518,7 @@ def evaluate_case_candidates(layout: ProjectLayout, traj_id: int) -> CaseCandida
     table = _ensure_route_case_table(layout)
     library = load_or_create_leg_library(layout.leg_library_json, project)
     row = _row_by_traj_id(table, traj_id)
-    timings = _candidate_timings(row, project, library)
+    timings = _candidate_timings(row, project, library, layout=layout)
     complete = [item for item in timings if item.complete]
     selected = min(complete, key=_candidate_timing_sort_key).candidate_id if complete else None
     return CaseCandidateEvaluationResult(traj_id=traj_id, timings=timings, selected_candidate_id=selected)
@@ -515,10 +537,12 @@ def generate_one(
     table = _ensure_route_case_table(layout)
     library = load_leg_library(layout.leg_library_json)
     row = _row_by_traj_id(table, traj_id)
-    case, timing = _best_complete_case(layout, row, project, library, leg_audit_cache=leg_audit_cache)
+    case, timing, effective_library = _best_complete_case(
+        layout, row, project, library, leg_audit_cache=leg_audit_cache
+    )
     output = write_case_outputs(
         layout,
-        CaseCompileRequest(case=case, leg_library=library, project=project),
+        CaseCompileRequest(case=case, leg_library=effective_library, project=project),
         CaseOutputOptions(
             write_case_json=True,
             write_bin=True,
@@ -592,8 +616,13 @@ def validate_one(
     library = load_leg_library(layout.leg_library_json)
     case_path = _existing_case_path(layout, traj_id, GenerationMode.FULL_AUTO)
     case = load_case(case_path)
-    dependency_failures = _case_dependency_failures(case, project, library, leg_audit_cache=leg_audit_cache)
-    trajectory = compile_case_to_trajectory(CaseCompileRequest(case=case, leg_library=library, project=project))
+    effective_library = effective_library_for_case_refs(layout, project, library, case)
+    dependency_failures = _case_dependency_failures(
+        case, project, effective_library, leg_audit_cache=leg_audit_cache
+    )
+    trajectory = compile_case_to_trajectory(
+        CaseCompileRequest(case=case, leg_library=effective_library, project=project)
+    )
     data = encode_trajectory(trajectory)
     decoded = decode_trajectory(data)
     roundtrip_ok = encode_trajectory(decoded) == data
@@ -706,27 +735,42 @@ def _candidate_timings(
     project: ProjectV40,
     library: LegLibraryV40,
     *,
+    layout: ProjectLayout | None = None,
     leg_audit_cache: dict[str, _ReusableLegAudit] | None = None,
     task_config=None,
 ) -> tuple[CandidateTiming, ...]:
     candidate_set = compile_task_candidates(row, project, task_config)
     timings: list[CandidateTiming] = []
     audit_cache = leg_audit_cache if leg_audit_cache is not None else {}
+    policy = full_auto_leg_source_policy(project)
+    manual_index = (
+        load_current_manual_template_legs(layout, project)
+        if layout is not None and policy != FullAutoLegSourcePolicy.AUTO_ONLY
+        else {}
+    )
     for candidate in automatic_candidate_subset(candidate_set.candidates, task_config):
         built = build_case_draft(row, project, preferred_candidate_id=candidate.candidate_id, task_config=task_config)
         leg_ids: list[str] = []
         missing: list[str] = []
+        automatic_missing: list[str] = []
+        source_rows: list[dict[str, Any]] = []
         motion_time = 0
         arrival_release: dict[object, int] = {}
         for requirement in built.transition_requirements:
             leg_id = _leg_id_for_transition(requirement, project, built.case)
             leg_ids.append(leg_id)
-            leg = _leg_by_id(library, leg_id)
-            audit = _cached_leg_audit(project, leg, audit_cache)
-            if leg is None or not audit.reusable:
+            selection = _select_effective_leg(
+                project, library, leg_id, policy, manual_index, audit_cache
+            )
+            automatic_leg = _leg_by_id(library, leg_id)
+            automatic_audit = _cached_leg_audit(project, automatic_leg, audit_cache)
+            if automatic_leg is None or not automatic_audit.reusable:
+                automatic_missing.append(leg_id)
+            source_rows.append({"leg_id": leg_id, **selection.to_ref_metadata()})
+            if selection.leg is None:
                 missing.append(leg_id)
             else:
-                motion_time += int(leg.analysis.get("planned_time_ms", 0))
+                motion_time += int(selection.leg.analysis.get("planned_time_ms", 0))
                 arrival_release[requirement.to_state_id] = motion_time
         execution = estimate_fifo_execution(
             project,
@@ -746,7 +790,17 @@ def _candidate_timings(
                 total_time_ms=execution.total_time_ms,
                 leg_ids=tuple(leg_ids),
                 missing_leg_ids=tuple(missing),
-                failure_reason="" if not missing else "missing, stale, failed, preview, or invalid legs",
+                leg_sources=tuple(source_rows),
+                automatic_missing_leg_ids=tuple(automatic_missing),
+                failure_reason=(
+                    ""
+                    if not missing
+                    else (
+                        "required validated manual template legs are missing"
+                        if policy == FullAutoLegSourcePolicy.MANUAL_ONLY
+                        else "missing, stale, failed, preview, or invalid legs"
+                    )
+                ),
                 route_rule_match=(
                     candidate.route_family
                     == preferred_route_family_for_candidate(candidate, task_config)
@@ -763,10 +817,11 @@ def _best_complete_case(
     library: LegLibraryV40,
     *,
     leg_audit_cache: dict[str, _ReusableLegAudit] | None = None,
-) -> tuple[CaseManifestV40, CandidateTiming]:
+) -> tuple[CaseManifestV40, CandidateTiming, LegLibraryV40]:
     task_config = ensure_competition_task_config(layout.competition_task_config_json)
     timings = _candidate_timings(
-        row, project, library, leg_audit_cache=leg_audit_cache, task_config=task_config
+        row, project, library, layout=layout,
+        leg_audit_cache=leg_audit_cache, task_config=task_config
     )
     complete = [item for item in timings if item.complete]
     if not complete:
@@ -777,7 +832,14 @@ def _best_complete_case(
         row, project, preferred_candidate_id=selected.candidate_id,
         lock_selected=locked_by_user, task_config=task_config,
     )
-    leg_refs, arrival_s = _leg_refs_and_arrival_s(built.transition_requirements, project, built.case, library, leg_audit_cache=leg_audit_cache)
+    effective_library, source_metadata = _effective_library_for_requirements(
+        layout, project, library, built.transition_requirements, built.case,
+        leg_audit_cache=leg_audit_cache,
+    )
+    leg_refs, arrival_s = _leg_refs_and_arrival_s(
+        built.transition_requirements, project, built.case, effective_library,
+        leg_audit_cache=leg_audit_cache, source_metadata=source_metadata,
+    )
     compiled_actions = _compiled_actions(built.case, project, arrival_s)
     review = dict(built.case.review)
     review.update(
@@ -798,6 +860,8 @@ def _best_complete_case(
         else "FASTEST_COMPLETE_GEOMETRY"
     )
     selected_plan["route_rule_match"] = bool(selected.route_rule_match)
+    selected_plan["leg_source_policy"] = full_auto_leg_source_policy(project).value
+    selected_plan["leg_source_summary"] = [dict(item) for item in selected.leg_sources]
     estimates = dict(built.case.estimates)
     estimates.update(
         {
@@ -821,13 +885,13 @@ def _best_complete_case(
         hashes=hashes,
         review=review,
     )
-    trajectory = compile_case_to_trajectory(CaseCompileRequest(case=case, leg_library=library, project=project))
+    trajectory = compile_case_to_trajectory(CaseCompileRequest(case=case, leg_library=effective_library, project=project))
     scan = _kinematic_check_starts_from_trajectory(case, project, trajectory, arrival_s)
     if scan:
         compiled_actions = _compiled_actions(built.case, project, arrival_s, kinematic_check_starts=scan)
         case = replace(case, actions={"source": list(built.case.actions.get("source", [])), "compiled": compiled_actions})
-        compile_case_to_trajectory(CaseCompileRequest(case=case, leg_library=library, project=project))
-    return case, selected
+        compile_case_to_trajectory(CaseCompileRequest(case=case, leg_library=effective_library, project=project))
+    return case, selected, effective_library
 
 
 def _leg_refs_and_arrival_s(
@@ -837,6 +901,7 @@ def _leg_refs_and_arrival_s(
     library: LegLibraryV40,
     *,
     leg_audit_cache: dict[str, _ReusableLegAudit] | None = None,
+    source_metadata: dict[str, dict[str, Any]] | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, int]]:
     refs: list[dict[str, Any]] = []
     arrival_s: dict[str, int] = {}
@@ -848,7 +913,12 @@ def _leg_refs_and_arrival_s(
         audit = _cached_leg_audit(project, leg, audit_cache)
         if leg is None or not audit.reusable:
             raise CompileError(f"missing or non-reusable leg for {requirement.requirement_id}: {leg_id}: {audit.reason}")
-        refs.append({"leg_id": leg.leg_id, "expected_leg_hash32": str(leg.hashes.get("self_hash32", ""))})
+        ref = {"leg_id": leg.leg_id, "expected_leg_hash32": str(leg.hashes.get("self_hash32", ""))}
+        if source_metadata and leg.leg_id in source_metadata:
+            ref.update(source_metadata[leg.leg_id])
+        else:
+            ref["selected_source"] = "MANUAL_TEMPLATE" if leg.source == "MANUAL_TEMPLATE" else "AUTOMATIC"
+        refs.append(ref)
         if len(leg.nodes) < 2:
             raise CompileError(f"leg {leg.leg_id} has fewer than two nodes")
         start_s = int(leg.nodes[0].get("local_s_mm", leg.nodes[0].get("s_mm", 0)))
@@ -857,6 +927,62 @@ def _leg_refs_and_arrival_s(
         arrival_s[requirement.to_state_id] = global_s
     return refs, arrival_s
 
+
+
+def _select_effective_leg(
+    project: ProjectV40,
+    library: LegLibraryV40,
+    leg_id: str,
+    policy: FullAutoLegSourcePolicy,
+    manual_index: dict[str, Any],
+    audit_cache: dict[str, _ReusableLegAudit],
+) -> EffectiveLegSelection:
+    automatic = _leg_by_id(library, leg_id)
+    automatic_audit = _cached_leg_audit(project, automatic, audit_cache)
+    manual = manual_index.get(leg_id)
+    manual_reusable = False
+    if manual is not None:
+        manual_reusable = _cached_leg_audit(project, manual.leg, audit_cache).reusable
+    return choose_effective_leg(
+        policy,
+        automatic_leg=automatic,
+        automatic_reusable=automatic_audit.reusable,
+        manual_leg=manual,
+        manual_reusable=manual_reusable,
+    )
+
+
+def _effective_library_for_requirements(
+    layout: ProjectLayout,
+    project: ProjectV40,
+    library: LegLibraryV40,
+    requirements: Iterable[TransitionRequirement],
+    case: CaseManifestV40,
+    *,
+    leg_audit_cache: dict[str, _ReusableLegAudit] | None = None,
+) -> tuple[LegLibraryV40, dict[str, dict[str, Any]]]:
+    policy = full_auto_leg_source_policy(project)
+    manual_index = (
+        load_current_manual_template_legs(layout, project)
+        if policy != FullAutoLegSourcePolicy.AUTO_ONLY
+        else {}
+    )
+    audit_cache = leg_audit_cache if leg_audit_cache is not None else {}
+    by_id = {item.leg_id: item for item in library.legs}
+    metadata: dict[str, dict[str, Any]] = {}
+    for requirement in requirements:
+        leg_id = _leg_id_for_transition(requirement, project, case)
+        selection = _select_effective_leg(
+            project, library, leg_id, policy, manual_index, audit_cache
+        )
+        if selection.leg is None:
+            raise CompileError(
+                f"{policy.value} has no valid leg for {requirement.requirement_id}: {leg_id}"
+            )
+        by_id[leg_id] = selection.leg
+        metadata[leg_id] = selection.to_ref_metadata()
+    effective = replace(library, legs=tuple(sorted(by_id.values(), key=lambda item: item.leg_id)))
+    return effective, metadata
 
 def _compiled_actions(
     case: CaseManifestV40,
@@ -1063,11 +1189,12 @@ def _cached_leg_audit(
 ) -> _ReusableLegAudit:
     if leg is None:
         return _ReusableLegAudit(False, "missing leg")
-    cached = cache.get(leg.leg_id)
+    cache_key = f"{leg.leg_id}:{leg.hashes.get('self_hash32', '')}"
+    cached = cache.get(cache_key)
     if cached is not None:
         return cached
     audit = _active_leg_audit(project, leg)
-    cache[leg.leg_id] = audit
+    cache[cache_key] = audit
     return audit
 
 

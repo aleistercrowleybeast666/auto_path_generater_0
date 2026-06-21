@@ -128,7 +128,7 @@ def optimize_current_case_leg(
 def retime_leg(project: ProjectV40, leg: LegV40, *, profile_name: str = "default") -> LegV40:
     if len(leg.nodes) < 2:
         raise CompileError(f"leg {leg.leg_id} has fewer than two nodes")
-    points = tuple((float(node["x_mm"]), float(node["y_mm"]), float(node.get("yaw_ddeg", 0))) for node in leg.nodes)
+    points = _motion_points_from_nodes(leg.nodes)
     samples = samples_from_points(points)
     limits = TimeParameterizationLimits.from_project(project, profile_name=profile_name)
     result = time_parameterize(TimeParameterizationRequest(samples=samples, limits=limits))
@@ -260,6 +260,36 @@ def _warm_start_key_matches(key: dict[str, Any], transition: TransitionRequireme
     return True
 
 
+
+def _motion_points_from_nodes(nodes: tuple[dict[str, Any], ...]) -> tuple[tuple[float, float, float], ...]:
+    """Collapse consecutive millimetre-quantisation duplicates for revalidation.
+
+    A saved Leg can contain two adjacent nodes with identical integer XY but
+    different s/yaw because the original continuous samples were distinct.
+    Geometry reconstruction must not interpret that representation artefact as
+    a zero-length segment.  The later yaw is retained, while the first and last
+    endpoints remain exact.
+    """
+
+    points: list[tuple[float, float, float]] = []
+    for node in nodes:
+        point = (
+            float(node["x_mm"]),
+            float(node["y_mm"]),
+            float(node.get("yaw_ddeg", 0)),
+        )
+        if points and point[0] == points[-1][0] and point[1] == points[-1][1]:
+            # Preserve the exact start pose if the first two saved samples
+            # quantise onto the same XY.  For interior/end duplicates keep the
+            # later sample so the exact terminal yaw is retained.
+            if len(points) > 1:
+                points[-1] = point
+        else:
+            points.append(point)
+    if len(points) < 2:
+        raise ValueError("leg must contain at least two distinct XY nodes")
+    return tuple(points)
+
 def _validate_leg_endpoint_and_nodes(leg: LegV40) -> dict[str, Any]:
     errors: list[str] = []
     if len(leg.nodes) < 2:
@@ -295,7 +325,7 @@ def _validate_leg_topology(leg: LegV40) -> dict[str, Any]:
 
 def _validate_leg_dynamics(project: ProjectV40, leg: LegV40) -> dict[str, Any]:
     try:
-        points = tuple((float(node["x_mm"]), float(node["y_mm"]), float(node.get("yaw_ddeg", 0))) for node in leg.nodes)
+        points = _motion_points_from_nodes(leg.nodes)
         samples = samples_from_points(points)
         limits = TimeParameterizationLimits.from_project(project, profile_name=str(leg.analysis.get("optimizer_profile", "default")))
         result = time_parameterize(TimeParameterizationRequest(samples=samples, limits=limits))

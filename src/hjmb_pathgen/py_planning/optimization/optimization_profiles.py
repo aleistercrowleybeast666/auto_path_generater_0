@@ -42,15 +42,16 @@ DEFAULT_PROFILES = {
         max_spacing_mm=25.0,
         oversample_per_segment=48,
         max_initial_guesses=4,
-        coordinate_passes=0,
-        coordinate_step_mm=50.0,
-        time_budget_ms=12000,
+        coordinate_passes=1,
+        coordinate_step_mm=55.0,
+        time_budget_ms=30000,
         strict_collision=True,
-        # Full-auto uses a fixed, compact low-speed yaw search. This removes
-        # the old profile selector while keeping rotation concentrated in the
-        # two low-speed windows.
-        yaw_alpha_values=(0.30, 0.50, 0.70),
-        yaw_window_pairs=((0.20, 0.75),),
+        # Keep the automatic pass bounded: geometry candidates and coordinate
+        # refinement are more valuable than multiplying every expensive strict
+        # collision check by nine yaw schedules.  The selected XY path still
+        # receives a balanced yaw window; FINAL can perform the broader search.
+        yaw_alpha_values=(0.50,),
+        yaw_window_pairs=((0.25, 0.75),),
         random_variant_count=0,
     ),
     LegOptimizationProfileName.STANDARD: OptimizationProfile(

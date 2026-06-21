@@ -9,6 +9,8 @@ Supported worker jobs:
 - `optimize-missing-legs`
 - `validate-all`
 - `export-final`
+- `validate-leg-template`
+- `validate-all-leg-templates`
 
 The worker uses a spawned process and queue messages for progress, result, cancellation, and error reporting. The UI polls those messages and keeps heavy jobs outside the Qt main thread.
 

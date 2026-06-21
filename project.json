@@ -253,6 +253,7 @@
       "max_yaw_step_ddeg": 30
     },
     "default": {
+      "full_auto_leg_source_policy": "AUTO_ONLY",
       "max_spacing_mm": 25,
       "max_yaw_step_ddeg": 30,
       "use_unload_pose_profiles": true

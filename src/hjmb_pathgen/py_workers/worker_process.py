@@ -31,6 +31,14 @@ from hjmb_pathgen.py_services.phase7_generation_service import (
     validate_one,
     validate_all,
 )
+from hjmb_pathgen.py_services.full_auto_leg_source_service import (
+    FullAutoLegSourcePolicy,
+    full_auto_leg_source_policy,
+)
+from hjmb_pathgen.py_services.leg_template_service import (
+    validate_all_enabled_templates_for_layout,
+    validate_leg_template_for_layout,
+)
 from hjmb_pathgen.py_io.layout.project_layout import ProjectLayout
 
 
@@ -328,6 +336,11 @@ def _run_job(
         # after an optimization pass; evaluating/assembling in the same child
         # used to stall indefinitely on some Windows installations.  Returning
         # a follow-up job lets the GUI launch a clean process immediately.
+        policy = (
+            full_auto_leg_source_policy(load_project(layout.project_json))
+            if hasattr(layout, "project_json")
+            else FullAutoLegSourcePolicy.BEST_AVAILABLE
+        )
         initial = evaluate_case_candidates(layout, traj_id)
         ordered = sorted(
             initial.timings,
@@ -343,31 +356,68 @@ def _run_job(
             "write_portable": bool(params.get("write_portable", False)),
             "dry_run": bool(params.get("dry_run", False)),
         }
-        incomplete = [item for item in ordered if not item.complete]
-        prepared_candidate_ids = [item.candidate_id for item in ordered if item.complete]
-        if not incomplete:
+
+        if policy == FullAutoLegSourcePolicy.MANUAL_ONLY:
+            complete = [item for item in ordered if item.complete]
+            if not complete:
+                details = " | ".join(
+                    f"{item.candidate_id}: missing manual {', '.join(item.missing_leg_ids) or 'none'}"
+                    for item in ordered
+                )
+                raise RuntimeError(
+                    f"P{traj_id:04d} MANUAL_ONLY has no complete candidate: {details}"
+                )
             emit(
                 "PREPARED",
-                f"P{traj_id:04d} already has all automatic candidates complete",
+                f"P{traj_id:04d} validated manual template candidates are ready",
                 percent=78,
             )
             return {
                 "phase": "PREPARED",
                 "optimization": [],
                 "candidate_evaluation": initial.to_dict(),
-                "prepared_candidate_ids": prepared_candidate_ids,
+                "prepared_candidate_ids": [item.candidate_id for item in complete],
+                "followup": {"job": "compile-full-auto-one", "params": compile_params},
+            }
+
+        if policy == FullAutoLegSourcePolicy.AUTO_ONLY:
+            work_items = [item for item in ordered if not item.complete]
+        else:
+            # BEST_AVAILABLE must prepare the automatic alternative even when a
+            # valid manual template already makes the candidate complete.
+            work_items = [
+                item for item in ordered
+                if item.automatic_missing_leg_ids or (not item.complete and item.missing_leg_ids)
+            ]
+
+        if not work_items:
+            complete = [item for item in ordered if item.complete]
+            if not complete:
+                raise RuntimeError(f"P{traj_id:04d} has no complete candidate")
+            emit(
+                "PREPARED",
+                f"P{traj_id:04d} candidate sources are already complete",
+                percent=78,
+            )
+            return {
+                "phase": "PREPARED",
+                "optimization": [],
+                "candidate_evaluation": initial.to_dict(),
+                "prepared_candidate_ids": [item.candidate_id for item in complete],
                 "followup": {"job": "compile-full-auto-one", "params": compile_params},
             }
 
         optimization_passes: list[dict[str, Any]] = []
-        for candidate_index, timing in enumerate(incomplete):
+        optimized_candidate_ids: list[str] = []
+        for candidate_index, timing in enumerate(work_items):
             _raise_if_cancelled(cancel_event)
+            missing_auto = timing.automatic_missing_leg_ids
             emit(
                 "OPTIMIZING",
-                f"optimizing candidate {timing.candidate_id}",
-                percent=max(1, round(72 * candidate_index / max(len(incomplete), 1))),
+                f"optimizing automatic alternative for {timing.candidate_id}",
+                percent=max(1, round(72 * candidate_index / max(len(work_items), 1))),
                 candidate_id=timing.candidate_id,
-                missing_leg_count=len(timing.missing_leg_ids),
+                missing_leg_count=len(missing_auto),
             )
             optimization_result = optimize_missing_legs(
                 layout,
@@ -388,9 +438,11 @@ def _run_job(
             )
             optimization = optimization_result.to_dict()
             optimization_passes.append({"candidate_id": timing.candidate_id, **optimization})
+            if optimization_result.failure_count == 0:
+                optimized_candidate_ids.append(timing.candidate_id)
             emit(
                 "OPTIMIZED",
-                f"candidate {timing.candidate_id} optimization pass complete",
+                f"candidate {timing.candidate_id} automatic pass complete",
                 percent=75,
                 candidate_id=timing.candidate_id,
                 optimized_count=optimization["optimized_count"],
@@ -398,26 +450,28 @@ def _run_job(
                 failed_count=optimization["failure_count"],
                 failures=optimization["failures"],
             )
-            _raise_if_cancelled(cancel_event)
-            if optimization_result.failure_count == 0:
-                prepared_candidate_ids.append(timing.candidate_id)
 
-        # FULL_AUTO is allowed to choose the faster route only after every
-        # minimum-stop candidate has had a preparation pass.  The old early
-        # return after the first successful route made the result depend on
-        # candidate ordering and prevented a real left-vs-right time compare.
-        if prepared_candidate_ids:
+        _raise_if_cancelled(cancel_event)
+        final_evaluation = evaluate_case_candidates(layout, traj_id)
+        complete = [item for item in final_evaluation.timings if item.complete]
+        prepared_ids = [item.candidate_id for item in complete]
+        if not prepared_ids and optimized_candidate_ids:
+            # The clean follow-up process is the final authority.  This fallback
+            # also supports older/mocked evaluators that do not reflect the just
+            # written library until the next interpreter starts.
+            prepared_ids = list(optimized_candidate_ids)
+        if prepared_ids:
             emit(
                 "PREPARED",
                 f"P{traj_id:04d} candidates are ready for clean-process comparison",
                 percent=78,
-                prepared_candidate_ids=prepared_candidate_ids,
+                prepared_candidate_ids=prepared_ids,
             )
             return {
                 "phase": "PREPARED",
                 "optimization": optimization_passes,
-                "candidate_evaluation": initial.to_dict(),
-                "prepared_candidate_ids": prepared_candidate_ids,
+                "candidate_evaluation": final_evaluation.to_dict(),
+                "prepared_candidate_ids": prepared_ids,
                 "followup": {"job": "compile-full-auto-one", "params": compile_params},
             }
 
@@ -430,10 +484,10 @@ def _run_job(
                 )
         details = [
             f"{item.candidate_id}: missing {', '.join(item.missing_leg_ids) or 'none'}"
-            for item in ordered
+            for item in final_evaluation.timings
         ]
         message = (
-            f"P{traj_id:04d} automatic optimization could not prepare a complete candidate: "
+            f"P{traj_id:04d} could not prepare a complete candidate under {policy.value}: "
             + " | ".join(details)
         )
         if failure_reasons:
@@ -481,26 +535,37 @@ def _run_job(
         }
     if job in {"generate-all", "generate-full-auto-all"}:
         _raise_if_cancelled(cancel_event)
-        emit("OPTIMIZING", "optimizing all missing/stale unique legs", percent=1)
-        optimization = optimize_missing_legs(
-            layout,
-            profile_name=LegOptimizationProfileName.AUTOMATIC,
-            seed=int(params.get("seed", 0)),
-            cancel_check=cancel_event.is_set,
-            progress_callback=lambda item: emit(
-                "OPTIMIZING",
-                "optimizing unique legs",
-                **{**item, "percent": max(1, round(int(item["percent"]) * 0.5))},
-            ),
-        ).to_dict()
-        emit(
-            "OPTIMIZED",
-            "unique leg pass complete",
-            percent=50,
-            optimized_count=optimization["optimized_count"],
-            reused_count=optimization["skipped_count"],
-            failed_count=optimization["failure_count"],
-        )
+        policy = full_auto_leg_source_policy(load_project(layout.project_json))
+        if policy == FullAutoLegSourcePolicy.MANUAL_ONLY:
+            optimization = {
+                "profile": "MANUAL_ONLY",
+                "optimized_count": 0,
+                "skipped_count": 0,
+                "failure_count": 0,
+                "failures": [],
+            }
+            emit("OPTIMIZED", "MANUAL_ONLY skips automatic leg optimization", percent=50)
+        else:
+            emit("OPTIMIZING", "optimizing all missing/stale automatic legs", percent=1)
+            optimization = optimize_missing_legs(
+                layout,
+                profile_name=LegOptimizationProfileName.AUTOMATIC,
+                seed=int(params.get("seed", 0)),
+                cancel_check=cancel_event.is_set,
+                progress_callback=lambda item: emit(
+                    "OPTIMIZING",
+                    "optimizing unique legs",
+                    **{**item, "percent": max(1, round(int(item["percent"]) * 0.5))},
+                ),
+            ).to_dict()
+            emit(
+                "OPTIMIZED",
+                "unique automatic leg pass complete",
+                percent=50,
+                optimized_count=optimization["optimized_count"],
+                reused_count=optimization["skipped_count"],
+                failed_count=optimization["failure_count"],
+            )
         if cancel_event.is_set():
             return {"optimization": optimization}
         generation = generate_all(
@@ -560,6 +625,57 @@ def _run_job(
     if job == "validate-all":
         _raise_if_cancelled(cancel_event)
         return validate_all(layout)
+    if job == "validate-leg-template":
+        _raise_if_cancelled(cancel_event)
+        template_id = str(params["template_id"])
+        emit("CHECKING", f"validating leg template {template_id}", percent=5, template_id=template_id)
+        result = validate_leg_template_for_layout(
+            layout,
+            template_id,
+            expected_template_hash=str(params["template_hash"]),
+            expected_dependency_hashes=dict(params["dependency_hashes"]),
+            cancel_check=cancel_event.is_set,
+            progress_callback=lambda item: emit(
+                "CHECKING",
+                f"{template_id}: {item.get('instance_id', '')}",
+                **item,
+            ),
+        )
+        _raise_if_cancelled(cancel_event)
+        emit("VALIDATED", f"leg template {template_id}: {result.template.state.value}", percent=100, template_id=template_id)
+        return {
+            "leg_template_validation": result.report.to_dict(),
+            "template_id": template_id,
+            "job_token": str(params.get("job_token", "")),
+            "revision": int(params.get("revision", 0)),
+            "project_root": str(layout.root),
+        }
+    if job == "validate-all-leg-templates":
+        _raise_if_cancelled(cancel_event)
+        emit("CHECKING", "validating all enabled leg templates", percent=5)
+        templates, instances, report = validate_all_enabled_templates_for_layout(
+            layout,
+            expected_template_hashes={str(key): str(value) for key, value in dict(params["template_hashes"]).items()},
+            expected_dependency_hashes={str(key): str(value) for key, value in dict(params["dependency_hashes"]).items()},
+            cancel_check=cancel_event.is_set,
+            progress_callback=lambda item: emit(
+                "CHECKING",
+                f"template {item.get('template_index', 0)}/{item.get('template_count', 0)}: {item.get('template_id', '')}",
+                **item,
+            ),
+        )
+        _raise_if_cancelled(cancel_event)
+        emit("VALIDATED", "all enabled leg templates validated", percent=100)
+        return {
+            "leg_template_validation_all": {
+                "template_count": len(report.template_reports),
+                "instance_count": len(instances.instances),
+                "states": {item.template_id: item.state.value for item in templates.templates if item.enabled},
+            },
+            "job_token": str(params.get("job_token", "")),
+            "revision": int(params.get("revision", 0)),
+            "project_root": str(layout.root),
+        }
     if job == "validate-current":
         _raise_if_cancelled(cancel_event)
         traj_id = int(params["traj_id"])

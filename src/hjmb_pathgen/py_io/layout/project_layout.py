@@ -39,6 +39,9 @@ from hjmb_pathgen.py_io.layout.path_naming import bin_name, case_json_name, port
 PROJECT_JSON = "project.json"
 ROUTE_CASE_TABLE_JSON = "route_case_table.json"
 LEG_LIBRARY_JSON = "leg_library.json"
+LEG_TEMPLATES_JSON = "leg_templates.json"
+LEG_TEMPLATE_INSTANCES_JSON = "leg_template_instances.json"
+LEG_TEMPLATE_VALIDATION_REPORT_JSON = "leg_template_validation_report.json"
 TRAJ_ID_CSV = "traj_id.csv"  # legacy import only
 TASK_CONFIG_DIR = "task_config"
 COMPETITION_TASK_CONFIG_JSON = "competition_task_config.json"
@@ -98,6 +101,18 @@ class ProjectLayout:
     @property
     def leg_library_json(self) -> Path:
         return self.resolve_project_path(LEG_LIBRARY_JSON)
+
+    @property
+    def leg_templates_json(self) -> Path:
+        return self.resolve_project_path(LEG_TEMPLATES_JSON)
+
+    @property
+    def leg_template_instances_json(self) -> Path:
+        return self.resolve_project_path(LEG_TEMPLATE_INSTANCES_JSON)
+
+    @property
+    def leg_template_validation_report_json(self) -> Path:
+        return self.resolve_project_path(Path(DIR_REPORTS) / LEG_TEMPLATE_VALIDATION_REPORT_JSON)
 
     @property
     def traj_id_csv(self) -> Path:
