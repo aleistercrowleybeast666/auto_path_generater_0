@@ -128,8 +128,8 @@
     ],
     "drop_boxes": [
       {
-        "center_x_mm": -1500,
-        "center_y_mm": 800,
+        "center_x_mm": -1640,
+        "center_y_mm": 875,
         "configured": true,
         "enabled": true,
         "length_mm": 280,
@@ -139,7 +139,7 @@
         "yaw_ddeg": 0
       },
       {
-        "center_x_mm": -1700,
+        "center_x_mm": -1875,
         "center_y_mm": 400,
         "configured": true,
         "enabled": true,
@@ -150,7 +150,7 @@
         "yaw_ddeg": 0
       },
       {
-        "center_x_mm": -1700,
+        "center_x_mm": -1875,
         "center_y_mm": 0,
         "configured": true,
         "enabled": true,
@@ -161,7 +161,7 @@
         "yaw_ddeg": 0
       },
       {
-        "center_x_mm": -1700,
+        "center_x_mm": -1875,
         "center_y_mm": -400,
         "configured": true,
         "enabled": true,
@@ -172,8 +172,8 @@
         "yaw_ddeg": 0
       },
       {
-        "center_x_mm": -1500,
-        "center_y_mm": -800,
+        "center_x_mm": -1640,
+        "center_y_mm": -875,
         "configured": true,
         "enabled": true,
         "length_mm": 280,
@@ -193,7 +193,7 @@
     },
     "pickup_boxes": [
       {
-        "center_x_mm": 1800,
+        "center_x_mm": 1855,
         "center_y_mm": 500,
         "configured": true,
         "enabled": true,
@@ -204,7 +204,7 @@
         "yaw_ddeg": 0
       },
       {
-        "center_x_mm": 1500,
+        "center_x_mm": 1600,
         "center_y_mm": 0,
         "configured": true,
         "enabled": true,
@@ -215,7 +215,7 @@
         "yaw_ddeg": 0
       },
       {
-        "center_x_mm": 1800,
+        "center_x_mm": 1855,
         "center_y_mm": -500,
         "configured": true,
         "enabled": true,
@@ -267,8 +267,8 @@
   "sites": {
     "P_DROP_1": {
       "configured": true,
-      "x_mm": -1438,
-      "y_mm": -408,
+      "x_mm": -1335,
+      "y_mm": -399,
       "yaw_ddeg": 65535
     },
     "P_DROP_2": {
@@ -462,8 +462,8 @@
       "field_boundary_footprint_profile": "LARGE_CIRCLE",
       "numerical_epsilon_mm": 1e-06,
       "pickup_arc_segments": 64,
-      "r_large_mm": 150.0,
-      "r_small_mm": 50.0,
+      "r_large_mm": 350.0,
+      "r_small_mm": 270.0,
       "strict_validation_resolution_mm": 5.0
     },
     "wheel": {

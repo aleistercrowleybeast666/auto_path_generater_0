@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import sys
 import unittest
@@ -10,10 +11,20 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QApplication, QComboBox, QScrollArea
+from PySide6.QtWidgets import QApplication, QComboBox, QPlainTextEdit, QScrollArea
 
 from hjmb_pathgen.py_domain.enums import GenerationMode
-from hjmb_pathgen.py_ui.v35_base.editor import MainWindow as V35BaseMainWindow
+from hjmb_pathgen.py_domain.project import ProjectV40
+from hjmb_pathgen.py_services.fixed_site_collision_service import (
+    FixedSiteCollisionEntry,
+    FixedSiteCollisionReport,
+    FixedSiteCollisionResult,
+)
+from hjmb_pathgen.py_ui.v35_base.editor import (
+    DROP_STATIONS,
+    PICKUP_STATIONS,
+    MainWindow as V35BaseMainWindow,
+)
 from hjmb_pathgen.py_ui.v35_base.path_models import (
     EditPoint,
     MechanicalAction,
@@ -27,6 +38,13 @@ from hjmb_pathgen.py_ui.v35_base.path_models import (
 )
 from hjmb_pathgen.py_ui.v35_exact_main_window import V35ExactV4MainWindow
 from hjmb_pathgen.py_ui.ui_state import LoadedProjectState
+
+FIXTURE_ROOT = Path(__file__).resolve().parents[1] / "fixtures" / "v40"
+
+
+def minimal_project() -> ProjectV40:
+    data = json.loads((FIXTURE_ROOT / "minimal_project.json").read_text(encoding="utf-8"))
+    return ProjectV40.from_dict(data)
 
 
 class SmallGuiRepairsTest(unittest.TestCase):
@@ -143,6 +161,126 @@ class SmallGuiRepairsTest(unittest.TestCase):
             self.assertEqual(scroll.horizontalScrollBarPolicy(), Qt.ScrollBarAsNeeded)
             self.assertEqual(scroll.verticalScrollBarPolicy(), Qt.ScrollBarAsNeeded)
             self.assertGreaterEqual(scroll.widget().minimumWidth(), 1000)
+        finally:
+            window.close()
+
+    def test_base_field_station_constants_match_current_layout(self) -> None:
+        self.assertEqual(
+            tuple((station_id, x_mm, y_mm) for station_id, x_mm, y_mm, _w, _h in PICKUP_STATIONS),
+            ((1, 1855, 500), (2, 1600, 0), (3, 1855, -500)),
+        )
+        self.assertEqual(
+            tuple((station_id, x_mm, y_mm) for station_id, x_mm, y_mm, _w, _h in DROP_STATIONS),
+            (
+                (4, -1640, 875),
+                (5, -1875, 400),
+                (6, -1875, 0),
+                (7, -1875, -400),
+                (8, -1640, -875),
+            ),
+        )
+
+    def test_fixed_site_collision_controls_exist_with_initial_status(self) -> None:
+        window = V35ExactV4MainWindow()
+        try:
+            self.assertEqual(window.fixed_site_collision_button.text(), "检测固定点碰撞")
+            self.assertEqual(window.fixed_site_collision_status_label.text(), "固定点碰撞：未检测")
+        finally:
+            window.close()
+
+    def test_fixed_site_collision_click_uses_unsaved_sites_without_save_or_worker(self) -> None:
+        window = V35ExactV4MainWindow()
+        try:
+            window._v4_state = LoadedProjectState(  # noqa: SLF001
+                layout=None,  # type: ignore[arg-type]
+                project=minimal_project(),
+                route_table=None,
+                leg_library=None,
+            )
+            window.project.fixed_sites[0].x_mm = 1234
+            window.project.fixed_sites[0].y_mm = 567
+            window.project.fixed_sites[0].yaw_ddeg = 890
+            captured: dict[str, ProjectV40] = {}
+
+            def fake_check(project: ProjectV40) -> FixedSiteCollisionReport:
+                captured["project"] = project
+                return FixedSiteCollisionReport(FixedSiteCollisionResult.PASSED, entries=())
+
+            with (
+                patch("hjmb_pathgen.py_ui.v35_exact_main_window.check_fixed_site_collisions", side_effect=fake_check),
+                patch.object(window, "_show_fixed_site_collision_dialog"),
+                patch.object(window, "_save_project_config") as save_project_config,
+                patch.object(window, "schedule_plan") as schedule_plan,
+                patch.object(window, "_start_worker") as start_worker,
+            ):
+                window.fixed_site_collision_button.click()
+
+            self.assertEqual(captured["project"].sites["P_START"]["x_mm"], 1234)
+            self.assertEqual(captured["project"].sites["P_START"]["y_mm"], 567)
+            self.assertEqual(captured["project"].sites["P_START"]["yaw_ddeg"], 890)
+            save_project_config.assert_not_called()
+            schedule_plan.assert_not_called()
+            start_worker.assert_not_called()
+        finally:
+            window.close()
+
+    def test_fixed_site_collision_status_label_distinguishes_results(self) -> None:
+        window = V35ExactV4MainWindow()
+        try:
+            window._v4_state = LoadedProjectState(  # noqa: SLF001
+                layout=None,  # type: ignore[arg-type]
+                project=minimal_project(),
+                route_table=None,
+                leg_library=None,
+            )
+            cases = (
+                (FixedSiteCollisionResult.PASSED, "通过"),
+                (FixedSiteCollisionResult.FAILED, "发现碰撞"),
+                (FixedSiteCollisionResult.INCOMPLETE, "检测不完整"),
+            )
+            for result, expected_text in cases:
+                with self.subTest(result=result):
+                    report = FixedSiteCollisionReport(result, entries=())
+                    with (
+                        patch("hjmb_pathgen.py_ui.v35_exact_main_window.check_fixed_site_collisions", return_value=report),
+                        patch.object(window, "_show_fixed_site_collision_dialog"),
+                    ):
+                        window.fixed_site_collision_button.click()
+                    self.assertIn(expected_text, window.fixed_site_collision_status_label.text())
+        finally:
+            window.close()
+
+    def test_fixed_site_collision_dialog_uses_scrollable_full_detail_text(self) -> None:
+        window = V35ExactV4MainWindow()
+        try:
+            entries = tuple(
+                FixedSiteCollisionEntry(
+                    site_key=f"P_DROP_{index}",
+                    profile_id=f"DROP_PROFILE_{index}",
+                    x_mm=float(index),
+                    y_mm=float(index + 100),
+                    yaw_ddeg=float(index * 10),
+                    checked=True,
+                    passed=True,
+                    min_signed_clearance_mm=float(index + 200),
+                    closest_obstacle_id=f"OBSTACLE_{index}",
+                )
+                for index in range(30)
+            )
+            report = FixedSiteCollisionReport(FixedSiteCollisionResult.PASSED, entries=entries)
+
+            dialog = window._build_fixed_site_collision_dialog(report)  # noqa: SLF001
+            try:
+                detail = dialog.findChild(QPlainTextEdit, "fixed_site_collision_detail_text")
+                self.assertIsNotNone(detail)
+                assert detail is not None
+                self.assertTrue(detail.isReadOnly())
+                self.assertEqual(detail.verticalScrollBarPolicy(), Qt.ScrollBarAsNeeded)
+                self.assertIn("DROP_PROFILE_0", detail.toPlainText())
+                self.assertIn("DROP_PROFILE_29", detail.toPlainText())
+                self.assertGreaterEqual(len(detail.toPlainText().splitlines()), 60)
+            finally:
+                dialog.close()
         finally:
             window.close()
 

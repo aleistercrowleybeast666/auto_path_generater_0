@@ -80,7 +80,7 @@
     },
     "STORE": {
       "estimated_time_ms": 1500,
-      "mode": "STOP_AND_WAIT",
+      "mode": "ASYNC",
       "post_wait_ms": 0,
       "timeout_ms": 3500
     }
@@ -270,8 +270,8 @@
       "field_boundary_footprint_profile": "LARGE_CIRCLE",
       "numerical_epsilon_mm": 1e-06,
       "pickup_arc_segments": 64,
-      "r_large_mm": 150.0,
-      "r_small_mm": 50.0,
+      "r_large_mm": 350.0,
+      "r_small_mm": 270.0,
       "strict_validation_resolution_mm": 5.0
     },
     "wheel": {

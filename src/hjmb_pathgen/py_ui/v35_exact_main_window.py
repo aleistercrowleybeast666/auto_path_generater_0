@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
     QComboBox,
+    QDialog,
     QFileDialog,
     QFormLayout,
     QGroupBox,
@@ -55,6 +56,12 @@ from hjmb_pathgen.py_io.layout.project_layout import ProjectLayout
 from hjmb_pathgen.py_io.persistence.atomic_writer import atomic_write_bytes
 from hjmb_pathgen.py_services.leg_clear_service import clear_optimized_leg_result
 from hjmb_pathgen.py_services.case_draft_service import generate_case_draft
+from hjmb_pathgen.py_services.fixed_site_collision_service import (
+    FixedSiteCollisionEntry,
+    FixedSiteCollisionReport,
+    FixedSiteCollisionResult,
+    check_fixed_site_collisions,
+)
 from hjmb_pathgen.py_services.project_bootstrap_service import bootstrap_v4_workspace
 from hjmb_pathgen.py_services.competition_task_config_service import default_competition_task_config
 from hjmb_pathgen.py_services.mode_case_service import convert_full_auto_to_semi_auto
@@ -437,6 +444,15 @@ class V35ExactV4MainWindow(legacy.MainWindow):
 
         self.fixed_site_table.setMinimumWidth(700)
         self.fixed_site_table.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+
+        collision_row = QHBoxLayout()
+        self.fixed_site_collision_button = QPushButton("检测固定点碰撞")
+        self.fixed_site_collision_button.clicked.connect(self._check_fixed_site_collision)
+        self.fixed_site_collision_status_label = QLabel("固定点碰撞：未检测")
+        self.fixed_site_collision_status_label.setMinimumWidth(260)
+        collision_row.addWidget(self.fixed_site_collision_button)
+        collision_row.addWidget(self.fixed_site_collision_status_label, 1)
+        root_layout.addLayout(collision_row)
 
         project_group = QGroupBox("V4 项目")
         project_layout = QVBoxLayout(project_group)
@@ -1301,16 +1317,10 @@ class V35ExactV4MainWindow(legacy.MainWindow):
             self._append_log(f"警告：{warning}")
         return True
 
-    def _save_project_config(self, *, show_message: bool = True) -> Path | None:
-        if not self._ensure_v4_workspace("保存公共配置"):
-            return None
+    def _build_project_config_snapshot(self):
         assert self._v4_state is not None
         base = self._v4_state.project
-        try:
-            unload_pose_profiles = self._read_unload_pose_table()
-        except (TypeError, ValueError) as exc:
-            self._warn("倒货姿态配置错误", str(exc))
-            return None
+        unload_pose_profiles = self._read_unload_pose_table()
         sites = {key: dict(value) for key, value in base.sites.items()}
         for index, key in enumerate(LOGICAL_SITE_KEYS):
             site = self.project.fixed_sites[index]
@@ -1402,15 +1412,124 @@ class V35ExactV4MainWindow(legacy.MainWindow):
             planner_profiles=planner_profiles,
             unload_pose_profiles=unload_pose_profiles,
         )
+        return project
+
+    def _save_project_config(self, *, show_message: bool = True) -> Path | None:
+        if not self._ensure_v4_workspace("保存公共配置"):
+            return None
+        assert self._v4_state is not None
+        try:
+            project = self._build_project_config_snapshot()
+        except (TypeError, ValueError) as exc:
+            self._warn("倒货姿态配置错误", str(exc))
+            return None
         save_project(self._v4_state.layout.project_json, project)
         self._v4_state.project = project
-        self._draft_unload_pose_profiles = copy.deepcopy(unload_pose_profiles)
+        self._draft_unload_pose_profiles = copy.deepcopy(project.unload_pose_profiles)
         self._append_log("project.json公共姿态、倒货姿态与规划参数已保存；没有自动规划")
         if hasattr(self, "leg_template_page"):
             self.leg_template_page.load_layout(self._v4_state.layout, synchronize=True)
         if show_message:
             self.update_status(f"已保存V4项目配置：{self._v4_state.layout.project_json}")
         return self._v4_state.layout.project_json
+
+    def _check_fixed_site_collision(self) -> None:
+        if self._v4_state is None:
+            message = "尚未加载V4项目，无法构造碰撞世界。"
+            self.fixed_site_collision_status_label.setText("固定点碰撞：检测不完整（无项目）")
+            self._warn("固定点碰撞检测失败", message)
+            return
+        try:
+            project = self._build_project_config_snapshot()
+            report = check_fixed_site_collisions(project)
+        except (AttributeError, TypeError, ValueError) as exc:
+            self.fixed_site_collision_status_label.setText("固定点碰撞：检测不完整（配置错误）")
+            self._warn("固定点碰撞检测失败", str(exc))
+            return
+
+        self.fixed_site_collision_status_label.setText(
+            self._fixed_site_collision_status_text(report)
+        )
+        self._show_fixed_site_collision_dialog(report)
+
+    def _show_fixed_site_collision_dialog(self, report: FixedSiteCollisionReport) -> None:
+        dialog = self._build_fixed_site_collision_dialog(report)
+        dialog.exec()
+
+    def _build_fixed_site_collision_dialog(self, report: FixedSiteCollisionReport) -> QDialog:
+        dialog = QDialog(self)
+        dialog.setWindowTitle("固定点碰撞检测结果")
+        dialog.setMinimumSize(720, 520)
+        dialog.resize(860, 640)
+
+        layout = QVBoxLayout(dialog)
+        summary = QLabel(self._fixed_site_collision_status_text(report))
+        summary.setObjectName("fixed_site_collision_summary_label")
+        summary.setWordWrap(True)
+        layout.addWidget(summary)
+
+        detail = QPlainTextEdit()
+        detail.setObjectName("fixed_site_collision_detail_text")
+        detail.setReadOnly(True)
+        detail.setPlainText(self._fixed_site_collision_detail_text(report))
+        detail.setLineWrapMode(QPlainTextEdit.NoWrap)
+        detail.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        layout.addWidget(detail, 1)
+
+        row = QHBoxLayout()
+        row.addStretch(1)
+        close_button = QPushButton("关闭")
+        close_button.clicked.connect(dialog.accept)
+        row.addWidget(close_button)
+        layout.addLayout(row)
+        return dialog
+
+    def _fixed_site_collision_status_text(self, report: FixedSiteCollisionReport) -> str:
+        counts = (
+            f"通过 {report.passed_count} / "
+            f"碰撞 {report.collision_count} / "
+            f"未完整 {report.incomplete_count}"
+        )
+        if report.result == FixedSiteCollisionResult.PASSED:
+            return f"固定点碰撞：通过（{counts}）"
+        if report.result == FixedSiteCollisionResult.FAILED:
+            return f"固定点碰撞：发现碰撞（{counts}）"
+        return f"固定点碰撞：检测不完整（{counts}）"
+
+    def _fixed_site_collision_detail_text(self, report: FixedSiteCollisionReport) -> str:
+        lines = [f"总结果：{report.result.value}"]
+        if report.errors:
+            lines.append("错误：")
+            lines.extend(f"- {error}" for error in report.errors)
+        for entry in report.entries:
+            lines.extend(self._fixed_site_collision_entry_lines(entry))
+        return "\n".join(lines)
+
+    def _fixed_site_collision_entry_lines(self, entry: FixedSiteCollisionEntry) -> list[str]:
+        title = entry.site_key
+        if entry.profile_id:
+            title = f"{title} [{entry.profile_id}]"
+        if not entry.checked:
+            return [f"{title}: 未完整检测：{entry.incomplete_reason}"]
+
+        outcome = "通过" if entry.passed else "碰撞"
+        lines = [
+            (
+                f"{title}: {outcome} "
+                f"x={entry.x_mm:.1f}, y={entry.y_mm:.1f}, yaw={entry.yaw_ddeg:.1f}"
+            ),
+            (
+                f"  最小间隙={entry.min_signed_clearance_mm:.3f} mm, "
+                f"最近障碍={entry.closest_obstacle_id or '-'}"
+            ),
+        ]
+        for collision in entry.collisions:
+            lines.append(
+                "  碰撞障碍="
+                f"{collision.obstacle_id}({collision.obstacle_type}), "
+                f"穿透={collision.penetration_depth_mm:.3f} mm"
+            )
+        return lines
 
     def import_fixed_sites(self) -> None:
         if self._v4_state is None:
